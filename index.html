@@ -813,10 +813,14 @@ function t(key) { return (T[LANG] || T.pt)[key] || (T.pt)[key] || key; }
 function setLang(lang) {
   LANG = lang;
   localStorage.setItem('rochling_lang', lang);
-  // Update toggle buttons
   document.getElementById('lb-pt')?.classList.toggle('on', lang==='pt');
   document.getElementById('lb-en')?.classList.toggle('on', lang==='en');
+  // Full re-render: badges use t() so tables must rebuild
+  pag.eq.rows = DB.slice(); pag.eq.p = 1;
   applyLang();
+  // Also rebuild charts with translated labels
+  buildAllCharts();
+  buildNotifs();
 }
 
 // Apply language to all static DOM elements
@@ -1056,7 +1060,8 @@ function applyLang() {
   const saveBtn = document.querySelector('.modal-actions .btn-p');
   if(saveBtn) saveBtn.textContent = t('btn_save');
 
-  // Re-render tables to update column headers
+  // Re-render tables to update column headers + badges
+  populateFilters();
   renderTable('geral');
   renderTable('alert');
   buildAllColPanels();
@@ -1125,36 +1130,41 @@ function initColVis() {
   });
 }
 function buildColPanel(tbl) {
-  const dd = document.getElementById(tbl+'-cols'); if(!dd) return;
-  dd.innerHTML = COL_DEFS[tbl].filter(c=>c.k!=='_act').map(c =>
-    `<label style="user-select:none"><input type="checkbox" ${colVis[tbl][c.k]?'checked':''} onchange="colVis['${tbl}']['${c.k}']=this.checked;renderTable('${tbl}');buildColPanel('${tbl}')"> ${esc(c.l||c.k)}</label>`
-  ).join('');
-  // Move dropdown to body to escape any overflow:hidden ancestors
-  if(dd.parentElement !== document.body) {
-    dd.dataset.owner = tbl+'-cols-owner';
-    document.body.appendChild(dd);
+  // Use a portal element at body level to escape overflow parents
+  const portalId = tbl+'-cols-portal';
+  let portal = document.getElementById(portalId);
+  if(!portal) {
+    portal = document.createElement('div');
+    portal.id = portalId;
+    portal.className = 'col-dd';
+    document.body.appendChild(portal);
   }
+  portal.innerHTML = COL_DEFS[tbl].filter(c=>c.k!=='_act').map(c =>
+    `<label style="user-select:none;display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:11px;color:var(--tx2)"><input type="checkbox" ${colVis[tbl][c.k]?'checked':''} onchange="colVis['${tbl}']['${c.k}']=this.checked;renderTable('${tbl}');buildColPanel('${tbl}')"> ${esc(c.l||c.k)}</label>`
+  ).join('');
 }
 function buildAllColPanels() { ['geral','alert'].forEach(buildColPanel); }
 function toggleColDD(id, btn) {
-  // Close any open dropdown first
-  document.querySelectorAll('.col-dd.on').forEach(d => {
-    if(d.id !== id) { d.classList.remove('on'); document.body.contains(d) && d.id && document.getElementById(d.id.replace('--portal',''))?.appendChild(d); }
-  });
-  const dd = document.getElementById(id);
-  if(!dd) return;
-  const isOn = dd.classList.contains('on');
-  if(isOn) { dd.classList.remove('on'); return; }
-  // Position relative to button
-  const b = btn || (typeof event !== 'undefined' ? event.currentTarget : null);
-  if(b) {
-    const rect = b.getBoundingClientRect();
-    dd.style.top    = (rect.bottom + window.scrollY + 4) + 'px';
-    dd.style.left   = 'auto';
-    dd.style.right  = 'auto';
-    dd.style.left   = Math.min(rect.left, window.innerWidth - 200) + 'px';
+  // id is like 'eq-cols' or 'alert-cols' — portal is 'eq-cols-portal'
+  const portalId = id + '-portal';
+  const portal = document.getElementById(portalId);
+  if(!portal) return;
+  const isOn = portal.classList.contains('on');
+  // Close all
+  document.querySelectorAll('.col-dd.on').forEach(d => d.classList.remove('on'));
+  if(isOn) return;
+  // Position under the button
+  const rect = btn.getBoundingClientRect();
+  const spaceRight = window.innerWidth - rect.right;
+  portal.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+  if(spaceRight >= 200) {
+    portal.style.left  = rect.left + 'px';
+    portal.style.right = 'auto';
+  } else {
+    portal.style.right = spaceRight + 'px';
+    portal.style.left  = 'auto';
   }
-  dd.classList.add('on');
+  portal.classList.add('on');
 }
 document.addEventListener('click', e => {
   if(!e.target.closest('.col-panel') && !e.target.closest('.col-dd')) {
@@ -1685,7 +1695,7 @@ function renderTable(tbl) {
 
   tbody.innerHTML = slice.map(r=>'<tr>'+cols.map(c=>renderCell(r,c.k,tbl)).join('')+'</tr>').join('');
 
-  const el = document.getElementById(cntId); if(el) el.textContent = p.rows.length+' registros';
+  const el = document.getElementById(cntId); if(el) el.textContent = p.rows.length+' '+t('kpi_sub_total');
   buildPag(p, pInfoId, pBtnsId, ()=>renderTable(tbl));
   attachResizers(tbl);
 }
