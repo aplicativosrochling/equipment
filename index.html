@@ -1140,6 +1140,8 @@ document.addEventListener('DOMContentLoaded', () => document.body.appendChild(_c
 let _colMenuTbl = null;
 
 function showColMenu(tbl, btn) {
+  // Stop click from bubbling to document (which would immediately close the menu)
+  if(event) event.stopPropagation();
   // If already open for same table, close
   if(_colMenu.style.display !== 'none' && _colMenuTbl === tbl) {
     _colMenu.style.display = 'none';
@@ -1171,6 +1173,10 @@ document.addEventListener('click', e => {
   if(!e.target.closest('#col-menu-portal') && !e.target.closest('.col-panel')) {
     _colMenu.style.display = 'none';
   }
+});
+// Prevent clicks inside portal from closing it
+document.addEventListener('DOMContentLoaded', () => {
+  _colMenu.addEventListener('click', e => e.stopPropagation());
 });
 
 // ═══════════════════════════════════════════════════════
@@ -1629,11 +1635,116 @@ function diasBadge(d){
   return `<span class="badge b-ok">${d}d</span>`;
 }
 // Translate data field values
+// ── Data translation dictionary PT → EN ──────────────────────────
+const DATA_EN = {
+  // Tipos de equipamento
+  'Aferidor de Torque':                    'Torque Calibrator',
+  'Balança Digital':                       'Digital Scale',
+  'Balança Eletrônica':                    'Electronic Scale',
+  'Bloco Padrão':                          'Gauge Block',
+  'Calibrador PNP':                        'PNP Gauge',
+  'Calibrador de Folga':                   'Feeler Gauge',
+  'Calibrador de Raio':                    'Radius Gauge',
+  'Determinador de Umidade':               'Moisture Analyzer',
+  'Dispositivo de Controle':               'Control Fixture',
+  'Dispositivo de controle':               'Control Fixture',
+  'Durômetro':                             'Durometer',
+  'Escala Métrica':                        'Metric Scale',
+  'Espectofotometro':                      'Spectrophotometer',
+  'Espessímetro':                          'Thickness Gauge',
+  'Esquadro':                              'Square Gauge',
+  'Fluxometro':                            'Flow Meter',
+  'Furo calibrado':                        'Calibrated Bore',
+  'Manovacuômetro Digital':               'Digital Vacuum Gauge',
+  'Manômetro injetora':                    'Injector Pressure Gauge',
+  'Medidor de Altura Centesimal':          'Height Gauge',
+  'Micrômetro':                            'Micrometer',
+  'Muflla':                                'Muffle Furnace',
+  'Máquina Universal de ensaios':          'Universal Testing Machine',
+  'Nível':                                 'Level',
+  'PNP':                                   'PNP Gauge',
+  'Paquímetro':                            'Caliper',
+  'Pesos':                                 'Weights',
+  'Pirômetro / Indicador de Temperatura':  'Pyrometer / Temp Indicator',
+  'Plastômetro':                           'Plastometer',
+  'Relógio Apalpador':                     'Dial Test Indicator',
+  'Relógio Comparador':                    'Dial Gauge',
+  'Rugosímetro':                           'Roughness Tester',
+  'Termohigrômetro':                       'Thermohygrometer',
+  'Termômetro Digital_Controlador de Temperatura': 'Digital Thermometer / Temp Controller',
+  'Termômetro Infravermelho Digital':      'Digital Infrared Thermometer',
+  'Torquímetro':                           'Torque Wrench',
+  'Transdutor':                            'Transducer',
+  'Transdutor à vácuo':                    'Vacuum Transducer',
+  'Trena métrica':                         'Metric Tape Measure',
+  'Tridimensional':                        'CMM (Coordinate Measuring Machine)',
+  // Localizações genéricas
+  'Almoxarifado':                          'Warehouse',
+  'ALMOXERIFADO':                          'WAREHOUSE',
+  'Ferramentaria':                         'Tool Room',
+  'Metrologia':                            'Metrology',
+  'Produção':                              'Production',
+  // Clientes
+  'Todos':                                 'All',
+  'Não definido':                          'Not defined',
+  // Observações
+  'OK':                                    'OK',
+  'ok':                                    'OK',
+  'NÃO ENCONTRADO':                        'NOT FOUND',
+  'não encontrado':                        'not found',
+  'DUPLICADO':                             'DUPLICATE',
+  'QUEBRADO':                              'BROKEN',
+  'REPROVADO CALIBRÇÃO':                   'FAILED CALIBRATION',
+  'VERIFICAR':                             'CHECK',
+  'CADASTRAR NO LIGHTLAB':                 'REGISTER IN LIGHTLAB',
+  // Status calib full text (for cells, not badges)
+  'Instrumento Calibrado e aprovado':      'Calibrated & Approved',
+  'Calibração Necessária':                 'Calibration Required',
+  'DESCARTADO':                            'DISCARDED',
+  'Não encontrado':                        'Not Found',
+  // Descriptions - common patterns
+  'Balança Eletrônica - 0 A 6 Kg':        'Electronic Scale - 0 to 6 Kg',
+  'Balança Eletrônica - 3 A 6 Kg':        'Electronic Scale - 3 to 6 Kg',
+  'Balança Eletrônica - 3 A 6 Kg - Door': 'Electronic Scale - 3 to 6 Kg - Door',
+  'Balança Digital Min 0,02 Kg Max 100 kg':'Digital Scale Min 0.02 Kg Max 100 Kg',
+  'Balança Eletrônica o a 500g':           'Electronic Scale 0 to 500g',
+  'Balança_Determinador de Umidade':       'Scale / Moisture Analyzer',
+};
+
+// Translate a single value given its field key
 function translateVal(k, v) {
   if(!v) return v;
-  if(k === 'status') return statusText(v);
+  if(k === 'status')       return statusText(v);
   if(k === 'status_calib') return calibText(v);
-  return v;
+  if(LANG !== 'en') return v;
+  // Look up in dictionary (exact match first)
+  if(DATA_EN[v] !== undefined) return DATA_EN[v];
+  // Partial match for descriptions with common PT prefixes
+  let result = v;
+  result = result.replace(/Balança Eletrônica/g, 'Electronic Scale');
+  result = result.replace(/Balança Digital/g,    'Digital Scale');
+  result = result.replace(/Paquímetro/g,         'Caliper');
+  result = result.replace(/Micrômetro/g,         'Micrometer');
+  result = result.replace(/Relógio Comparador/g, 'Dial Gauge');
+  result = result.replace(/Relógio Apalpador/g,  'Dial Test Indicator');
+  result = result.replace(/Termômetro/g,         'Thermometer');
+  result = result.replace(/Rugosímetro/g,        'Roughness Tester');
+  result = result.replace(/Durômetro/g,          'Durometer');
+  result = result.replace(/Torquímetro/g,        'Torque Wrench');
+  result = result.replace(/Espessímetro/g,       'Thickness Gauge');
+  result = result.replace(/Manovacuômetro/g,     'Vacuum Gauge');
+  result = result.replace(/Manômetro/g,          'Pressure Gauge');
+  result = result.replace(/Pirômetro/g,          'Pyrometer');
+  result = result.replace(/Transdutor/g,         'Transducer');
+  result = result.replace(/Medidor de Altura/g,  'Height Gauge');
+  result = result.replace(/Dispositivo de [Cc]ontrole/g, 'Control Fixture');
+  result = result.replace(/Injeção - Máquina/g,  'Injection - Machine');
+  result = result.replace(/Injetora/g,           'Injection');
+  result = result.replace(/Almoxarifado/g,       'Warehouse');
+  result = result.replace(/Ferramentaria/g,      'Tool Room');
+  result = result.replace(/Metrologia/g,         'Metrology');
+  result = result.replace(/Produção/g,           'Production');
+  return result;
 }
 function statusText(v) {
   if(!v) return v;
@@ -1683,7 +1794,10 @@ function renderCell(r, k, tbl) {
   }
   if(k==='ult_calib'||k==='prox_calib') return `<td ${attr} style="width:${w||105}px;min-width:${w||105}px;max-width:${w||105}px;font-family:var(--mono);font-size:10px">${r[k]||'—'}</td>`;
   const v = r[k];
-  const vt = (k==='status'||k==='status_calib') ? translateVal(k, v) : v;
+  // Translate all translatable fields
+  const translatableFields = ['tipo','status','status_calib','localizacao',
+    'cliente','observacoes','descricao','empresa'];
+  const vt = translatableFields.includes(k) ? translateVal(k, v) : v;
   return `<td ${attr} title="${esc(vt||'')}">${esc(vt||'—')}</td>`;
 }
 
@@ -2054,10 +2168,10 @@ function updateValidityBar(){
   const total=Math.round((end-start)/86400000),elapsed=Math.round((today-start)/86400000),remaining=Math.round((end-today)/86400000);
   const pct=Math.max(0,Math.min(100,Math.round(elapsed/total*100)));
   const color=remaining<0?'var(--red)':remaining<=30?'var(--orange)':remaining<=90?'var(--accent)':'var(--green)';
-  document.getElementById('v-text').textContent=remaining<0?`Vencido há ${Math.abs(remaining)}d`:remaining===0?'Vence hoje!':`${remaining}d restantes`;
+  document.getElementById('v-text').textContent=remaining<0?`${t('d_expired')} ${Math.abs(remaining)}${t('d_days')}`:remaining===0?`${t('d_today')}`:`${remaining}${t('d_days')} ${t('d_remaining')}`;
   document.getElementById('v-text').style.color=color;
   document.getElementById('v-bar').style.cssText=`width:${pct}%;background:${pct>=100?'var(--red)':pct>=80?'var(--orange)':'var(--green)'}`;
-  document.getElementById('v-pct').textContent=pct+'% usado';
+  document.getElementById('v-pct').textContent=pct+LANG==='en'?'% used':'% usado';
   wrap.style.display='block';
 }
 
