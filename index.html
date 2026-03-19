@@ -187,7 +187,7 @@ tr:hover td{background:rgba(77,166,255,.06)!important}
 
 /* ── COL PANEL ── */
 .col-panel{position:relative}
-.col-dd{display:none;position:absolute;right:0;top:calc(100% + 3px);background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:6px;z-index:100;min-width:180px;max-height:320px;overflow-y:auto;box-shadow:0 6px 20px rgba(0,0,0,.3)}
+.col-dd{display:none;position:fixed;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:6px;z-index:9999;min-width:180px;max-height:320px;overflow-y:auto;box-shadow:0 6px 20px rgba(0,0,0,.4)}
 .col-dd.on{display:block}
 .col-dd label{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:11px;color:var(--tx2)}
 .col-dd label:hover{background:var(--surf2)}
@@ -205,6 +205,11 @@ body.col-resizing *{cursor:col-resize!important}
 @keyframes bell-ring{0%,100%{transform:rotate(0)}20%{transform:rotate(-15deg)}40%{transform:rotate(15deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(8deg)}}
 @media print{.hdr,.tabs,.filters,.modal-ov,.toast,.notif-panel,.btn-p,.btn-g,.btn-ic,.tgl{display:none!important}.page{display:none!important}#tab-relatorios{display:block!important}}
 #fp,#file-import{display:none}
+
+/* ── LANG TOGGLE ── */
+.lang-tgl{display:flex;gap:1px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:5px;overflow:hidden}
+.lang-btn{padding:3px 9px;font-size:10px;font-weight:800;border:none;background:transparent;color:var(--tx3);cursor:pointer;font-family:var(--font);letter-spacing:.5px;transition:all .15s}
+.lang-btn.on{background:var(--accent);color:#000}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -218,6 +223,10 @@ body.col-resizing *{cursor:col-resize!important}
   </div>
   <div class="hdr-r">
     <span id="last-upd"></span>
+    <div class="lang-tgl">
+      <button class="lang-btn on" id="lb-pt" onclick="setLang('pt')">PT</button>
+      <button class="lang-btn"    id="lb-en" onclick="setLang('en')">EN</button>
+    </div>
     <div class="tgl">
       <button class="tgl-o on" id="th-dk" onclick="setTheme('dark')">🌙</button>
       <button class="tgl-o" id="th-lt" onclick="setTheme('light')">☀️</button>
@@ -266,7 +275,7 @@ body.col-resizing *{cursor:col-resize!important}
         <canvas id="ch-gauge"></canvas>
         <div style="position:absolute;bottom:16px;text-align:center">
           <div id="gauge-pct" style="font-size:24px;font-weight:800;font-family:var(--mono);letter-spacing:-1px">—</div>
-          <div style="font-size:9px;color:var(--tx3);letter-spacing:1px;text-transform:uppercase">em dia</div>
+          <div id="gauge-label" style="font-size:9px;color:var(--tx3);letter-spacing:1px;text-transform:uppercase">em dia</div>
         </div>
       </div>
     </div>
@@ -312,7 +321,7 @@ body.col-resizing *{cursor:col-resize!important}
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
         <span class="tbl-cnt" id="alert-cnt">—</span>
         <input class="search-box" placeholder="🔍 Buscar..." oninput="alertSearch=this.value;renderAlerts()">
-        <div class="col-panel"><button class="btn-g" onclick="toggleColDD('alert-cols')">⚙ Colunas</button><div class="col-dd" id="alert-cols"></div></div>
+        <div class="col-panel"><button class="btn-g" onclick="toggleColDD('alert-cols',this)">⚙ Colunas</button><div class="col-dd" id="alert-cols"></div></div>
         <button class="btn-g" onclick="exportCSV('alert')">↓ CSV</button>
       </div>
     </div>
@@ -341,7 +350,7 @@ body.col-resizing *{cursor:col-resize!important}
       <span class="tbl-title">Equipamentos de Medição</span>
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
         <span class="tbl-cnt" id="eq-cnt">—</span>
-        <div class="col-panel"><button class="btn-g" onclick="toggleColDD('eq-cols')">⚙ Colunas</button><div class="col-dd" id="eq-cols"></div></div>
+        <div class="col-panel"><button class="btn-g" onclick="toggleColDD('eq-cols',this)">⚙ Colunas</button><div class="col-dd" id="eq-cols"></div></div>
         <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
       </div>
     </div>
@@ -540,9 +549,23 @@ function buildColPanel(tbl) {
   ).join('');
 }
 function buildAllColPanels() { ['geral','alert'].forEach(buildColPanel); }
-function toggleColDD(id) { document.getElementById(id).classList.toggle('on'); }
+function toggleColDD(id, btn) {
+  const dd = document.getElementById(id);
+  const isOn = dd.classList.contains('on');
+  // Close all first
+  document.querySelectorAll('.col-dd').forEach(d => d.classList.remove('on'));
+  if(!isOn) {
+    const b = btn || event.currentTarget;
+    const rect = b.getBoundingClientRect();
+    dd.style.top  = (rect.bottom + 4) + 'px';
+    dd.style.right = (window.innerWidth - rect.right) + 'px';
+    dd.classList.add('on');
+  }
+}
 document.addEventListener('click', e => {
-  if(!e.target.closest('.col-panel')) document.querySelectorAll('.col-dd').forEach(d=>d.classList.remove('on'));
+  if(!e.target.closest('.col-panel') && !e.target.closest('.col-dd')) {
+    document.querySelectorAll('.col-dd').forEach(d => d.classList.remove('on'));
+  }
 });
 
 // ═══════════════════════════════════════════════════════
@@ -695,7 +718,7 @@ async function fbInit(cfg) {
 // LEITURA única
 async function fbPull() {
   if(!fbActive()) return false;
-  setSyncInd('Carregando do Firebase…', 'var(--accent2)', true);
+  setSyncInd(t('sync_loading'), 'var(--accent2)', true);
   try {
     const snap = await _colRef.doc('dados').get();
     if(snap.exists) {
@@ -706,7 +729,7 @@ async function fbPull() {
     setSyncInd('🔥 Sync ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
     return true;
   } catch(e) {
-    setSyncInd('⚠️ Firebase offline — usando cache local', 'var(--orange)');
+    setSyncInd(t('sync_offline'), 'var(--orange)');
     console.warn('fbPull error:', e);
     return false;
   }
@@ -717,7 +740,7 @@ function fbSchedulePush() {
   _pending = true;
   const btn = document.getElementById('btn-sync-now');
   if(btn) btn.style.display = 'inline-block';
-  setSyncInd('⏸ Salvando…', 'var(--orange)');
+  setSyncInd(t('sync_pending'), 'var(--orange)');
   if(_pushTimer) clearTimeout(_pushTimer);
   _pushTimer = setTimeout(() => fbPush(false), 1500);
 }
@@ -725,7 +748,7 @@ function fbSchedulePush() {
 async function fbPush(manual) {
   if(!fbActive()) { saveLS(); return; }
   if(_pushTimer) { clearTimeout(_pushTimer); _pushTimer = null; }
-  setSyncInd('Salvando no Firebase…', 'var(--accent2)', true);
+  setSyncInd(t('sync_saving'), 'var(--accent2)', true);
   try {
     const payload = DB.map(r=>{const{dias_vencer,...rest}=r;return rest;});
     await _colRef.doc('dados').set({ records: payload, updated: new Date().toISOString() });
@@ -733,10 +756,10 @@ async function fbPush(manual) {
     _pending = false;
     const btn = document.getElementById('btn-sync-now');
     if(btn) btn.style.display = 'none';
-    setSyncInd('🔥 Salvo ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
+    setSyncInd(t('sync_saved') + ' ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
     if(manual) showToast('🔥 Salvo no Firebase!');
   } catch(e) {
-    setSyncInd('⚠️ Falha — tentando em 30s', 'var(--red)');
+    setSyncInd(t('sync_fail'), 'var(--red)');
     _pushTimer = setTimeout(() => fbPush(false), 30000);
     saveLS();
     if(manual) showToast('Falha Firebase. Salvo localmente.', 'err');
@@ -1265,7 +1288,7 @@ function buildUrgentes() {
   const rows=DB.filter(r=>r.prox_calib&&r.dias_vencer!==null).sort((a,b)=>a.dias_vencer-b.dias_vencer).slice(0,15);
   el.innerHTML=rows.map((r,i)=>{
     const d=r.dias_vencer,c=d<0?'var(--red)':d<=30?'var(--orange)':'var(--accent)';
-    const lb=d<0?`Vencido há ${Math.abs(d)}d`:`${d}d restantes`;
+    const lb=d<0?`${t('d_expired')} ${Math.abs(d)}${t('d_days')}`:`${d}${t('d_days')} ${t('d_remaining')}`;
     return `<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:11px">
       <span style="font-family:var(--mono);color:var(--tx3);width:14px;text-align:right;font-size:10px">${i+1}</span>
       <div style="flex:1;overflow:hidden"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.id||r.descricao||'—')}</div><div style="color:var(--tx3);font-size:10px">${esc(r.tipo||'')} · ${esc(r.localizacao||'')}</div></div>
@@ -1323,7 +1346,7 @@ let editUID=null;
 function openEdit(uid){
   const r=DB.find(x=>x._uid===uid); if(!r)return;
   editUID=uid;
-  document.getElementById('m-title').textContent='Editar Registro';
+  document.getElementById('m-title').textContent=t('m_edit_title');
   document.getElementById('m-sub').textContent=r.id||r.descricao||'—';
   ['m-id','id','m-tipo','tipo','m-cliente','cliente','m-fab','fabricante','m-desc','descricao','m-local','localizacao','m-resp','responsavel','m-emp','empresa','m-codlab','cod_lab','m-ult','ult_calib','m-prox','prox_calib','m-notes','notes'].reduce((a,v,i)=>{if(i%2===0){a.key=v;}else{const el=document.getElementById(a.key);if(el)el.value=r[v]||'';}return a;},{});
   document.getElementById('m-freq').value=r.freq_dias||'';
@@ -1375,10 +1398,10 @@ function saveRecord(){
   if(editUID!==null){
     const idx=DB.findIndex(x=>x._uid===editUID);
     if(idx>=0)DB[idx]={...DB[idx],...upd};
-    showToast('Registro atualizado');
+    showToast(t('t_updated'));
   } else {
     DB.push({...upd,_uid:Date.now(),sheet:'geral'});
-    showToast('Registro adicionado');
+    showToast(t('t_added'));
   }
   closeModal(); updateAll(); fbSchedulePush();
 }
@@ -1494,17 +1517,602 @@ function updateAll(){
   updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
   pag.eq.rows=DB.slice(); pag.eq.p=1; renderTable('geral');
   renderAlerts();
-  document.getElementById('last-upd').textContent='Atualizado: '+new Date().toLocaleString('pt-BR');
+  document.getElementById('last-upd').textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
+}
+
+// ═══════════════════════════════════════════════════════
+// i18n — Bilíngue PT / EN
+// ═══════════════════════════════════════════════════════
+let LANG = localStorage.getItem('rochling_lang') || 'pt';
+
+const T = {
+  pt: {
+    // Header / nav
+    title:          'Controle de Equipamentos de Medição',
+    tab_dashboard:  '📊 Dashboard',
+    tab_alerts:     '⚠️ Alertas',
+    tab_equip:      '🔧 Equipamentos',
+    tab_reports:    '📋 Relatórios',
+    btn_import:     '📥 Importar',
+    btn_export:     '📤 Exportar',
+    btn_reset:      '🔄 Resetar',
+    btn_new:        '＋ Novo',
+    btn_save:       '💾 Salvar',
+    btn_cancel:     'Cancelar',
+    btn_cols:       '⚙ Colunas',
+    btn_csv:        '↓ CSV',
+    btn_print:      '🖨️ Imprimir / PDF',
+    btn_csv_period: '📥 Exportar CSV',
+    btn_clear:      '✕ Limpar',
+    btn_mark_read:  'Marcar lidas',
+    btn_see_alerts: 'Ver todos os alertas →',
+    btn_sync:       '☁️ Sync',
+    lbl_updated:    'Atualizado:',
+    // KPIs
+    kpi_total:      'Total',
+    kpi_active:     'Ativos',
+    kpi_inactive:   'Inativos',
+    kpi_calib_ok:   'Calib. OK',
+    kpi_expired:    'Vencidos',
+    kpi_due30:      'Vencem 30d',
+    kpi_due90:      'Vencem 90d',
+    kpi_health:     'Índice Saúde',
+    kpi_sub_total:  'registros',
+    kpi_sub_active: 'em operação',
+    kpi_sub_inact:  'fora de uso',
+    kpi_sub_ok:     'aprovados',
+    kpi_sub_exp:    'prazo expirado',
+    kpi_sub_urg:    'urgente',
+    kpi_sub_mon:    'monitorar',
+    kpi_sub_health: 'equip. em dia',
+    // Charts
+    ch_health:      '💚 Saúde do Parque',
+    ch_calib:       '📊 Status de Calibração',
+    ch_oper:        '⚡ Status Operacional',
+    ch_types:       '🔧 Top Tipos de Equipamento',
+    ch_types_exp:   '🔴 Tipos com Calibração Vencida',
+    ch_due6m:       '📅 Vencimentos — Próx. 6 Meses',
+    ch_locations:   '📍 Top Localizações',
+    ch_companies:   '🏢 Empresa Executante',
+    ch_in_day:      'em dia',
+    // Alerts tab
+    tl_expired:     '🔴 Vencidos',
+    tl_due30:       '🟠 Vencem em 30d',
+    tl_due90:       '🟡 Vencem em 90d',
+    tl_ok:          '🟢 Em dia',
+    alert_search:   '🔍 Buscar...',
+    notif_title:    '🔔 Notificações',
+    // Filters
+    f_type:         'Tipo',
+    f_client:       'Cliente',
+    f_location:     'Localização',
+    f_responsible:  'Responsável',
+    f_company:      'Empresa',
+    f_status_op:    'Status Op.',
+    f_calib:        'Calibração',
+    f_from:         'De',
+    f_to:           'Até',
+    f_search:       'Código, descrição...',
+    f_search_lbl:   'Buscar',
+    f_all:          'Todos',
+    f_all_f:        'Todas',
+    f_calib_ok:     'OK',
+    f_calib_exp:    'Vencido',
+    f_calib_need:   'Necessária',
+    tbl_equip_title:'Equipamentos de Medição',
+    // Col headers (COL_DEFS labels)
+    col_id:         'Código',
+    col_tipo:       'Tipo',
+    col_cod_lab:    'Cód. Labortec',
+    col_cliente:    'Cliente',
+    col_desc:       'Descrição',
+    col_fab:        'Fabricante',
+    col_local:      'Localização',
+    col_resp:       'Responsável',
+    col_emp:        'Empresa',
+    col_ult:        'Últ. Calib.',
+    col_prox:       'Próx. Calib.',
+    col_freq:       'Freq.(d)',
+    col_calib:      'Calib.',
+    col_status:     'Status',
+    col_dias:       'Dias',
+    col_obs:        'Observações',
+    col_arq:        'Arquivo',
+    // Reports tab
+    rep_period_title: '📋 Relatório por Período',
+    rep_from:       'De:',
+    rep_to:         'Até:',
+    rep_csv_period: '↓ CSV do Período',
+    rep_venc_mes:   '📅 Vencimentos por Mês (12 meses)',
+    rep_evolucao:   '📈 Evolução Acumulada (7 meses)',
+    rep_resp:       '👤 Por Responsável',
+    rep_emp_venc:   '🏭 Vencidos por Empresa',
+    rep_freq:       '⏱ Frequência de Calibração',
+    rep_heatmap:    '🌡️ Status por Localização',
+    rep_resumo:     '🔢 Resumo Geral',
+    rep_urgentes:   '⏱️ Top 15 Mais Urgentes',
+    rep_kpi_venc:   'Vencidos',
+    rep_kpi_30d:    'Vencem 30d',
+    rep_kpi_90d:    'Vencem 90d',
+    rep_kpi_ok:     'Em Dia',
+    rep_kpi_health: 'Índice Saúde',
+    // Modal
+    m_edit_title:   'Editar Registro',
+    m_new_title:    'Novo Equipamento',
+    m_code:         'Código de Controle',
+    m_type:         'Tipo de Equipamento',
+    m_client:       'Cliente',
+    m_maker:        'Fabricante',
+    m_desc:         'Descrição',
+    m_location:     'Localização',
+    m_responsible:  'Responsável',
+    m_company:      'Empresa Executante',
+    m_codlab:       'Código Labortec',
+    m_last_calib:   'Última Calibração',
+    m_next_calib:   'Próxima Calibração',
+    m_freq:         'Frequência (dias)',
+    m_status_op:    'Status Operacional',
+    m_status_calib: 'Status Calibração',
+    m_validity:     'Validade:',
+    m_file:         'Arquivo / Certificado',
+    m_file_none:    'Nenhum arquivo selecionado',
+    m_file_select:  '📁 Selecionar',
+    m_file_open:    '🔗 Abrir',
+    m_notes:        'Observações',
+    // Status values
+    s_active:       'ATIVO',
+    s_inactive:     'INATIVO',
+    s_calib_ok:     'Calibrado e Aprovado',
+    s_calib_need:   'Calibração Necessária',
+    s_discarded:    'Descartado',
+    s_notfound:     'Não Encontrado',
+    // Days badge
+    d_expired:      'Vencido',
+    d_today:        'Hoje!',
+    d_days:         'd',
+    d_remaining:    'restantes',
+    // Toast / sync messages
+    t_updated:      'Registro atualizado',
+    t_added:        'Registro adicionado',
+    t_imported:     'Importado',
+    t_records:      'registros',
+    t_reset:        'Dados resetados',
+    t_saved_fb:     'Salvo no Firebase!',
+    t_fb_connected: 'Firebase conectado!',
+    t_fb_loaded:    'registros carregados.',
+    sync_loading:   t('sync_loading'),
+    sync_saving:    t('sync_saving'),
+    sync_saved:     'Salvo',
+    sync_pending:   t('sync_pending'),
+    sync_offline:   t('sync_offline'),
+    sync_fail:      t('sync_fail'),
+  },
+  en: {
+    title:          'Measurement Equipment Control',
+    tab_dashboard:  '📊 Dashboard',
+    tab_alerts:     '⚠️ Alerts',
+    tab_equip:      '🔧 Equipment',
+    tab_reports:    '📋 Reports',
+    btn_import:     '📥 Import',
+    btn_export:     '📤 Export',
+    btn_reset:      '🔄 Reset',
+    btn_new:        '＋ New',
+    btn_save:       '💾 Save',
+    btn_cancel:     'Cancel',
+    btn_cols:       '⚙ Columns',
+    btn_csv:        '↓ CSV',
+    btn_print:      '🖨️ Print / PDF',
+    btn_csv_period: '📥 Export CSV',
+    btn_clear:      '✕ Clear',
+    btn_mark_read:  'Mark as read',
+    btn_see_alerts: 'See all alerts →',
+    btn_sync:       '☁️ Sync',
+    lbl_updated:    'Updated:',
+    kpi_total:      'Total',
+    kpi_active:     'Active',
+    kpi_inactive:   'Inactive',
+    kpi_calib_ok:   'Calib. OK',
+    kpi_expired:    'Expired',
+    kpi_due30:      'Due 30d',
+    kpi_due90:      'Due 90d',
+    kpi_health:     'Health Index',
+    kpi_sub_total:  'records',
+    kpi_sub_active: 'in operation',
+    kpi_sub_inact:  'out of service',
+    kpi_sub_ok:     'approved',
+    kpi_sub_exp:    'expired',
+    kpi_sub_urg:    'urgent',
+    kpi_sub_mon:    'monitor',
+    kpi_sub_health: 'equip. on time',
+    ch_health:      '💚 Fleet Health',
+    ch_calib:       '📊 Calibration Status',
+    ch_oper:        '⚡ Operational Status',
+    ch_types:       '🔧 Top Equipment Types',
+    ch_types_exp:   '🔴 Types with Expired Calibration',
+    ch_due6m:       '📅 Due Dates — Next 6 Months',
+    ch_locations:   '📍 Top Locations',
+    ch_companies:   '🏢 Executing Company',
+    ch_in_day:      'on time',
+    tl_expired:     '🔴 Expired',
+    tl_due30:       '🟠 Due in 30d',
+    tl_due90:       '🟡 Due in 90d',
+    tl_ok:          '🟢 Up to date',
+    alert_search:   '🔍 Search...',
+    notif_title:    '🔔 Notifications',
+    f_type:         'Type',
+    f_client:       'Client',
+    f_location:     'Location',
+    f_responsible:  'Responsible',
+    f_company:      'Company',
+    f_status_op:    'Op. Status',
+    f_calib:        'Calibration',
+    f_from:         'From',
+    f_to:           'To',
+    f_search:       'Code, description...',
+    f_search_lbl:   'Search',
+    f_all:          'All',
+    f_all_f:        'All',
+    f_calib_ok:     'OK',
+    f_calib_exp:    'Expired',
+    f_calib_need:   'Required',
+    tbl_equip_title:'Measurement Equipment',
+    col_id:         'Code',
+    col_tipo:       'Type',
+    col_cod_lab:    'Labortec Code',
+    col_cliente:    'Client',
+    col_desc:       'Description',
+    col_fab:        'Manufacturer',
+    col_local:      'Location',
+    col_resp:       'Responsible',
+    col_emp:        'Company',
+    col_ult:        'Last Calib.',
+    col_prox:       'Next Calib.',
+    col_freq:       'Freq.(d)',
+    col_calib:      'Calib.',
+    col_status:     'Status',
+    col_dias:       'Days',
+    col_obs:        'Notes',
+    col_arq:        'File',
+    rep_period_title: '📋 Period Report',
+    rep_from:       'From:',
+    rep_to:         'To:',
+    rep_csv_period: '↓ CSV Period',
+    rep_venc_mes:   '📅 Expiries by Month (12 months)',
+    rep_evolucao:   '📈 Cumulative Trend (7 months)',
+    rep_resp:       '👤 By Responsible',
+    rep_emp_venc:   '🏭 Expired by Company',
+    rep_freq:       '⏱ Calibration Frequency',
+    rep_heatmap:    '🌡️ Status by Location',
+    rep_resumo:     '🔢 General Summary',
+    rep_urgentes:   '⏱️ Top 15 Most Urgent',
+    rep_kpi_venc:   'Expired',
+    rep_kpi_30d:    'Due 30d',
+    rep_kpi_90d:    'Due 90d',
+    rep_kpi_ok:     'On Time',
+    rep_kpi_health: 'Health Index',
+    m_edit_title:   'Edit Record',
+    m_new_title:    'New Equipment',
+    m_code:         'Control Code',
+    m_type:         'Equipment Type',
+    m_client:       'Client',
+    m_maker:        'Manufacturer',
+    m_desc:         'Description',
+    m_location:     'Location',
+    m_responsible:  'Responsible',
+    m_company:      'Executing Company',
+    m_codlab:       'Labortec Code',
+    m_last_calib:   'Last Calibration',
+    m_next_calib:   'Next Calibration',
+    m_freq:         'Frequency (days)',
+    m_status_op:    'Operational Status',
+    m_status_calib: 'Calibration Status',
+    m_validity:     'Validity:',
+    m_file:         'File / Certificate',
+    m_file_none:    'No file selected',
+    m_file_select:  '📁 Select',
+    m_file_open:    '🔗 Open',
+    m_notes:        'Notes',
+    s_active:       'ACTIVE',
+    s_inactive:     'INACTIVE',
+    s_calib_ok:     'Calibrated & Approved',
+    s_calib_need:   'Calibration Required',
+    s_discarded:    'Discarded',
+    s_notfound:     'Not Found',
+    d_expired:      'Expired',
+    d_today:        'Today!',
+    d_days:         'd',
+    d_remaining:    'remaining',
+    t_updated:      'Record updated',
+    t_added:        'Record added',
+    t_imported:     'Imported',
+    t_records:      'records',
+    t_reset:        'Data reset',
+    t_saved_fb:     'Saved to Firebase!',
+    t_fb_connected: 'Firebase connected!',
+    t_fb_loaded:    'records loaded.',
+    sync_loading:   'Loading from Firebase…',
+    sync_saving:    'Saving to Firebase…',
+    sync_saved:     'Saved',
+    sync_pending:   '⏸ Saving…',
+    sync_offline:   '⚠️ Firebase offline — using local cache',
+    sync_fail:      '⚠️ Failed — retrying in 30s',
+  }
+};
+
+function t(key) { return (T[LANG] || T.pt)[key] || (T.pt)[key] || key; }
+
+function setLang(lang) {
+  LANG = lang;
+  localStorage.setItem('rochling_lang', lang);
+  // Update toggle buttons
+  document.getElementById('lb-pt')?.classList.toggle('on', lang==='pt');
+  document.getElementById('lb-en')?.classList.toggle('on', lang==='en');
+  applyLang();
+}
+
+// Apply language to all static DOM elements
+function applyLang() {
+  const L = lang => (el, key) => { if(el) el.textContent = t(key); };
+  const s = (id, key) => { const el=document.getElementById(id); if(el) el.textContent=t(key); };
+  const q = (sel, key) => { document.querySelectorAll(sel).forEach(el=>{ if(!el.dataset.orig) el.dataset.orig=el.textContent; el.textContent=t(key); }); };
+  const a = (sel, attr, key) => { document.querySelectorAll(sel).forEach(el=>el.setAttribute(attr, t(key))); };
+
+  // Header / title
+  document.title = 'Röchling — ' + t('title');
+  document.querySelector('h1') && (document.querySelector('h1').textContent = t('title'));
+
+  // Tabs
+  const tabs = document.querySelectorAll('.tab');
+  if(tabs[0]) tabs[0].textContent = t('tab_dashboard');
+  if(tabs[1]) tabs[1].textContent = t('tab_alerts');
+  if(tabs[2]) tabs[2].textContent = t('tab_equip');
+  if(tabs[3]) tabs[3].textContent = t('tab_reports');
+
+  // Header buttons
+  const hbtns = document.querySelectorAll('.hdr-r .btn-g, .hdr-r .btn-p');
+  hbtns.forEach(btn => {
+    const txt = btn.textContent.trim();
+    const map = {
+      '📥 Importar':'btn_import','📥 Import':'btn_import',
+      '📤 Exportar':'btn_export','📤 Export':'btn_export',
+      '🔄 Resetar':'btn_reset','🔄 Reset':'btn_reset',
+      '＋ Novo':'btn_new','＋ New':'btn_new',
+    };
+    if(map[txt]) btn.textContent = t(map[txt]);
+  });
+
+  // KPI labels
+  const kpiLabels = [
+    ['kpi_total','kpi_sub_total'], ['kpi_active','kpi_sub_active'],
+    ['kpi_inactive','kpi_sub_inact'], ['kpi_calib_ok','kpi_sub_ok'],
+    ['kpi_expired','kpi_sub_exp'], ['kpi_due30','kpi_sub_urg'],
+    ['kpi_due90','kpi_sub_mon'], ['kpi_health','kpi_sub_health'],
+  ];
+  document.querySelectorAll('.kpi').forEach((kpi, i) => {
+    if(!kpiLabels[i]) return;
+    const lbl = kpi.querySelector('.kpi-lbl'), sub = kpi.querySelector('.kpi-sub');
+    if(lbl) lbl.textContent = t(kpiLabels[i][0]);
+    if(sub) sub.textContent = t(kpiLabels[i][1]);
+  });
+
+  // Chart titles
+  const chartMap = [
+    ['💚 Saúde do Parque','💚 Fleet Health','ch_health'],
+    ['📊 Status de Calibração','📊 Calibration Status','ch_calib'],
+    ['⚡ Status Operacional','⚡ Operational Status','ch_oper'],
+    ['🔧 Top Tipos de Equipamento','🔧 Top Equipment Types','ch_types'],
+    ['🔴 Tipos com Calibração Vencida','🔴 Types with Expired Calibration','ch_types_exp'],
+    ['📅 Vencimentos — Próx. 6 Meses','📅 Due Dates — Next 6 Months','ch_due6m'],
+    ['📍 Top Localizações','📍 Top Locations','ch_locations'],
+    ['🏢 Empresa Executante','🏢 Executing Company','ch_companies'],
+    ['📅 Vencimentos por Mês (12 meses)','📅 Expiries by Month (12 months)','rep_venc_mes'],
+    ['📈 Evolução Acumulada (7 meses)','📈 Cumulative Trend (7 months)','rep_evolucao'],
+    ['👤 Por Responsável','👤 By Responsible','rep_resp'],
+    ['🏭 Vencidos por Empresa','🏭 Expired by Company','rep_emp_venc'],
+    ['⏱ Frequência de Calibração','⏱ Calibration Frequency','rep_freq'],
+    ['🌡️ Status por Localização','🌡️ Status by Location','rep_heatmap'],
+    ['🔢 Resumo Geral','🔢 General Summary','rep_resumo'],
+    ['⏱️ Top 15 Mais Urgentes','⏱️ Top 15 Most Urgent','rep_urgentes'],
+    ['📋 Relatório por Período','📋 Period Report','rep_period_title'],
+  ];
+  document.querySelectorAll('.chart-title, .tbl-title').forEach(el => {
+    const txt = el.textContent.trim();
+    const entry = chartMap.find(e => e[0]===txt || e[1]===txt);
+    if(entry) el.textContent = t(entry[2]);
+  });
+
+  // Alert timeline cards
+  const tlCards = [
+    ['tl-venc','tl_expired'],['tl-30d','tl_due30'],
+    ['tl-90d','tl_due90'],['tl-ok','tl_ok']
+  ];
+  tlCards.forEach(([id,key]) => {
+    const el = document.getElementById(id)?.querySelector('.tl-lbl');
+    if(el) el.textContent = t(key);
+  });
+
+  // Notifications panel
+  const notifTitle = document.querySelector('.notif-panel [style*="font-size:12px;font-weight:700"]');
+  if(notifTitle) notifTitle.textContent = t('notif_title');
+  const markRead = document.querySelector('[onclick="markAllRead()"]');
+  if(markRead) markRead.textContent = t('btn_mark_read');
+  const seeAlerts = document.querySelector('.notif-panel .btn-g');
+  if(seeAlerts) seeAlerts.textContent = t('btn_see_alerts');
+
+  // Alert search placeholder
+  const alertSearch = document.querySelector('.search-box');
+  if(alertSearch) alertSearch.placeholder = t('alert_search');
+
+  // Filter labels
+  const filterMap = [
+    ['f_type','Tipo'],['f_client','Cliente'],['f_location','Localização'],
+    ['f_responsible','Responsável'],['f_company','Empresa'],
+    ['f_status_op','Status Op.'],['f_calib','Calibração'],
+    ['f_from','De'],['f_to','Até'],['f_search_lbl','Buscar']
+  ];
+  document.querySelectorAll('.filters .fg label').forEach(lbl => {
+    const txt = lbl.textContent.trim();
+    const entry = filterMap.find(e => e[1]===txt || t(e[0])===txt);
+    if(entry) lbl.textContent = t(entry[0]);
+  });
+
+  // Filter select options
+  const fStatus = document.getElementById('f-status');
+  if(fStatus) {
+    const opts = fStatus.options;
+    if(opts[0]) opts[0].text = t('f_all');
+    if(opts[1]) { opts[1].value='ATIVO';   opts[1].text=t('s_active'); }
+    if(opts[2]) { opts[2].value='INATIVO'; opts[2].text=t('s_inactive'); }
+  }
+  const fCalib = document.getElementById('f-calib');
+  if(fCalib) {
+    const opts = fCalib.options;
+    if(opts[0]) opts[0].text = t('f_all');
+    if(opts[1]) opts[1].text = t('f_calib_ok');
+    if(opts[2]) opts[2].text = t('f_calib_exp');
+    if(opts[3]) opts[3].text = t('f_calib_need');
+  }
+  document.querySelectorAll('#f-tipo, #f-cli, #f-local, #f-resp, #f-emp').forEach(sel => {
+    if(sel.options[0]) sel.options[0].text = sel.id==='f-local'||sel.id==='f-emp' ? t('f_all_f') : t('f_all');
+  });
+
+  // Search placeholder
+  const fsearch = document.getElementById('f-search');
+  if(fsearch) fsearch.placeholder = t('f_search');
+
+  // Equip table title
+  const eqTitle = document.querySelector('#tab-equipamentos .tbl-title');
+  if(eqTitle) eqTitle.textContent = t('tbl_equip_title');
+
+  // Columns buttons
+  document.querySelectorAll('[onclick*="toggleColDD"]').forEach(btn => { btn.textContent = t('btn_cols'); });
+  document.querySelectorAll('[onclick*="exportCSV"]').forEach(btn => { btn.textContent = t('btn_csv'); });
+  document.querySelectorAll('[onclick*="clearF"]').forEach(btn => { btn.textContent = t('btn_clear'); });
+
+  // Reports
+  const repPeriodLabels = document.querySelectorAll('.tbl-hdr label');
+  repPeriodLabels.forEach(lbl => {
+    if(lbl.textContent.trim()==='De:' || lbl.textContent.trim()==='From:') lbl.textContent = t('rep_from');
+    if(lbl.textContent.trim()==='Até:' || lbl.textContent.trim()==='To:') lbl.textContent = t('rep_to');
+  });
+  document.querySelectorAll('[onclick="exportRepCSV()"]').forEach(btn => {
+    if(btn.textContent.includes('CSV')) btn.textContent = t('rep_csv_period');
+  });
+  const printBtn = document.querySelector('[onclick="window.print()"]');
+  if(printBtn) printBtn.textContent = t('btn_print');
+
+  // Report KPI labels
+  const repKpiMap = [
+    ['rk-venc','rep_kpi_venc'],['rk-30d','rep_kpi_30d'],
+    ['rk-90d','rep_kpi_90d'],['rk-ok','rep_kpi_ok'],['rk-saude','rep_kpi_health']
+  ];
+  repKpiMap.forEach(([id,key]) => {
+    const el = document.getElementById(id)?.closest('.rep-kpi')?.querySelector('.rep-kpi-lbl');
+    if(el) el.textContent = t(key);
+  });
+
+  // COL_DEFS labels — update for table re-render
+  const colKeyMap = {
+    id:'col_id', tipo:'col_tipo', cod_lab:'col_cod_lab', cliente:'col_cliente',
+    descricao:'col_desc', fabricante:'col_fab', localizacao:'col_local',
+    responsavel:'col_resp', empresa:'col_emp', ult_calib:'col_ult',
+    prox_calib:'col_prox', freq_dias:'col_freq', status_calib:'col_calib',
+    status:'col_status', dias_vencer:'col_dias', observacoes:'col_obs', link:'col_arq'
+  };
+  Object.entries(COL_DEFS).forEach(([tbl, cols]) => {
+    cols.forEach(col => {
+      if(colKeyMap[col.k]) col.l = t(colKeyMap[col.k]);
+    });
+  });
+
+  // Modal labels
+  const modalMap = [
+    ['m-id','m_code'], ['m-tipo','m_type'], ['m-cliente','m_client'],
+    ['m-fab','m_maker'], ['m-desc','m_desc'], ['m-local','m_location'],
+    ['m-resp','m_responsible'], ['m-emp','m_company'], ['m-codlab','m_codlab'],
+    ['m-ult','m_last_calib'], ['m-prox','m_next_calib'], ['m-freq','m_freq'],
+    ['m-status','m_status_op'], ['m-calib-status','m_status_calib'],
+    ['m-notes','m_notes'],
+  ];
+  modalMap.forEach(([inputId, labelKey]) => {
+    const input = document.getElementById(inputId);
+    if(!input) return;
+    const label = input.closest('.fg2')?.querySelector('label');
+    if(label) {
+      // Preserve AUTO badge for next calib
+      if(inputId==='m-prox') {
+        label.innerHTML = t(labelKey) + ' <span style="color:var(--accent);font-size:8px">AUTO</span>';
+      } else {
+        label.firstChild && label.firstChild.nodeType===3
+          ? (label.firstChild.textContent = t(labelKey))
+          : (label.textContent = t(labelKey));
+      }
+    }
+  });
+
+  // Modal status options
+  const mStatus = document.getElementById('m-status');
+  if(mStatus) {
+    if(mStatus.options[0]) { mStatus.options[0].value=t('s_active'); mStatus.options[0].text=t('s_active'); }
+    if(mStatus.options[1]) { mStatus.options[1].value=t('s_inactive'); mStatus.options[1].text=t('s_inactive'); }
+  }
+  const mCalib = document.getElementById('m-calib-status');
+  if(mCalib) {
+    if(mCalib.options[0]) mCalib.options[0].text = t('s_calib_ok');
+    if(mCalib.options[1]) mCalib.options[1].text = t('s_calib_need');
+    if(mCalib.options[2]) mCalib.options[2].text = t('s_discarded');
+    if(mCalib.options[3]) mCalib.options[3].text = t('s_notfound');
+  }
+
+  // File labels
+  const fileLabel = document.querySelector('label[for="fp"]') || 
+    Array.from(document.querySelectorAll('.fg2 label')).find(l=>l.textContent.includes('Arquivo')||l.textContent.includes('File'));
+  if(fileLabel) fileLabel.textContent = t('m_file');
+  const fileInput = document.getElementById('m-link');
+  if(fileInput) fileInput.placeholder = t('m_file_none');
+  document.querySelector('[onclick*="fp"].btn-g')?.childNodes.forEach?.(n=>{});
+  document.querySelectorAll('.btn-g').forEach(btn => {
+    if(btn.getAttribute('onclick')==="document.getElementById('fp').click()") btn.textContent = t('m_file_select');
+  });
+  const openBtn = document.getElementById('btn-open-file');
+  if(openBtn) openBtn.textContent = t('m_file_open');
+
+  // Validity label
+  const valLabel = document.querySelector('#validity-wrap [style*="color:var(--tx3)"]');
+  if(valLabel) valLabel.textContent = t('m_validity');
+
+  // Modal action buttons
+  const cancelBtn = document.querySelector('.modal-actions .btn-g');
+  if(cancelBtn) cancelBtn.textContent = t('btn_cancel');
+  const saveBtn = document.querySelector('.modal-actions .btn-p');
+  if(saveBtn) saveBtn.textContent = t('btn_save');
+
+  // Re-render tables to update column headers
+  renderTable('geral');
+  renderTable('alert');
+  buildAllColPanels();
+  // Gauge "em dia" / "on time" label
+  const gaugeLabel = document.getElementById('gauge-label');
+  if(gaugeLabel) gaugeLabel.textContent = t('ch_in_day');
+  // Reset modal title if open
+  const mTitle = document.getElementById('m-title');
+  if(mTitle && mTitle.textContent) {
+    const isEdit = mTitle.textContent !== t('m_new_title');
+  }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  initDB();            // carrega cache local instantaneamente
+  initDB();
   initColVis(); initColWidths();
   updateAll();
   filterAlerts('vencido');
   startAutoNotif();
   document.getElementById('edit-modal').addEventListener('click', e=>{if(e.target===e.currentTarget)closeModal();});
-  // Inicia Firebase em background (não bloqueia renderização)
+  // Aplica idioma salvo
+  document.getElementById('lb-pt')?.classList.toggle('on', LANG==='pt');
+  document.getElementById('lb-en')?.classList.toggle('on', LANG==='en');
+  applyLang();
+  // Inicia Firebase em background
   initFirebase();
 });
 </script>
