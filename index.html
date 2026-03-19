@@ -321,7 +321,7 @@ body.col-resizing *{cursor:col-resize!important}
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
         <span class="tbl-cnt" id="alert-cnt">—</span>
         <input class="search-box" placeholder="🔍 Buscar..." oninput="alertSearch=this.value;renderAlerts()">
-        <div class="col-panel"><button class="btn-g" onclick="toggleColDD('alert-cols',this)">⚙ Colunas</button><div class="col-dd" id="alert-cols"></div></div>
+        <div class="col-panel"><button class="btn-g" id="btn-cols-alert" onclick="showColMenu('alert',this)">⚙ <span data-i18n="btn_cols_lbl">Colunas</span></button></div>
         <button class="btn-g" onclick="exportCSV('alert')">↓ CSV</button>
       </div>
     </div>
@@ -350,7 +350,7 @@ body.col-resizing *{cursor:col-resize!important}
       <span class="tbl-title">Equipamentos de Medição</span>
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
         <span class="tbl-cnt" id="eq-cnt">—</span>
-        <div class="col-panel"><button class="btn-g" onclick="toggleColDD('eq-cols',this)">⚙ Colunas</button><div class="col-dd" id="eq-cols"></div></div>
+        <div class="col-panel"><button class="btn-g" id="btn-cols-eq" onclick="showColMenu('geral',this)">⚙ <span data-i18n="btn_cols_lbl">Colunas</span></button></div>
         <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
       </div>
     </div>
@@ -957,8 +957,8 @@ function applyLang() {
   const eqTitle = document.querySelector('#tab-equipamentos .tbl-title');
   if(eqTitle) eqTitle.textContent = t('tbl_equip_title');
 
-  // Columns buttons — preserve ⚙ icon
-  document.querySelectorAll('[onclick*="toggleColDD"]').forEach(btn => { btn.innerHTML = '⚙ ' + t('btn_cols').replace('⚙ ','').replace('⚙',''); });
+  // Columns buttons
+  document.querySelectorAll('[data-i18n="btn_cols_lbl"]').forEach(el => { el.textContent = t('btn_cols').replace('⚙ ','').replace('⚙','').trim() || 'Colunas'; });
   document.querySelectorAll('[onclick*="exportCSV"]').forEach(btn => { btn.textContent = t('btn_csv'); });
   document.querySelectorAll('[onclick*="clearF"]').forEach(btn => { btn.textContent = t('btn_clear'); });
 
@@ -1061,10 +1061,10 @@ function applyLang() {
   if(saveBtn) saveBtn.textContent = t('btn_save');
 
   // Re-render tables to update column headers + badges
+  if(typeof _colMenu !== 'undefined') _colMenu.style.display = 'none';
   populateFilters();
   renderTable('geral');
   renderTable('alert');
-  buildAllColPanels();
   // Gauge "em dia" / "on time" label
   const gaugeLabel = document.getElementById('gauge-label');
   if(gaugeLabel) gaugeLabel.textContent = t('ch_in_day');
@@ -1129,46 +1129,47 @@ function initColVis() {
     cols.forEach(c => { colVis[t][c.k] = c.def; });
   });
 }
-function buildColPanel(tbl) {
-  // Use a portal element at body level to escape overflow parents
-  const portalId = tbl+'-cols-portal';
-  let portal = document.getElementById(portalId);
-  if(!portal) {
-    portal = document.createElement('div');
-    portal.id = portalId;
-    portal.className = 'col-dd';
-    document.body.appendChild(portal);
+function buildColPanel(tbl) { /* rebuilt by showColMenu */ }
+function buildAllColPanels() { /* portal rebuilt on open */ }
+// ── Column selector — single global dropdown portal ──────────────
+const _colMenu = document.createElement('div');
+_colMenu.id = 'col-menu-portal';
+_colMenu.style.cssText = 'display:none;position:fixed;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:6px 2px;z-index:99999;min-width:210px;max-height:340px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)';
+document.addEventListener('DOMContentLoaded', () => document.body.appendChild(_colMenu));
+
+let _colMenuTbl = null;
+
+function showColMenu(tbl, btn) {
+  // If already open for same table, close
+  if(_colMenu.style.display !== 'none' && _colMenuTbl === tbl) {
+    _colMenu.style.display = 'none';
+    return;
   }
-  portal.innerHTML = COL_DEFS[tbl].filter(c=>c.k!=='_act').map(c =>
-    `<label style="user-select:none;display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:11px;color:var(--tx2)"><input type="checkbox" ${colVis[tbl][c.k]?'checked':''} onchange="colVis['${tbl}']['${c.k}']=this.checked;renderTable('${tbl}');buildColPanel('${tbl}')"> ${esc(c.l||c.k)}</label>`
+  _colMenuTbl = tbl;
+  // Build content
+  _colMenu.innerHTML = COL_DEFS[tbl].filter(col => col.k !== '_act').map(col =>
+    `<label style="display:flex;align-items:center;gap:8px;padding:5px 12px;cursor:pointer;font-size:11px;color:var(--tx2);white-space:nowrap;border-radius:3px" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background=''">
+      <input type="checkbox" ${colVis[tbl][col.k] ? 'checked' : ''} 
+        onchange="colVis['${tbl}']['${col.k}']=this.checked; renderTable('${tbl}'); buildAllColPanels();"
+        style="cursor:pointer;accent-color:var(--accent)">
+      ${esc(col.l || col.k)}
+    </label>`
   ).join('');
-}
-function buildAllColPanels() { ['geral','alert'].forEach(buildColPanel); }
-function toggleColDD(id, btn) {
-  // id is like 'eq-cols' or 'alert-cols' — portal is 'eq-cols-portal'
-  const portalId = id + '-portal';
-  const portal = document.getElementById(portalId);
-  if(!portal) return;
-  const isOn = portal.classList.contains('on');
-  // Close all
-  document.querySelectorAll('.col-dd.on').forEach(d => d.classList.remove('on'));
-  if(isOn) return;
-  // Position under the button
+  // Position
   const rect = btn.getBoundingClientRect();
-  const spaceRight = window.innerWidth - rect.right;
-  portal.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
-  if(spaceRight >= 200) {
-    portal.style.left  = rect.left + 'px';
-    portal.style.right = 'auto';
-  } else {
-    portal.style.right = spaceRight + 'px';
-    portal.style.left  = 'auto';
-  }
-  portal.classList.add('on');
+  _colMenu.style.display = 'block';
+  // Adjust if overflows right edge
+  const menuW = 210;
+  let left = rect.left;
+  if(left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+  _colMenu.style.top  = (rect.bottom + 4) + 'px';
+  _colMenu.style.left = left + 'px';
 }
+
 document.addEventListener('click', e => {
-  if(!e.target.closest('.col-panel') && !e.target.closest('.col-dd')) {
-    document.querySelectorAll('.col-dd').forEach(d => d.classList.remove('on'));
+  if(_colMenu.style.display === 'none') return;
+  if(!e.target.closest('#col-menu-portal') && !e.target.closest('.col-panel')) {
+    _colMenu.style.display = 'none';
   }
 });
 
@@ -1627,11 +1628,37 @@ function diasBadge(d){
   if(d<=90)return `<span class="badge b-info">${d}d</span>`;
   return `<span class="badge b-ok">${d}d</span>`;
 }
+// Translate data field values
+function translateVal(k, v) {
+  if(!v) return v;
+  if(k === 'status') return statusText(v);
+  if(k === 'status_calib') return calibText(v);
+  return v;
+}
+function statusText(v) {
+  if(!v) return v;
+  const u = v.toUpperCase();
+  if(u==='ATIVO'||u==='ACTIVE')   return t('s_active');
+  if(u==='INATIVO'||u==='INACTIVE') return t('s_inactive');
+  return v;
+}
+function calibText(v) {
+  if(!v) return v;
+  if(v.includes('aprovado')||v.includes('Approved')||v.includes('Calibrated'))
+    return LANG==='en' ? 'Calibrated & Approved' : 'Calibrado e Aprovado';
+  if(v.includes('Necessária')||v.includes('Required'))
+    return LANG==='en' ? 'Calibration Required' : 'Calibração Necessária';
+  if(v.includes('DESCARTADO')||v.includes('Discarded'))
+    return LANG==='en' ? 'Discarded' : 'Descartado';
+  if(v.includes('encontrado')||v.includes('Found'))
+    return LANG==='en' ? 'Not Found' : 'Não Encontrado';
+  return v;
+}
 function calibBadge(v){
   if(!v)return '<span class="badge b-gray">—</span>';
-  if(v.includes('aprovado')||v.includes('Approved'))return `<span class="badge b-ok">✓ ${t('f_calib_ok')}</span>`;
+  if(v.includes('aprovado')||v.includes('Approved')||v.includes('Calibrated'))return `<span class="badge b-ok">✓ ${t('f_calib_ok')}</span>`;
   if(v.includes('Necessária')||v.includes('Required'))return `<span class="badge b-warn">⚠ ${LANG==='en'?'Req':'Nec'}</span>`;
-  if(v.includes('DESCARTADO'))return '<span class="badge b-gray">✕</span>';
+  if(v.includes('DESCARTADO')||v.includes('Discarded'))return '<span class="badge b-gray">✕</span>';
   return `<span class="badge b-gray">${esc(v.slice(0,10))}</span>`;
 }
 function statusBadge(v){
@@ -1656,7 +1683,8 @@ function renderCell(r, k, tbl) {
   }
   if(k==='ult_calib'||k==='prox_calib') return `<td ${attr} style="width:${w||105}px;min-width:${w||105}px;max-width:${w||105}px;font-family:var(--mono);font-size:10px">${r[k]||'—'}</td>`;
   const v = r[k];
-  return `<td ${attr} title="${esc(v||'')}">${esc(v||'—')}</td>`;
+  const vt = (k==='status'||k==='status_calib') ? translateVal(k, v) : v;
+  return `<td ${attr} title="${esc(vt||'')}">${esc(vt||'—')}</td>`;
 }
 
 function renderTable(tbl) {
