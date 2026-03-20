@@ -2222,6 +2222,47 @@ function startInlineEdit(uid, k, td) {
   }
 }
 
+// Recalcula próxima calib, dias_vencer e status_calib de um registro
+function recalcRecord(r) {
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // 1. Se tem Última Calib + Frequência → calcula Próxima automaticamente
+  if(r.ult_calib && r.freq_dias) {
+    try {
+      const ult  = new Date(r.ult_calib + 'T00:00:00');
+      const prox = new Date(ult);
+      prox.setDate(prox.getDate() + parseInt(r.freq_dias));
+      r.prox_calib = prox.toISOString().slice(0, 10);
+    } catch(e) {}
+  }
+
+  // 2. Recalcula dias_vencer a partir da Próxima Calibração
+  if(r.prox_calib) {
+    try {
+      r.dias_vencer = Math.round(
+        (new Date(r.prox_calib + 'T00:00:00') - today) / 86400000
+      );
+    } catch(e) { r.dias_vencer = null; }
+  } else {
+    r.dias_vencer = null;
+  }
+
+  // 3. Atualiza status_calib automaticamente baseado nos dias restantes
+  //    (só atualiza se não for Descartado ou Não Encontrado)
+  const sc = r.status_calib || '';
+  const isSpecial = sc.includes('DESCARTADO') || sc.includes('encontrado')
+                 || sc.includes('Discarded') || sc.includes('Found');
+  if(!isSpecial) {
+    if(r.dias_vencer === null) {
+      // Sem data → não altera
+    } else if(r.dias_vencer < 0) {
+      r.status_calib = 'Calibração Necessária';
+    } else {
+      r.status_calib = 'Instrumento Calibrado e aprovado';
+    }
+  }
+}
+
 function commitInlineEdit(silent) {
   if(!_inlineActive) return;
   const { uid, k, td } = _inlineActive;
@@ -2233,28 +2274,24 @@ function commitInlineEdit(silent) {
 
   if(r && (String(r[k]||'') !== String(newVal||''))) {
     r[k] = newVal;
-    // Recalc dias_vencer if dates changed
-    if(k === 'ult_calib' || k === 'prox_calib') {
-      const today = new Date(); today.setHours(0,0,0,0);
-      if(r.prox_calib) {
-        try { r.dias_vencer = Math.round((new Date(r.prox_calib+'T00:00:00') - today) / 86400000); }
-        catch(e) { r.dias_vencer = null; }
-      }
+
+    // Recalcula campos derivados quando muda data ou frequência
+    if(k === 'ult_calib' || k === 'prox_calib' || k === 'freq_dias') {
+      recalcRecord(r);
     }
+
     _inlineActive = null;
     if(!silent) {
       fbSchedulePush();
-      if(!silent) showToast((LANG==='en'?'Saved: ':'Salvo: ') + (INLINE_EDITABLE[k]?.label || k), 'success');
+      showToast(LANG==='en' ? '✅ Saved — calibration updated' : '✅ Salvo — calibração atualizada');
     }
-    // Re-render just this row for performance
     renderTable('geral');
+    renderAlerts();
     updateKPIs();
+    buildAllCharts();
   } else {
     _inlineActive = null;
-    if(td && _inlineActive === null) {
-      // Restore display
-      renderTable('geral');
-    }
+    renderTable('geral');
   }
   _inlineActive = null;
 }
@@ -2658,10 +2695,12 @@ function saveRecord(){
   };
   if(editUID!==null){
     const idx=DB.findIndex(x=>x._uid===editUID);
-    if(idx>=0)DB[idx]={...DB[idx],...upd};
+    if(idx>=0){ DB[idx]={...DB[idx],...upd}; recalcRecord(DB[idx]); }
     showToast(t('t_updated'));
   } else {
-    DB.push({...upd,_uid:Date.now(),sheet:'geral'});
+    const newRec={...upd,_uid:Date.now(),sheet:'geral'};
+    recalcRecord(newRec);
+    DB.push(newRec);
     showToast(t('t_added'));
   }
   closeModal(); updateAll(); fbSchedulePush();
