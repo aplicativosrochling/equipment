@@ -2688,7 +2688,8 @@ let editUID=null;
 function openEdit(uid){
   const r=DB.find(x=>x._uid===uid); if(!r)return;
   editUID=uid;
-  document.getElementById('m-title').textContent=t('m_edit_title');
+  const mTitleE=document.getElementById('m-title');
+  if(mTitleE) mTitleE.textContent=t('m_edit_title');
   const delBtn=document.getElementById('m-btn-del');
   if(delBtn) delBtn.style.display='inline-block';
   document.getElementById('m-sub').textContent=r.id||r.descricao||'—';
@@ -2704,10 +2705,12 @@ function openEdit(uid){
 }
 function openAdd(){
   editUID=null;
-  document.getElementById('m-title').textContent='Novo Registro';
+  const mTitle=document.getElementById('m-title');
+  const mSub=document.getElementById('m-sub');
+  if(mTitle) mTitle.textContent=t('m_new_title');
   const delBtn=document.getElementById('m-btn-del');
   if(delBtn) delBtn.style.display='none';
-  document.getElementById('m-sub').textContent='Preencha os dados';
+  if(mSub) mSub.textContent=LANG==='en'?'Fill in the details':'Preencha os dados';
   ['m-id','m-tipo','m-cliente','m-fab','m-desc','m-local','m-resp','m-emp','m-codlab','m-ult','m-prox','m-freq','m-notes','m-link','m-link-data'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('m-status').value='ATIVO';
   document.getElementById('m-calib-status').value='Instrumento Calibrado e aprovado';
@@ -2755,7 +2758,8 @@ function saveRecord(){
   updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
   applyF();    // re-run filters to keep filtered view after save
   renderAlerts();
-  document.getElementById('last-upd').textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
+  const luSave=document.getElementById('last-upd');
+  if(luSave) luSave.textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
   fbSchedulePush();
 }
 
@@ -2823,10 +2827,10 @@ function updateValidityBar(){
   const total=Math.round((end-start)/86400000),elapsed=Math.round((today-start)/86400000),remaining=Math.round((end-today)/86400000);
   const pct=Math.max(0,Math.min(100,Math.round(elapsed/total*100)));
   const color=remaining<0?'var(--red)':remaining<=30?'var(--orange)':remaining<=90?'var(--accent)':'var(--green)';
-  document.getElementById('v-text').textContent=remaining<0?`${t('d_expired')} ${Math.abs(remaining)}${t('d_days')}`:remaining===0?`${t('d_today')}`:`${remaining}${t('d_days')} ${t('d_remaining')}`;
-  document.getElementById('v-text').style.color=color;
-  document.getElementById('v-bar').style.cssText=`width:${pct}%;background:${pct>=100?'var(--red)':pct>=80?'var(--orange)':'var(--green)'}`;
-  document.getElementById('v-pct').textContent=pct+LANG==='en'?'% used':'% usado';
+  const vText=document.getElementById('v-text'); if(vText) vText.textContent=remaining<0?`${t('d_expired')} ${Math.abs(remaining)}${t('d_days')}`:remaining===0?`${t('d_today')}`:`${remaining}${t('d_days')} ${t('d_remaining')}`;
+  if(vText) vText.style.color=color;
+  const vBar=document.getElementById('v-bar'); if(vBar) vBar.style.cssText=`width:${pct}%;background:${pct>=100?'var(--red)':pct>=80?'var(--orange)':'var(--green)'}`;
+  const vPct=document.getElementById('v-pct'); if(vPct) vPct.textContent=pct+LANG==='en'?'% used':'% usado';
   wrap.style.display='block';
 }
 
@@ -2898,7 +2902,7 @@ function importData(e){const f=e.target.files[0];if(!f)return;const rd=new FileR
 // TOAST
 // ═══════════════════════════════════════════════════════
 let _toastT=null;
-function showToast(msg,type='success'){const t=document.getElementById('toast');document.getElementById('toast-msg').textContent=msg;t.className='toast '+(type==='err'?'err':'');t.classList.add('on');if(_toastT)clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove('on'),3500);}
+function showToast(msg,type='success'){const t=document.getElementById('toast');const tmEl=document.getElementById('toast-msg'); if(tmEl) tmEl.textContent=msg;t.className='toast '+(type==='err'?'err':'');t.classList.add('on');if(_toastT)clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove('on'),3500);}
 
 // ═══════════════════════════════════════════════════════
 // RESET
@@ -2928,7 +2932,8 @@ function updateAll(){
     pag.eq.rows=DB.slice(); pag.eq.p=1; renderTable('geral');
   }
   renderAlerts();
-  document.getElementById('last-upd').textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
+  const luAll=document.getElementById('last-upd');
+  if(luAll) luAll.textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
 }
 
 
