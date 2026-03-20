@@ -369,6 +369,15 @@ td.editable-cell { position: relative }
 .col-dd label { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11.5px; color: var(--tx2) }
 .col-dd label:hover { background: var(--surf2); color: var(--tx) }
 
+/* ── DELETE BUTTON ── */
+.btn-del {
+  background: transparent; color: var(--red);
+  border: 1px solid var(--red); padding: 5px 12px;
+  border-radius: var(--r); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: var(--tr); font-family: var(--font);
+}
+.btn-del:hover { background: rgba(220,38,38,.08); }
+
 /* ── TOAST ── */
 .toast { position: fixed; bottom: 20px; right: 20px; background: var(--surf); border: 1px solid var(--bdr2); border-radius: var(--r2); padding: 11px 16px; font-size: 12px; display: flex; align-items: center; gap: 9px; box-shadow: 0 8px 32px rgba(0,0,0,.3); z-index: 600; transform: translateY(70px); opacity: 0; transition: all .22s cubic-bezier(.34,1.56,.64,1) }
 .toast.on { transform: translateY(0); opacity: 1 }
@@ -705,8 +714,9 @@ body.col-resizing * { cursor: col-resize !important }
       <div class="fg2 mg-full"><label>Observações</label><textarea id="m-notes" rows="2"></textarea></div>
     </div>
     <div class="modal-actions">
-      <button class="btn-g" onclick="closeModal()">Cancelar</button>
-      <button class="btn-p" onclick="saveRecord()">💾 Salvar</button>
+      <button class="btn-g" onclick="closeModal()" id="m-btn-cancel">Cancelar</button>
+      <button class="btn-del" id="m-btn-del" onclick="deleteRecord()" style="display:none">🗑 Excluir</button>
+      <button class="btn-p" onclick="saveRecord()" id="m-btn-save">💾 Salvar</button>
     </div>
   </div>
 </div>
@@ -2350,7 +2360,10 @@ function renderCell(r, k, tbl) {
     ? `class="editable-cell" onclick="startInlineEdit(${r._uid},'${k}',this)" title="${LANG==='en'?'Click to edit':'Clique para editar'}"`
     : '';
 
-  if(k==='_act') return `<td ${attr}><button class="btn-g" style="padding:1px 7px;font-size:10px" onclick="openEdit(${r._uid})">✏</button></td>`;
+  if(k==='_act') return `<td ${attr} style="white-space:nowrap">
+    <button class="btn-g" style="padding:1px 6px;font-size:11px;border:none;background:transparent;color:var(--tx3)" onclick="openEdit(${r._uid})" title="${LANG==='en'?'Edit':'Editar'}">✏</button>
+    <button class="btn-g" style="padding:1px 6px;font-size:11px;border:none;background:transparent;color:var(--red);opacity:.5" onclick="deleteInline(${r._uid})" title="${LANG==='en'?'Delete':'Excluir'}">🗑</button>
+  </td>`;
   if(k==='dias_vencer')  return `<td ${attr}>${diasBadge(r.dias_vencer)}</td>`;
 
   // Editable badge cells — click opens inline select
@@ -2671,6 +2684,8 @@ function openEdit(uid){
   const r=DB.find(x=>x._uid===uid); if(!r)return;
   editUID=uid;
   document.getElementById('m-title').textContent=t('m_edit_title');
+  const delBtn=document.getElementById('m-btn-del');
+  if(delBtn) delBtn.style.display='inline-block';
   document.getElementById('m-sub').textContent=r.id||r.descricao||'—';
   ['m-id','id','m-tipo','tipo','m-cliente','cliente','m-fab','fabricante','m-desc','descricao','m-local','localizacao','m-resp','responsavel','m-emp','empresa','m-codlab','cod_lab','m-ult','ult_calib','m-prox','prox_calib','m-notes','notes'].reduce((a,v,i)=>{if(i%2===0){a.key=v;}else{const el=document.getElementById(a.key);if(el)el.value=r[v]||'';}return a;},{});
   document.getElementById('m-freq').value=r.freq_dias||'';
@@ -2685,6 +2700,8 @@ function openEdit(uid){
 function openAdd(){
   editUID=null;
   document.getElementById('m-title').textContent='Novo Registro';
+  const delBtn=document.getElementById('m-btn-del');
+  if(delBtn) delBtn.style.display='none';
   document.getElementById('m-sub').textContent='Preencha os dados';
   ['m-id','m-tipo','m-cliente','m-fab','m-desc','m-local','m-resp','m-emp','m-codlab','m-ult','m-prox','m-freq','m-notes','m-link','m-link-data'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('m-status').value='ATIVO';
@@ -2730,6 +2747,39 @@ function saveRecord(){
     showToast(t('t_added'));
   }
   closeModal(); updateAll(); fbSchedulePush();
+}
+
+function deleteRecord(){
+  // defined below
+}
+
+function deleteInline(uid){
+  const r = DB.find(x => x._uid === uid);
+  if(!r) return;
+  const name = r.id || r.descricao || 'registro';
+  if(!confirm(LANG==='en' ? `Delete "${name}"?` : `Excluir "${name}"?`)) return;
+  DB = DB.filter(x => x._uid !== uid);
+  updateAll();
+  filterAlerts('vencido');
+  fbSchedulePush();
+  showToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
+}
+  
+function deleteRecord_real(){
+  if(editUID === null) return;
+  const r = DB.find(x => x._uid === editUID);
+  if(!r) return;
+  const name = r.id || r.descricao || 'este registro';
+  const msg  = LANG === 'en'
+    ? `Delete "${name}"?\nThis action cannot be undone.`
+    : `Excluir "${name}"?\nEsta ação não pode ser desfeita.`;
+  if(!confirm(msg)) return;
+  DB = DB.filter(x => x._uid !== editUID);
+  closeModal();
+  updateAll();
+  filterAlerts('vencido');
+  fbSchedulePush();
+  showToast(LANG === 'en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
 }
 
 function autoCalc(){
