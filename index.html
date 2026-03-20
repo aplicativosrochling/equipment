@@ -1664,8 +1664,13 @@ function fbStartListen() {
        JSON.stringify(newDB.map(r=>r.prox_calib)) !== JSON.stringify(DB.map(r=>r.prox_calib))) {
       DB = newDB;
       saveLS();
-      updateAll();
-      filterAlerts('vencido');
+      // Preserve active filters when receiving live updates
+      updateKPIs(); buildAllCharts(); populateFilters();
+      const hasFilter = ['f-tipo','f-cli','f-local','f-resp','f-emp',
+        'f-status','f-calib','f-de','f-ate','f-search']
+        .some(id => { const el=document.getElementById(id); return el && el.value; });
+      if(hasFilter) applyF(); else { pag.eq.rows=DB.slice(); pag.eq.p=1; renderTable('geral'); }
+      renderAlerts();
       setSyncInd('🔥 Atualizado ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
     }
   }, err => {
@@ -2315,15 +2320,15 @@ function commitInlineEdit(silent) {
     _inlineActive = null;
     if(!silent) {
       fbSchedulePush();
-      showToast(LANG==='en' ? '✅ Saved — calibration updated' : '✅ Salvo — calibração atualizada');
+      showToast(LANG==='en' ? '✅ Saved' : '✅ Salvo');
     }
-    renderTable('geral');
+    applyF();          // re-run current filters (preserves active filter state)
     renderAlerts();
     updateKPIs();
     buildAllCharts();
   } else {
     _inlineActive = null;
-    renderTable('geral');
+    applyF();          // restore filtered view
   }
   _inlineActive = null;
 }
@@ -2746,11 +2751,31 @@ function saveRecord(){
     DB.push(newRec);
     showToast(t('t_added'));
   }
-  closeModal(); updateAll(); fbSchedulePush();
+  closeModal();
+  updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
+  applyF();    // re-run filters to keep filtered view after save
+  renderAlerts();
+  document.getElementById('last-upd').textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
+  fbSchedulePush();
 }
 
 function deleteRecord(){
-  // defined below
+  if(editUID === null) return;
+  const r = DB.find(x => x._uid === editUID);
+  if(!r) return;
+  const name = r.id || r.descricao || 'este registro';
+  const msg = LANG==='en'
+    ? `Delete "${name}"?\nThis action cannot be undone.`
+    : `Excluir "${name}"?\nEsta ação não pode ser desfeita.`;
+  if(!confirm(msg)) return;
+  DB = DB.filter(x => x._uid !== editUID);
+  closeModal();
+  applyF();            // re-run current filters
+  renderAlerts();
+  updateKPIs();
+  buildAllCharts();
+  fbSchedulePush();
+  showToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
 }
 
 function deleteInline(uid){
@@ -2759,8 +2784,10 @@ function deleteInline(uid){
   const name = r.id || r.descricao || 'registro';
   if(!confirm(LANG==='en' ? `Delete "${name}"?` : `Excluir "${name}"?`)) return;
   DB = DB.filter(x => x._uid !== uid);
-  updateAll();
-  filterAlerts('vencido');
+  applyF();            // re-run current filters (preserves active filter state)
+  renderAlerts();
+  updateKPIs();
+  buildAllCharts();
   fbSchedulePush();
   showToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
 }
@@ -2891,7 +2918,15 @@ function resetDB(){
 // ═══════════════════════════════════════════════════════
 function updateAll(){
   updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
-  pag.eq.rows=DB.slice(); pag.eq.p=1; renderTable('geral');
+  // Check if any filter is active — if so, re-apply instead of resetting
+  const hasFilter = ['f-tipo','f-cli','f-local','f-resp','f-emp',
+    'f-status','f-calib','f-de','f-ate','f-search']
+    .some(id => { const el=document.getElementById(id); return el && el.value; });
+  if(hasFilter) {
+    applyF();   // preserve active filters
+  } else {
+    pag.eq.rows=DB.slice(); pag.eq.p=1; renderTable('geral');
+  }
   renderAlerts();
   document.getElementById('last-upd').textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
 }
