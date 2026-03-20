@@ -2037,34 +2037,77 @@ function translateVal(k, v) {
   if(k === 'status')       return statusText(v);
   if(k === 'status_calib') return calibText(v);
   if(LANG !== 'en') return v;
-  // Look up in dictionary (exact match first)
+  // 1. Exact match in dictionary
   if(DATA_EN[v] !== undefined) return DATA_EN[v];
-  // Partial match for descriptions with common PT prefixes
-  let result = v;
-  result = result.replace(/Balança Eletrônica/g, 'Electronic Scale');
-  result = result.replace(/Balança Digital/g,    'Digital Scale');
-  result = result.replace(/Paquímetro/g,         'Caliper');
-  result = result.replace(/Micrômetro/g,         'Micrometer');
-  result = result.replace(/Relógio Comparador/g, 'Dial Gauge');
-  result = result.replace(/Relógio Apalpador/g,  'Dial Test Indicator');
-  result = result.replace(/Termômetro/g,         'Thermometer');
-  result = result.replace(/Rugosímetro/g,        'Roughness Tester');
-  result = result.replace(/Durômetro/g,          'Durometer');
-  result = result.replace(/Torquímetro/g,        'Torque Wrench');
-  result = result.replace(/Espessímetro/g,       'Thickness Gauge');
-  result = result.replace(/Manovacuômetro/g,     'Vacuum Gauge');
-  result = result.replace(/Manômetro/g,          'Pressure Gauge');
-  result = result.replace(/Pirômetro/g,          'Pyrometer');
-  result = result.replace(/Transdutor/g,         'Transducer');
-  result = result.replace(/Medidor de Altura/g,  'Height Gauge');
-  result = result.replace(/Dispositivo de [Cc]ontrole/g, 'Control Fixture');
-  result = result.replace(/Injeção - Máquina/g,  'Injection - Machine');
-  result = result.replace(/Injetora/g,           'Injection');
-  result = result.replace(/Almoxarifado/g,       'Warehouse');
-  result = result.replace(/Ferramentaria/g,      'Tool Room');
-  result = result.replace(/Metrologia/g,         'Metrology');
-  result = result.replace(/Produção/g,           'Production');
-  return result;
+  // 2. Partial substitution — order matters (longer phrases first)
+  let r = v;
+  // Equipment types in descriptions
+  r = r.replace(/Balança Eletrônica/gi,          'Electronic Scale');
+  r = r.replace(/Balança Digital/gi,             'Digital Scale');
+  r = r.replace(/Balança_Determinador de Umidade/gi,'Scale \/ Moisture Analyzer');
+  r = r.replace(/Balança/gi,                     'Scale');
+  r = r.replace(/Relógio [Cc]omparador [Cc]entesimal [Dd]igital/gi, 'Digital Centesimal Dial Gauge');
+  r = r.replace(/Relógio [Cc]omparador/gi,       'Dial Gauge');
+  r = r.replace(/Relógio [Aa]palpador/gi,        'Dial Test Indicator');
+  r = r.replace(/Paquímetro [Dd]igital [Pp]rofundidade/gi,'Digital Depth Caliper');
+  r = r.replace(/Paquímetro [Dd]igital para canal/gi,'Digital Groove Caliper');
+  r = r.replace(/Paquímetro [Dd]igital/gi,       'Digital Caliper');
+  r = r.replace(/Paquímetro [Aa]nalógico/gi,     'Analog Caliper');
+  r = r.replace(/Paquímetro/gi,                  'Caliper');
+  r = r.replace(/Micrômetro/gi,                  'Micrometer');
+  r = r.replace(/Rugosímetro/gi,                 'Roughness Tester');
+  r = r.replace(/Durômetro/gi,                   'Durometer');
+  r = r.replace(/Durometro/gi,                   'Durometer');
+  r = r.replace(/Torquímetro/gi,                 'Torque Wrench');
+  r = r.replace(/Espessímetro/gi,                'Thickness Gauge');
+  r = r.replace(/Manovacuômetro/gi,              'Vacuum Gauge');
+  r = r.replace(/Manômetro [Dd]igital/gi,        'Digital Pressure Gauge');
+  r = r.replace(/Manômetro tipo transdutor/gi,   'Pressure Transducer');
+  r = r.replace(/Manômetro/gi,                   'Pressure Gauge');
+  r = r.replace(/Termômetro [Ii]nfravermelho/gi, 'Infrared Thermometer');
+  r = r.replace(/Termômetro.*[Cc]ontrolador/gi,  'Thermometer \/ Temp Controller');
+  r = r.replace(/Termômetro/gi,                  'Thermometer');
+  r = r.replace(/Pirômetro/gi,                   'Pyrometer');
+  r = r.replace(/Transdutor/gi,                  'Transducer');
+  r = r.replace(/Medidor [Dd]igital de [Ee]spessura/gi,'Digital Thickness Gauge');
+  r = r.replace(/Medidor [Ee]xterno [Dd]igital/gi,'Digital External Gauge');
+  r = r.replace(/Medidor de [Aa]ltura/gi,        'Height Gauge');
+  r = r.replace(/Medidor/gi,                     'Gauge');
+  r = r.replace(/Dispositivo de [Cc]ontrole/gi,  'Control Fixture');
+  r = r.replace(/GD&T - Dispositivo de Controle/gi,'GD&T - Control Fixture');
+  r = r.replace(/Aferidor de [Tt]orque/gi,       'Torque Calibrator');
+  r = r.replace(/Máquina de [Tt]ração e [Cc]ompressão/gi,'Tensile \/ Compression Machine');
+  r = r.replace(/Máquina [Uu]niversal/gi,        'Universal Testing Machine');
+  r = r.replace(/Mufla.*Termômetro/gi,           'Muffle Furnace \/ Thermometer');
+  r = r.replace(/Mufla/gi,                       'Muffle Furnace');
+  r = r.replace(/Sensor de [Cc]alor/gi, 'Heat Sensor');
+  r = r.replace(/[Dd]eterminador de [Uu]midade/gi, 'Moisture Analyzer');
+  r = r.replace(/Determinador de [Uu]midade/gi,  'Moisture Analyzer');
+  r = r.replace(/Esquadro [Ii]nox/gi,            'Stainless Steel Square');
+  r = r.replace(/Esquadro/gi,                    'Square Gauge');
+  r = r.replace(/Trena/gi,                       'Tape Measure');
+  r = r.replace(/Nível/gi,                       'Level');
+  // Location / area words
+  r = r.replace(/Almoxarifado/gi,                'Warehouse');
+  r = r.replace(/Ferramentaria/gi,               'Tool Room');
+  r = r.replace(/Metrologia/gi,                  'Metrology');
+  r = r.replace(/Produção/gi,                    'Production');
+  r = r.replace(/Injeção - Máquina/gi,           'Injection - Machine');
+  r = r.replace(/Injetora/gi,                    'Injector');
+  // Common descriptor words
+  r = r.replace(/[Aa]nalógico/gi,                'Analog');
+  r = r.replace(/[Dd]igital/gi,                  'Digital');
+  r = r.replace(/[Cc]entesimal/gi,               'Centesimal');
+  r = r.replace(/[Pp]rofundidade/gi,             'Depth');
+  r = r.replace(/[Pp]rofund/gi,                'Depth');
+  r = r.replace(/de [Pp]recisão/gi,              'Precision');
+  r = r.replace(/Infravermelho/gi,               'Infrared');
+  r = r.replace(/[Cc]omparador/gi,               'Comparator');
+  r = r.replace(/[Aa]palpador/gi,                'Test Indicator');
+  r = r.replace(/[Pp]eso[s]?/gi,                 'Weight');
+  r = r.replace(/à/g, 'to');
+  r = r.replace(/Int\. Ext\./g, 'Int. Ext.');
+  return r;
 }
 function statusText(v) {
   if(!v) return v;
