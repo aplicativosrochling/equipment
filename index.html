@@ -410,6 +410,44 @@ body.col-resizing { cursor: col-resize !important; user-select: none !important 
 body.col-resizing * { cursor: col-resize !important }
 @keyframes bell-ring{0%,100%{transform:rotate(0)}20%{transform:rotate(-15deg)}40%{transform:rotate(15deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(8deg)}}
 @media print{.hdr,.tabs,.filters,.modal-ov,.toast,.notif-panel,.btn-p,.btn-g,.btn-ic,.tgl{display:none!important}.page{display:none!important}#tab-relatorios{display:block!important}}
+
+/* ── PRINT PDF OVERLAY ── */
+#pdf-print-frame {
+  display: none;
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,.65); backdrop-filter: blur(6px);
+  align-items: center; justify-content: center;
+}
+#pdf-print-frame.on { display: flex }
+#pdf-print-box {
+  background: var(--surf); border: 1px solid var(--bdr2);
+  border-radius: 14px; width: min(520px,96vw); padding: 28px 28px 22px;
+  box-shadow: 0 32px 80px rgba(0,0,0,.55);
+  animation: modalIn .16s cubic-bezier(.34,1.56,.64,1);
+}
+#pdf-print-box h2 { font-size: 15px; font-weight: 800; margin-bottom: 3px }
+#pdf-print-box p  { font-size: 12px; color: var(--tx2); margin-bottom: 18px }
+.pdf-opt-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px }
+.pdf-opt {
+  flex: 1; min-width: 110px; border: 1px solid var(--bdr2);
+  border-radius: 8px; padding: 10px 12px; cursor: pointer;
+  transition: var(--tr); background: var(--surf2);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.pdf-opt:hover { border-color: var(--brand); background: rgba(44,99,199,.05) }
+.pdf-opt.sel   { border-color: var(--brand); background: rgba(44,99,199,.09) }
+.pdf-opt-icon { font-size: 18px }
+.pdf-opt-lbl  { font-size: 12px; font-weight: 700; color: var(--tx) }
+.pdf-opt-sub  { font-size: 10px; color: var(--tx3) }
+.pdf-col-sel  { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; max-height: 130px; overflow-y: auto; padding: 2px }
+.pdf-col-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px;
+  border: 1px solid var(--bdr2); border-radius: 20px; font-size: 10.5px;
+  cursor: pointer; background: var(--surf2); color: var(--tx2);
+  transition: var(--tr); user-select: none;
+}
+.pdf-col-chip.on { border-color: var(--brand); background: rgba(44,99,199,.1); color: var(--brand); font-weight: 600 }
+.pdf-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--bdr2) }
 #fp,#file-import{display:none}
 
 /* scrollbar */
@@ -749,6 +787,43 @@ body.col-resizing * { cursor: col-resize !important }
 <div id="notif-ov" onclick="toggleNotif()" style="display:none;position:fixed;inset:0;z-index:499"></div>
 
 
+<!-- PDF PRINT OVERLAY -->
+<div id="pdf-print-frame" onclick="if(event.target===this)closePdfModal()">
+  <div id="pdf-print-box">
+    <h2>🖨️ Imprimir / Exportar PDF</h2>
+    <p id="pdf-print-desc">Configurar impressão da tabela</p>
+
+    <div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Orientação</div>
+    <div class="pdf-opt-row">
+      <div class="pdf-opt sel" id="pdf-opt-landscape" onclick="setPdfOri('landscape')">
+        <span class="pdf-opt-icon">⬜</span>
+        <span class="pdf-opt-lbl">Paisagem</span>
+        <span class="pdf-opt-sub">Recomendado — mais colunas</span>
+      </div>
+      <div class="pdf-opt" id="pdf-opt-portrait" onclick="setPdfOri('portrait')">
+        <span class="pdf-opt-icon">▭</span>
+        <span class="pdf-opt-lbl">Retrato</span>
+        <span class="pdf-opt-sub">Colunas selecionadas</span>
+      </div>
+    </div>
+
+    <div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Colunas a exibir</div>
+    <div class="pdf-col-sel" id="pdf-col-chips"></div>
+
+    <div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Tamanho da fonte</div>
+    <div class="pdf-opt-row">
+      <div class="pdf-opt" id="pdf-sz-8"  onclick="setPdfSz(8)" ><span class="pdf-opt-icon" style="font-size:13px">A</span><span class="pdf-opt-lbl">Pequena</span><span class="pdf-opt-sub">8pt — mais linhas</span></div>
+      <div class="pdf-opt sel" id="pdf-sz-10" onclick="setPdfSz(10)"><span class="pdf-opt-icon" style="font-size:15px">A</span><span class="pdf-opt-lbl">Média</span><span class="pdf-opt-sub">10pt — padrão</span></div>
+      <div class="pdf-opt" id="pdf-sz-12" onclick="setPdfSz(12)"><span class="pdf-opt-icon" style="font-size:18px">A</span><span class="pdf-opt-lbl">Grande</span><span class="pdf-opt-sub">12pt — legível</span></div>
+    </div>
+
+    <div class="pdf-actions">
+      <button class="btn-g" onclick="closePdfModal()">Cancelar</button>
+      <button class="btn-p" onclick="executePrint()">🖨️ Imprimir / PDF</button>
+    </div>
+  </div>
+</div>
+
 <!-- DRILL-DOWN MODAL -->
 <div class="drill-ov" id="drill-modal" onclick="if(event.target===this)closeDrill()">
   <div class="drill-modal">
@@ -762,7 +837,10 @@ body.col-resizing * { cursor: col-resize !important }
     <div class="drill-body" id="drill-body"></div>
     <div class="drill-foot">
       <span id="drill-count">0 registros</span>
-      <span style="font-family:var(--mono);font-size:10px;color:var(--tx3)">Clique em ✏ para editar · 🗑 para excluir</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="openPdfModal()" title="Imprimir / PDF">🖨️ PDF</button>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--tx3)">Clique em ✏ para editar · 🗑 para excluir</span>
+      </div>
     </div>
   </div>
 </div>
@@ -3337,6 +3415,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Estado do drill atual (para refresh)
   let drillState = null;
+  window.__getDrillState = () => drillState;
 
   function fmtDate(s){
     if(!s) return '—';
@@ -3499,8 +3578,251 @@ document.addEventListener('DOMContentLoaded', async () => {
     if(e.key!=='Escape') return;
     const editOpen = document.getElementById('edit-modal').classList.contains('on');
     const drillOpen = document.getElementById('drill-modal').classList.contains('on');
+    const pdfOpen = document.getElementById('pdf-print-frame').classList.contains('on');
+    if(pdfOpen) { closePdfModal(); return; }
     if(drillOpen && !editOpen) closeDrill();
   });
+})();
+
+// ═══════════════════════════════════════════════════════
+// PDF / PRINT SYSTEM
+// ═══════════════════════════════════════════════════════
+(function(){
+  // Colunas disponíveis para impressão
+  const PDF_COLS = [
+    { k:'id',          l:'Código' },
+    { k:'tipo',        l:'Tipo' },
+    { k:'descricao',   l:'Descrição' },
+    { k:'cliente',     l:'Cliente' },
+    { k:'localizacao', l:'Localização' },
+    { k:'responsavel', l:'Responsável' },
+    { k:'empresa',     l:'Empresa' },
+    { k:'ult_calib',   l:'Últ. Calib.' },
+    { k:'prox_calib',  l:'Próx. Calib.' },
+    { k:'freq_dias',   l:'Freq. (dias)' },
+    { k:'status',      l:'Status Op.' },
+    { k:'status_calib',l:'Status Calib.' },
+    { k:'dias_vencer', l:'Dias' },
+    { k:'observacoes', l:'Observações' },
+  ];
+
+  // Colunas selecionadas por padrão
+  const DEFAULT_COLS = ['id','tipo','descricao','localizacao','empresa','ult_calib','prox_calib','dias_vencer','status_calib'];
+
+  let _pdfOri = 'landscape';
+  let _pdfSz  = 10;
+  let _pdfCols = [...DEFAULT_COLS];
+  let _pdfRows = [];
+  let _pdfTitle = '';
+  let _pdfSub   = '';
+
+  window.openPdfModal = function() {
+    // Captura os dados e título do drill modal aberto
+    const ds = (typeof window.__getDrillState === 'function') ? window.__getDrillState() : null;
+    if(ds) {
+      _pdfRows  = ds.filter();
+      _pdfTitle = document.getElementById('drill-title')?.textContent || 'Relatório';
+      _pdfSub   = document.getElementById('drill-sub')?.textContent   || '';
+    } else {
+      _pdfRows  = (typeof DB !== 'undefined') ? DB : [];
+      _pdfTitle = 'Equipamentos de Medição';
+      _pdfSub   = '';
+    }
+    document.getElementById('pdf-print-desc').textContent =
+      `${_pdfRows.length} registro${_pdfRows.length===1?'':'s'} · ${_pdfTitle}`;
+    renderChips();
+    document.getElementById('pdf-print-frame').classList.add('on');
+  };
+
+  window.closePdfModal = function() {
+    document.getElementById('pdf-print-frame').classList.remove('on');
+  };
+
+  window.setPdfOri = function(ori) {
+    _pdfOri = ori;
+    document.getElementById('pdf-opt-landscape').classList.toggle('sel', ori==='landscape');
+    document.getElementById('pdf-opt-portrait').classList.toggle('sel',  ori==='portrait');
+  };
+
+  window.setPdfSz = function(sz) {
+    _pdfSz = sz;
+    [8,10,12].forEach(s => document.getElementById('pdf-sz-'+s)?.classList.toggle('sel', s===sz));
+  };
+
+  function renderChips() {
+    const wrap = document.getElementById('pdf-col-chips');
+    if(!wrap) return;
+    wrap.innerHTML = PDF_COLS.map(c => `
+      <span class="pdf-col-chip ${_pdfCols.includes(c.k)?'on':''}"
+            onclick="togglePdfCol('${c.k}',this)">${c.l}</span>
+    `).join('');
+  }
+
+  window.togglePdfCol = function(k, el) {
+    const idx = _pdfCols.indexOf(k);
+    if(idx >= 0) { if(_pdfCols.length > 1) _pdfCols.splice(idx,1); }
+    else _pdfCols.push(k);
+    el.classList.toggle('on', _pdfCols.includes(k));
+  };
+
+  function fmtVal(k, v) {
+    if(v === null || v === undefined || v === '') return '—';
+    if(k === 'dias_vencer') {
+      const d = Number(v);
+      if(isNaN(d)) return '—';
+      if(d < 0)  return `⛔ ${Math.abs(d)}d vencido`;
+      if(d === 0) return '🔴 Hoje';
+      if(d <= 30) return `⚠ ${d}d`;
+      if(d <= 90) return `${d}d`;
+      return `✓ ${d}d`;
+    }
+    if(k === 'ult_calib' || k === 'prox_calib') {
+      try { return new Date(v+'T00:00:00').toLocaleDateString('pt-BR'); } catch(e) { return v; }
+    }
+    return String(v);
+  }
+
+  function diasColor(d) {
+    if(d === null || d === undefined) return '#6b7280';
+    const n = Number(d);
+    if(isNaN(n)) return '#6b7280';
+    if(n < 0)  return '#dc2626';
+    if(n <= 30) return '#ea580c';
+    if(n <= 90) return '#d97706';
+    return '#16a34a';
+  }
+
+  window.executePrint = function() {
+    closePdfModal();
+    const cols = PDF_COLS.filter(c => _pdfCols.includes(c.k));
+    const rows = _pdfRows;
+    const now  = new Date().toLocaleString('pt-BR');
+    const colW = _pdfOri === 'landscape' ? Math.floor(260/cols.length) : Math.floor(180/cols.length);
+
+    const thead = cols.map(c =>
+      `<th style="background:#1e2235;color:#c8cde4;padding:7px ${_pdfSz<=8?'4px':'6px'};font-size:${_pdfSz-1}pt;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-right:1px solid #2e3450;min-width:${colW}mm">${c.l}</th>`
+    ).join('');
+
+    const tbody = rows.map((r, i) => {
+      const bg = i % 2 === 0 ? '#ffffff' : '#f8f9fc';
+      const cells = cols.map(c => {
+        const raw = r[c.k];
+        const txt = fmtVal(c.k, raw);
+        const color = c.k === 'dias_vencer' ? diasColor(raw) : 'inherit';
+        const fw = c.k === 'dias_vencer' && raw !== null && Number(raw) < 0 ? 'bold' : 'normal';
+        const ff = (c.k === 'id' || c.k === 'ult_calib' || c.k === 'prox_calib' || c.k === 'freq_dias' || c.k === 'dias_vencer')
+          ? 'font-family:monospace;font-size:' + (_pdfSz-1) + 'pt'
+          : 'font-size:' + _pdfSz + 'pt';
+        return `<td style="${ff};padding:5px ${_pdfSz<=8?'3px':'5px'};border-right:1px solid #e8eaf0;color:${color};font-weight:${fw};max-width:${colW+5}mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${txt}</td>`;
+      }).join('');
+      return `<tr style="background:${bg};border-bottom:1px solid #e8eaf0">${cells}</tr>`;
+    }).join('');
+
+    const logoB64 = document.querySelector('.hdr img')?.src || '';
+    const totalRows = rows.length;
+    const vencidos  = rows.filter(r => r.dias_vencer !== null && r.dias_vencer < 0).length;
+    const ok        = rows.filter(r => r.dias_vencer !== null && r.dias_vencer > 90).length;
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>${_pdfTitle}</title>
+<style>
+  @page { size: ${_pdfOri==='landscape'?'A4 landscape':'A4 portrait'}; margin: 10mm 8mm 10mm 8mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1d2e; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Header */
+  .ph { display: flex; align-items: center; justify-content: space-between;
+        padding: 0 0 10px 0; border-bottom: 3px solid #2c63c7; margin-bottom: 10px }
+  .ph-left { display: flex; align-items: center; gap: 12px }
+  .ph-logo { height: 32px; width: auto }
+  .ph-title { font-size: 16pt; font-weight: 800; color: #1a1d2e; letter-spacing: -.3px }
+  .ph-sub   { font-size: 9pt; color: #6b7280; margin-top: 2px }
+  .ph-right { text-align: right; font-size: 8pt; color: #9ca3bc; line-height: 1.6 }
+
+  /* KPI Strip */
+  .kpi-strip { display: flex; gap: 10px; margin-bottom: 10px }
+  .kpi-chip { flex: 1; border-radius: 6px; padding: 7px 10px; border: 1px solid #e0e4f0 }
+  .kpi-chip-val { font-size: 18pt; font-weight: 800; font-family: monospace; letter-spacing: -1px; line-height: 1 }
+  .kpi-chip-lbl { font-size: 7.5pt; color: #6b7280; margin-top: 2px }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: ${_pdfSz}pt; table-layout: auto }
+  thead { display: table-header-group }
+  tbody tr { page-break-inside: avoid }
+  th { background: #1e2235 !important; color: #c8cde4; border-bottom: 2px solid #2c63c7 }
+  tr:last-child td { border-bottom: none }
+
+  /* Footer */
+  .pf { position: fixed; bottom: 0; left: 0; right: 0;
+        border-top: 1px solid #e0e4f0; padding: 4px 8px;
+        display: flex; justify-content: space-between;
+        font-size: 7.5pt; color: #9ca3bc; background: #fff }
+  .pf-brand { color: #2c63c7; font-weight: 700 }
+
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    thead { display: table-header-group !important }
+    tfoot { display: table-footer-group }
+    .no-print { display: none !important }
+  }
+</style>
+</head>
+<body>
+  <div class="ph">
+    <div class="ph-left">
+      ${logoB64 ? `<img class="ph-logo" src="${logoB64}" alt="Logo">` : ''}
+      <div>
+        <div class="ph-title">${_pdfTitle}</div>
+        <div class="ph-sub">${_pdfSub ? _pdfSub + ' · ' : ''}Gerado em ${now}</div>
+      </div>
+    </div>
+    <div class="ph-right">
+      Röchling — Controle de Equipamentos<br>
+      <strong>${totalRows}</strong> registro${totalRows===1?'':'s'}
+    </div>
+  </div>
+
+  <div class="kpi-strip">
+    <div class="kpi-chip" style="border-color:#bfdbfe;background:#eff6ff">
+      <div class="kpi-chip-val" style="color:#2c63c7">${totalRows}</div>
+      <div class="kpi-chip-lbl">Total</div>
+    </div>
+    <div class="kpi-chip" style="border-color:#fecaca;background:#fef2f2">
+      <div class="kpi-chip-val" style="color:#dc2626">${vencidos}</div>
+      <div class="kpi-chip-lbl">Vencidos</div>
+    </div>
+    <div class="kpi-chip" style="border-color:#bbf7d0;background:#f0fdf4">
+      <div class="kpi-chip-val" style="color:#16a34a">${ok}</div>
+      <div class="kpi-chip-lbl">Em dia (&gt;90d)</div>
+    </div>
+    <div class="kpi-chip" style="border-color:#e0e4f0;background:#f8f9fc">
+      <div class="kpi-chip-val" style="color:#7c3aed">${totalRows>0?Math.round(ok/totalRows*100):0}%</div>
+      <div class="kpi-chip-lbl">Taxa de saúde</div>
+    </div>
+  </div>
+
+  <table>
+    <thead><tr>${thead}</tr></thead>
+    <tbody>${tbody}</tbody>
+  </table>
+
+  <div class="pf">
+    <span><span class="pf-brand">Röchling</span> — Controle de Equipamentos de Medição</span>
+    <span>${now} · ${totalRows} registros · Orientação: ${_pdfOri==='landscape'?'Paisagem':'Retrato'}</span>
+  </div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=1200,height=850');
+    if(!win) { alert('Permita popups para gerar o PDF.'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 600);
+  };
 })();
 
 </script>
