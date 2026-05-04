@@ -594,6 +594,31 @@ body.col-resizing * { cursor: col-resize !important }
     <div class="chart-card"><div class="chart-title">📍 Top Localizações</div><div style="height:250px;position:relative"><canvas id="ch-locais"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">🏢 Empresa Executante</div><div style="height:250px;position:relative"><canvas id="ch-emp"></canvas></div></div>
   </div>
+
+  <!-- Gráfico mês a mês — realizados vs previstos -->
+  <div class="chart-card" style="margin-bottom:12px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <div class="chart-title" style="margin-bottom:0">
+        <span class="chart-title-dot" style="background:var(--brand)"></span>
+        📆 Calibrações por Mês — Previstas vs Realizadas
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div style="display:flex;gap:4px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:5px;padding:3px 4px">
+          <button id="ch-mensal-btn-12" onclick="setMensalRange(12)" class="btn-g" style="font-size:10px;padding:2px 8px;background:var(--brand);color:#fff;border-color:var(--brand)">12M</button>
+          <button id="ch-mensal-btn-6"  onclick="setMensalRange(6)"  class="btn-g" style="font-size:10px;padding:2px 8px">6M</button>
+          <button id="ch-mensal-btn-3"  onclick="setMensalRange(3)"  class="btn-g" style="font-size:10px;padding:2px 8px">3M</button>
+        </div>
+        <span style="font-size:10px;color:var(--tx3);font-family:var(--mono)">clique nas barras para detalhes</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#2c63c7;display:inline-block"></span>Previstas (vencem)</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#16a34a;display:inline-block"></span>Realizadas (última calib.)</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#dc2626;display:inline-block"></span>Vencidas sem realização</div>
+    </div>
+    <div style="height:270px;position:relative"><canvas id="ch-mensal"></canvas></div>
+    <div id="ch-mensal-sumario" style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--bdr2)"></div>
+  </div>
 </div>
 
 <!-- ═══════════════ ALERTAS ═══════════════ -->
@@ -2045,11 +2070,153 @@ function buildAllCharts() {
   const em={}; DB.forEach(r=>{const k=(r.empresa||'').trim();if(k)em[k]=(em[k]||0)+1;});
   const es=Object.entries(em).sort((a,b)=>b[1]-a[1]).slice(0,8);
   charts.emp=new Chart(document.getElementById('ch-emp'),{type:'doughnut',data:{labels:es.map(x=>x[0]),datasets:[{data:es.map(x=>x[1]),backgroundColor:CC,borderWidth:0,hoverOffset:5}]},options:donutOpts()});
+
+  buildMensalChart();
 }
 
 // ═══════════════════════════════════════════════════════
-// TABLE RENDER
+// GRÁFICO MÊS A MÊS — Previstas vs Realizadas
 // ═══════════════════════════════════════════════════════
+let _mensalRange = 12;
+
+window.setMensalRange = function(n) {
+  _mensalRange = n;
+  ['3','6','12'].forEach(m => {
+    const b = document.getElementById('ch-mensal-btn-'+m);
+    if(!b) return;
+    b.style.background = (String(n)===m) ? 'var(--brand)' : 'transparent';
+    b.style.color      = (String(n)===m) ? '#fff'         : 'var(--tx2)';
+    b.style.borderColor= (String(n)===m) ? 'var(--brand)' : 'var(--bdr2)';
+  });
+  buildMensalChart();
+};
+
+function buildMensalChart() {
+  dc('mensal');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const labels=[], previstos=[], realizados=[], vencidosSemReal=[];
+
+  for(let m = -(_mensalRange-1); m <= 0; m++) {
+    const d = new Date(today.getFullYear(), today.getMonth()+m, 1);
+    const dNext = new Date(today.getFullYear(), today.getMonth()+m+1, 1);
+    const label = d.toLocaleDateString('pt-BR', {month:'short', year:'2-digit'});
+    labels.push(label);
+
+    // Previstas: equipamentos com prox_calib dentro do mês
+    const prevMes = DB.filter(r => {
+      if(!r.prox_calib) return false;
+      const pc = new Date(r.prox_calib+'T00:00:00');
+      return pc >= d && pc < dNext;
+    });
+
+    // Realizadas: equipamentos com ult_calib dentro do mês
+    const realMes = DB.filter(r => {
+      if(!r.ult_calib) return false;
+      const uc = new Date(r.ult_calib+'T00:00:00');
+      return uc >= d && uc < dNext;
+    });
+
+    // Vencidas sem realização: prox_calib no mês mas sem ult_calib correspondente ou ult_calib diferente
+    const vencSem = prevMes.filter(r => {
+      if(!r.ult_calib) return true;
+      const uc = new Date(r.ult_calib+'T00:00:00');
+      return !(uc >= d && uc < dNext);
+    });
+
+    previstos.push(prevMes.length);
+    realizados.push(realMes.length);
+    vencidosSemReal.push(d < today ? vencSem.length : 0); // só mostra vencidas em meses passados
+  }
+
+  // Sumário
+  const sumEl = document.getElementById('ch-mensal-sumario');
+  if(sumEl) {
+    const totPrev = previstos.reduce((a,b)=>a+b,0);
+    const totReal = realizados.reduce((a,b)=>a+b,0);
+    const totVenc = vencidosSemReal.reduce((a,b)=>a+b,0);
+    const taxa = totPrev>0 ? Math.round(totReal/totPrev*100) : 0;
+    sumEl.innerHTML = [
+      ['📋 Previstas','var(--brand)',totPrev],
+      ['✅ Realizadas','var(--green)',totReal],
+      ['🚨 Sem realização','var(--red)',totVenc],
+      ['📊 Taxa de execução','var(--accent)', taxa+'%'],
+    ].map(([l,c,v])=>`<div style="font-size:11px;color:var(--tx2)">${l}: <strong style="color:${c};font-family:var(--mono)">${v}</strong></div>`).join('');
+  }
+
+  const el = document.getElementById('ch-mensal');
+  if(!el) return;
+  charts.mensal = new Chart(el, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Previstas (vencem)',
+          data: previstos,
+          backgroundColor: 'rgba(44,99,199,.75)',
+          borderRadius: 4,
+          borderWidth: 0,
+          order: 2
+        },
+        {
+          label: 'Realizadas',
+          data: realizados,
+          backgroundColor: 'rgba(22,163,74,.8)',
+          borderRadius: 4,
+          borderWidth: 0,
+          order: 1
+        },
+        {
+          label: 'Vencidas s/ realização',
+          data: vencidosSemReal,
+          backgroundColor: 'rgba(220,38,38,.75)',
+          borderRadius: 4,
+          borderWidth: 0,
+          order: 3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            afterBody: (items) => {
+              const idx = items[0]?.dataIndex;
+              if(idx===undefined) return '';
+              const p = previstos[idx]||0, r = realizados[idx]||0;
+              const tx = p>0 ? Math.round(r/p*100) : 0;
+              return `Taxa de execução: ${tx}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: tc(), font: { size: 10 } }, grid: { color: gc() } },
+        y: { ticks: { color: tc(), font: { size: 10 }, stepSize: 1 }, grid: { color: gc() }, beginAtZero: true }
+      }
+    }
+  });
+
+  // Wire drill-down for mensal chart
+  if(charts.mensal && !charts.mensal.__drillMensal) {
+    charts.mensal.__drillMensal = true;
+    charts.mensal.canvas.onclick = (evt) => {
+      const pts = charts.mensal.getElementsAtEventForMode(evt,'nearest',{intersect:true},true);
+      if(!pts.length) return;
+      const p = pts[0];
+      const label = charts.mensal.data.labels[p.index];
+      const dsLabel = charts.mensal.data.datasets[p.datasetIndex]?.label || '';
+      let drillKey;
+      if(dsLabel.includes('Previstas')) drillKey = 'mensal-prev';
+      else if(dsLabel.includes('Realizadas')) drillKey = 'mensal-real';
+      else drillKey = 'mensal-venc';
+      openDrill(drillKey, label);
+    };
+  }
+}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 function diasBadge(d){
@@ -3053,6 +3220,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     'vence30':  { title:'⚠️ Vencem em 30 dias',    filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0&&r.dias_vencer<=30) },
     'vence90':  { title:'📅 Vencem em 90 dias',    filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>30&&r.dias_vencer<=90) },
     'saude':    { title:'💚 Equipamentos em Dia',  filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0) },
+    'mensal-prev': {
+      title: '📋 Calibrações Previstas no Mês',
+      filter: (label) => {
+        const [monStr, yrStr] = label.split('/');
+        return DB.filter(r => {
+          if(!r.prox_calib) return false;
+          const pc = new Date(r.prox_calib+'T00:00:00');
+          const lbl = pc.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.','');
+          return lbl.toLowerCase() === label.toLowerCase();
+        });
+      }
+    },
+    'mensal-real': {
+      title: '✅ Calibrações Realizadas no Mês',
+      filter: (label) => {
+        return DB.filter(r => {
+          if(!r.ult_calib) return false;
+          const uc = new Date(r.ult_calib+'T00:00:00');
+          const lbl = uc.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.','');
+          return lbl.toLowerCase() === label.toLowerCase();
+        });
+      }
+    },
+    'mensal-venc': {
+      title: '🚨 Previstas Sem Realização no Mês',
+      filter: (label) => {
+        return DB.filter(r => {
+          if(!r.prox_calib) return false;
+          const pc = new Date(r.prox_calib+'T00:00:00');
+          const lbl = pc.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.','');
+          if(lbl.toLowerCase() !== label.toLowerCase()) return false;
+          // sem ult_calib no mesmo mês
+          if(!r.ult_calib) return true;
+          const uc = new Date(r.ult_calib+'T00:00:00');
+          const lblUlt = uc.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.','');
+          return lblUlt.toLowerCase() !== label.toLowerCase();
+        });
+      }
+    },
     'calib': {
       title: '📊 Status de Calibração',
       filter: (label) => {
