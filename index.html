@@ -3120,7 +3120,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <td>${norm(r.status)||'—'}</td>
       <td style="text-align:right"><span class="drill-act">
         <button onclick="openEdit(${r._uid})" title="Editar">✏</button>
-        <button class="del" onclick="if(confirm('Excluir registro ${(''+norm(r.id)).replace(/'/g,&quot;\\'&quot;)}?'))deleteInline(${r._uid})" title="Excluir">🗑</button>
+        <button class="del" onclick="if(confirm('Excluir este registro?'))deleteInline(${r._uid})" title="Excluir">🗑</button>
       </span></td>
     </tr>`).join('');
     return `<table>${head}<tbody>${body}</tbody></table>`;
