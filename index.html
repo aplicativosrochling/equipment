@@ -133,17 +133,32 @@ body {
 
 /* ── TABS ── */
 .tabs {
-  background: var(--surf); border-bottom: 1px solid var(--bdr2);
-  display: flex; padding: 0 24px; gap: 0; overflow-x: auto;
+  background: var(--surf); border-bottom: 2px solid var(--bdr2);
+  display: flex; padding: 0 24px; gap: 2px; overflow-x: auto;
 }
 .tab {
-  padding: 13px 18px; font-size: 12px; font-weight: 500; cursor: pointer;
-  border-bottom: 2px solid transparent; color: var(--tx3);
-  white-space: nowrap; transition: var(--tr); letter-spacing: .1px;
-  display: flex; align-items: center; gap: 7px;
+  padding: 14px 20px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  border-bottom: 3px solid transparent; color: var(--tx3);
+  white-space: nowrap; transition: var(--tr); letter-spacing: .3px;
+  display: flex; align-items: center; gap: 8px;
+  text-transform: uppercase; position: relative; margin-bottom: -2px;
+  border-radius: 6px 6px 0 0;
 }
-.tab:hover { color: var(--tx2) }
-.tab.on { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600 }
+.tab:hover { color: var(--tx); background: var(--surf2) }
+.tab.on {
+  color: var(--brand); border-bottom-color: var(--brand);
+  background: rgba(44,99,199,.07);
+  box-shadow: inset 0 2px 0 var(--brand);
+}
+.tab .tab-badge {
+  background: var(--brand); color: #fff;
+  font-size: 9px; font-weight: 800; font-family: var(--mono);
+  padding: 1px 6px; border-radius: 10px; letter-spacing: .5px;
+  min-width: 18px; text-align: center;
+}
+.tab.on .tab-badge { background: var(--brand) }
+.tab .tab-icon { font-size: 14px; line-height: 1 }
+.tab:hover .tab-badge { background: var(--brand-lt) }
 
 /* ── LAYOUT ── */
 .main { max-width: 1900px; margin: 0 auto; padding: 20px 24px }
@@ -158,10 +173,16 @@ body {
 .kpi {
   background: var(--surf); border: 1px solid var(--bdr2);
   border-radius: var(--r2); padding: 16px 18px 14px;
-  transition: var(--tr); cursor: default; position: relative;
+  transition: var(--tr); cursor: pointer; position: relative;
   overflow: hidden;
 }
 .kpi:hover { border-color: var(--bdr3); box-shadow: var(--sh) }
+.kpi .kpi-drill-hint {
+  position: absolute; bottom: 8px; right: 12px;
+  font-size: 9px; color: var(--tx3); font-family: var(--mono);
+  opacity: 0; transition: opacity .15s; letter-spacing: .3px;
+}
+.kpi:hover .kpi-drill-hint { opacity: 1 }
 /* accent dot top-right corner */
 .kpi::after {
   content: ''; position: absolute; top: 0; right: 0;
@@ -477,10 +498,20 @@ body.col-resizing * { cursor: col-resize !important }
 
 <!-- TABS -->
 <div class="tabs">
-  <div class="tab on"  onclick="showTab('dashboard',this)">📊 Dashboard</div>
-  <div class="tab"     onclick="showTab('alertas',this)">⚠️ Alertas</div>
-  <div class="tab"     onclick="showTab('equipamentos',this)">🔧 Equipamentos</div>
-  <div class="tab"     onclick="showTab('relatorios',this)">📋 Relatórios</div>
+  <div class="tab on"  onclick="showTab('dashboard',this)">
+    <span class="tab-icon">📊</span> Dashboard
+  </div>
+  <div class="tab"     onclick="showTab('alertas',this)">
+    <span class="tab-icon">⚠️</span> Alertas
+    <span class="tab-badge" id="tab-badge-alertas">0</span>
+  </div>
+  <div class="tab"     onclick="showTab('equipamentos',this)">
+    <span class="tab-icon">🔧</span> Equipamentos
+    <span class="tab-badge" id="tab-badge-equipamentos">0</span>
+  </div>
+  <div class="tab"     onclick="showTab('relatorios',this)">
+    <span class="tab-icon">📋</span> Relatórios
+  </div>
 </div>
 
 <div class="main">
@@ -488,45 +519,53 @@ body.col-resizing * { cursor: col-resize !important }
 <!-- ═══════════════ DASHBOARD ═══════════════ -->
 <div id="tab-dashboard" class="page on">
   <div class="kpi-grid">
-    <div class="kpi c-blue">
+    <div class="kpi c-blue" onclick="openDrill('todos','Total')">
       <div class="kpi-header"><span class="kpi-lbl">Total</span><span class="kpi-icon">📦</span></div>
       <div class="kpi-val" id="k-total">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-total">registros</span><canvas class="kpi-sparkline" id="sp-total"></canvas></div>
+      <span class="kpi-drill-hint">↗ ver todos</span>
     </div>
-    <div class="kpi c-green">
+    <div class="kpi c-green" onclick="openDrill('ativos','Ativo')">
       <div class="kpi-header"><span class="kpi-lbl">Ativos</span><span class="kpi-icon">✅</span></div>
       <div class="kpi-val" id="k-ativos">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-ativos">em operação</span><canvas class="kpi-sparkline" id="sp-ativos"></canvas></div>
+      <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
-    <div class="kpi c-gray">
+    <div class="kpi c-gray" onclick="openDrill('inativos','Inativo')">
       <div class="kpi-header"><span class="kpi-lbl">Inativos</span><span class="kpi-icon">⏸</span></div>
       <div class="kpi-val" id="k-inativos">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-inativos">fora de uso</span><canvas class="kpi-sparkline" id="sp-inativos"></canvas></div>
+      <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
-    <div class="kpi c-teal">
+    <div class="kpi c-teal" onclick="openDrill('calib-ok','Calibrado OK')">
       <div class="kpi-header"><span class="kpi-lbl">Calib. OK</span><span class="kpi-icon">🎯</span></div>
       <div class="kpi-val" id="k-calib-ok">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-calib-ok">aprovados</span><canvas class="kpi-sparkline" id="sp-calib"></canvas></div>
+      <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
-    <div class="kpi c-red">
+    <div class="kpi c-red" onclick="openDrill('vencidos','Vencidos')">
       <div class="kpi-header"><span class="kpi-lbl">Vencidos</span><span class="kpi-icon">🚨</span></div>
       <div class="kpi-val" id="k-venc">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-venc">prazo expirado</span><canvas class="kpi-sparkline" id="sp-venc"></canvas></div>
+      <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
-    <div class="kpi c-orange">
+    <div class="kpi c-orange" onclick="openDrill('vence30','Vencem em 30 dias')">
       <div class="kpi-header"><span class="kpi-lbl">Vencem 30d</span><span class="kpi-icon">⚠️</span></div>
       <div class="kpi-val" id="k-30d">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-30d">urgente</span><canvas class="kpi-sparkline" id="sp-30d"></canvas></div>
+      <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
-    <div class="kpi c-accent">
+    <div class="kpi c-accent" onclick="openDrill('vence90','Vencem em 90 dias')">
       <div class="kpi-header"><span class="kpi-lbl">Vencem 90d</span><span class="kpi-icon">📅</span></div>
       <div class="kpi-val" id="k-90d">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-90d">monitorar</span><canvas class="kpi-sparkline" id="sp-90d"></canvas></div>
+      <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
-    <div class="kpi c-purple">
+    <div class="kpi c-purple" onclick="openDrill('saude','Índice de Saúde')">
       <div class="kpi-header"><span class="kpi-lbl">Índice Saúde</span><span class="kpi-icon">💚</span></div>
       <div class="kpi-val" id="k-saude">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-saude">equip. em dia</span><canvas class="kpi-sparkline" id="sp-saude"></canvas></div>
+      <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
   </div>
 
@@ -3006,6 +3045,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Mapa: chartKey → { title, filter(label, idx) → array de registros DB }
   const DRILL = {
+    'todos':    { title:'📦 Todos os Equipamentos', filter:()=>DB },
+    'ativos':   { title:'✅ Equipamentos Ativos',   filter:()=>DB.filter(r=>lc(r.status)==='ativo') },
+    'inativos': { title:'⏸ Equipamentos Inativos', filter:()=>DB.filter(r=>lc(r.status)==='inativo') },
+    'calib-ok': { title:'🎯 Calibração OK (em dia)', filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>90) },
+    'vencidos': { title:'🚨 Calibração Vencida',   filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0) },
+    'vence30':  { title:'⚠️ Vencem em 30 dias',    filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0&&r.dias_vencer<=30) },
+    'vence90':  { title:'📅 Vencem em 90 dias',    filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>30&&r.dias_vencer<=90) },
+    'saude':    { title:'💚 Equipamentos em Dia',  filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0) },
     'calib': {
       title: '📊 Status de Calibração',
       filter: (label) => {
@@ -3177,9 +3224,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       const r = _origUpdateAll.apply(this,arguments);
       setTimeout(wireAll, 50);
       setTimeout(wireAll, 300);
+      setTimeout(updateTabBadges, 100);
       return r;
     };
   }
+  function updateTabBadges(){
+    try{
+      const vencidos = (typeof DB!=='undefined') ? DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0).length : 0;
+      const alertas  = (typeof DB!=='undefined') ? DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<=90).length : 0;
+      const total    = (typeof DB!=='undefined') ? DB.length : 0;
+      const ba = document.getElementById('tab-badge-alertas');
+      const be = document.getElementById('tab-badge-equipamentos');
+      if(ba){ ba.textContent = alertas; ba.style.display = alertas>0?'':'none'; ba.style.background=vencidos>0?'var(--red)':'var(--orange)'; }
+      if(be){ be.textContent = total; be.style.display = total>0?'':'none'; }
+    }catch(e){}
+  }
+  // dispara na carga inicial
+  let badgeTries=0;
+  const badgeInterval=setInterval(()=>{
+    if(typeof DB!=='undefined'&&DB.length>0){ updateTabBadges(); clearInterval(badgeInterval); }
+    if(++badgeTries>40) clearInterval(badgeInterval);
+  },300);
 
   // ── Hooks: refresh drill após save/delete; mantêm o drill aberto
   function installHook(name){
