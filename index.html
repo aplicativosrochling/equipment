@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Röchling — Controle de Equipamentos</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -14,17 +14,19 @@
    Direction: Notion / Linear — clean, spatial, precise
 ═══════════════════════════════════════════════ */
 :root {
-  --brand:   #2c63c7;       /* Röchling Corporate Blue */
-  --brand-dk:#1e4fa0;  /* hover/active */
-  --brand-lt:#3b7ae0; /* lighter */
-  --accent:  #f59e0b;               /* amber accent */
-  --accent2: #2c63c7;       /* alias → brand */
-  --green:   #16a34a;
-  --red:     #dc2626;
-  --orange:  #ea580c;
-  --purple:  #7c3aed;
-  --teal:    #0d9488;
-  --pink:    #db2777;
+  /* ── Röchling Automotive Official Brand Colors (Wikimedia SVG source) ── */
+  --brand:     #0064b3;     /* Röchling Blue — official primary */
+  --brand-dk:  #004f8f;     /* hover / active */
+  --brand-lt:  #1a7fcc;     /* lighter blue */
+  --accent-dim:#cfe3f5;     /* very light blue tint */
+  --accent:    #f59e0b;     /* amber — warnings / urgency */
+  --accent2:   #1a7fcc;     /* secondary blue tone */
+  --green:     #16a34a;
+  --red:       #dc2626;
+  --orange:    #ea580c;
+  --purple:    #7c3aed;
+  --teal:      #0d9488;
+  --pink:      #db2777;
   --font:    'DM Sans', system-ui, sans-serif;
   --mono:    'DM Mono', 'JetBrains Mono', monospace;
   --r:  5px;
@@ -45,7 +47,7 @@
   --tx2:   #8b90a8;
   --tx3:   #454966;
   --sh:    0 4px 32px rgba(0,0,0,.6);
-  --ring:  0 0 0 2px rgba(44,99,199,.3);
+  --ring:  0 0 0 2px rgba(0,100,179,.35);
 }
 
 /* Light — warm whites */
@@ -57,11 +59,11 @@
   --bdr:   #e8eaf0;
   --bdr2:  #dfe1ea;
   --bdr3:  #cdd0db;
-  --tx:    #0f1120;
+  --tx:    #1a1a1a;
   --tx2:   #5b607a;
   --tx3:   #9ca3bc;
   --sh:    0 2px 16px rgba(15,17,32,.06);
-  --ring:  0 0 0 2px rgba(44,99,199,.25);
+  --ring:  0 0 0 2px rgba(0,100,179,.3);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0 }
@@ -74,25 +76,22 @@ body {
   font-feature-settings: 'ss01','cv01';
 }
 
-/* ── HEADER — clean command bar ── */
+/* ── HEADER — Röchling branded command bar ── */
 .hdr {
   background: var(--surf);
   border-bottom: 1px solid var(--bdr2);
+  border-top: 3px solid #0064b3;
   padding: 0 24px;
   display: flex; align-items: center; justify-content: space-between;
-  height: 54px; position: sticky; top: 0; z-index: 300; gap: 8px;
-  box-shadow: 0 1px 0 var(--bdr2);
+  height: 57px; position: sticky; top: 0; z-index: 300; gap: 8px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.18);
 }
 .hdr-l { display: flex; align-items: center; gap: 14px; flex-shrink: 0 }
-.logo {
-  background: var(--accent); color: #000;
-  font-weight: 800; font-size: 9px; padding: 4px 10px; border-radius: 4px;
-  letter-spacing: 2.5px; font-family: var(--mono); text-transform: uppercase;
-  box-shadow: 0 2px 12px rgba(245,158,11,.25);
-}
 .hdr h1 {
-  font-size: 13px; font-weight: 500; white-space: nowrap;
-  color: var(--tx2); letter-spacing: .2px;
+  font-size: 12px; font-weight: 500; white-space: nowrap;
+  color: var(--tx2); letter-spacing: .3px;
+  border-left: 2px solid var(--brand);
+  padding-left: 10px;
 }
 .hdr-divider { width: 1px; height: 20px; background: var(--bdr2); flex-shrink: 0 }
 .hdr-r { display: flex; align-items: center; gap: 5px }
@@ -105,7 +104,7 @@ body {
   font-size: 12px; font-weight: 600; cursor: pointer;
   transition: var(--tr); white-space: nowrap; font-family: var(--font);
   letter-spacing: .1px;
-  box-shadow: 0 1px 3px rgba(44,99,199,.35);
+  box-shadow: 0 2px 8px rgba(0,100,179,.40);
 }
 .btn-p:hover { background: var(--brand-dk); transform: translateY(-1px) }
 .btn-p:active { transform: none }
@@ -115,7 +114,7 @@ body {
   font-size: 11px; cursor: pointer; transition: var(--tr);
   white-space: nowrap; font-family: var(--font);
 }
-.btn-g:hover { border-color: var(--brand); color: var(--brand); background: rgba(44,99,199,.05) }
+.btn-g:hover { border-color: var(--brand); color: var(--brand); background: rgba(0,100,179,.05) }
 .btn-ic {
   background: transparent; border: 1px solid var(--bdr2); color: var(--tx2);
   padding: 5px 9px; border-radius: var(--r); font-size: 14px;
@@ -147,7 +146,7 @@ body {
 .tab:hover { color: var(--tx); background: var(--surf2) }
 .tab.on {
   color: var(--brand); border-bottom-color: var(--brand);
-  background: rgba(44,99,199,.07);
+  background: rgba(0,100,179,.07);
   box-shadow: inset 0 2px 0 var(--brand);
 }
 .tab .tab-badge {
@@ -198,7 +197,7 @@ body {
 .kpi.c-accent::after{ background: var(--accent) }
 .kpi.c-teal::after  { background: var(--teal) }
 /* hover glow per color */
-.kpi.c-blue:hover  { box-shadow: 0 0 0 1px var(--brand), 0 4px 24px rgba(44,99,199,.15) }
+.kpi.c-blue:hover  { box-shadow: 0 0 0 1px var(--brand), 0 4px 24px rgba(0,100,179,.15) }
 .kpi.c-green:hover { box-shadow: 0 0 0 1px var(--green), 0 4px 24px rgba(22,163,74,.1) }
 .kpi.c-red:hover   { box-shadow: 0 0 0 1px var(--red), 0 4px 24px rgba(220,38,38,.1) }
 .kpi.c-orange:hover{ box-shadow: 0 0 0 1px var(--orange), 0 4px 24px rgba(234,88,12,.1) }
@@ -266,7 +265,7 @@ td {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 12px;
 }
-tr:hover td { background: var(--surf2) !important }
+tr:hover td { background: var(--surf2) !important; box-shadow: inset 3px 0 0 var(--brand) }
 tr:nth-child(even) td { background: rgba(255,255,255,.012) }
 
 /* ── BADGES ── */
@@ -279,14 +278,14 @@ tr:nth-child(even) td { background: rgba(255,255,255,.012) }
 .b-ok   { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0 }
 .b-warn { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa }
 .b-err  { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca }
-.b-info { background: #eff6ff; color: #2c63c7; border: 1px solid #bfdbfe }
+.b-info { background: #e8f2fb; color: #0064b3; border: 1px solid #b3d4f0 }
 .b-gray { background: var(--surf2); color: var(--tx3); border: 1px solid var(--bdr2) }
 .b-teal { background: #f0fdfa; color: #0f766e; border: 1px solid #99f6e4 }
 
 [data-theme=dark] .b-ok   { background: rgba(22,163,74,.12); color: #4ade80; border-color: rgba(22,163,74,.2) }
 [data-theme=dark] .b-warn { background: rgba(234,88,12,.12); color: #fb923c; border-color: rgba(234,88,12,.2) }
 [data-theme=dark] .b-err  { background: rgba(220,38,38,.12); color: #f87171; border-color: rgba(220,38,38,.2) }
-[data-theme=dark] .b-info { background: rgba(44,99,199,.12); color: #7ba7e8; border-color: rgba(44,99,199,.2) }
+[data-theme=dark] .b-info { background: rgba(0,100,179,.15); color: #60a5fa; border-color: rgba(0,100,179,.3) }
 [data-theme=dark] .b-teal { background: rgba(13,148,136,.12); color: #2dd4bf; border-color: rgba(13,148,136,.2) }
 
 /* ── PAGINATION ── */
@@ -383,6 +382,27 @@ tr:nth-child(even) td { background: rgba(255,255,255,.012) }
 .editable-cell:hover::after { content: '✎'; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 9px; color: var(--accent); opacity: .5; pointer-events: none }
 td.editable-cell { position: relative }
 
+/* ── FILL HANDLE (drag para preencher) ── */
+.fill-handle {
+  position: absolute; bottom: -1px; right: -1px;
+  width: 9px; height: 9px;
+  background: var(--brand); border: 1.5px solid var(--surf);
+  border-radius: 1px; cursor: crosshair; z-index: 10;
+  opacity: 0; transition: opacity .15s;
+}
+td.editable-cell:hover .fill-handle,
+td.editable-cell.fill-active .fill-handle { opacity: 1 }
+td.fill-preview { background: rgba(0,100,179,.12) !important; outline: 1px dashed var(--brand) !important }
+[data-theme=dark] td.fill-preview { background: rgba(0,100,179,.22) !important }
+.fill-ghost {
+  position: fixed; z-index: 9999; pointer-events: none;
+  background: var(--surf); border: 1.5px solid var(--brand);
+  border-radius: 5px; padding: 4px 10px; font-size: 11px;
+  font-family: var(--mono); color: var(--brand); font-weight: 700;
+  box-shadow: 0 4px 16px rgba(0,0,0,.3); white-space: nowrap;
+  display: none;
+}
+
 /* ── COL PANEL ── */
 .col-panel { position: relative }
 .col-dd { display: none; position: absolute; background: var(--surf); border: 1px solid var(--bdr2); border-radius: var(--r2); padding: 6px; z-index: 9999; min-width: 200px; max-height: 320px; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,.4) }
@@ -390,7 +410,55 @@ td.editable-cell { position: relative }
 .col-dd label { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11.5px; color: var(--tx2) }
 .col-dd label:hover { background: var(--surf2); color: var(--tx) }
 
-/* ── DELETE BUTTON ── */
+/* ── BULK SELECT & EDIT ── */
+.bulk-bar {
+  display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 16px; background: #e8f2fb;
+  border-bottom: 2px solid var(--brand);
+  font-size: 12px; font-weight: 600; color: var(--brand);
+  animation: slideDown .18s ease;
+}
+[data-theme=dark] .bulk-bar { background: rgba(0,100,179,.15); }
+.bulk-bar.on { display: flex }
+@keyframes slideDown { from { transform: translateY(-8px); opacity:0 } to { transform: none; opacity:1 } }
+.bulk-bar-count { font-family: var(--mono); font-size: 13px; font-weight: 800 }
+.bulk-field-row {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  background: var(--surf2); border: 1px solid var(--bdr2);
+  border-radius: 6px; padding: 5px 10px;
+}
+.bulk-field-row select, .bulk-field-row input {
+  font-size: 11px; background: var(--surf); color: var(--tx);
+  border: 1px solid var(--bdr2); border-radius: 4px;
+  padding: 3px 8px; font-family: var(--font); outline: none;
+}
+.bulk-field-row select:focus, .bulk-field-row input:focus {
+  border-color: var(--brand);
+}
+.row-chk {
+  width: 15px; height: 15px; cursor: pointer; flex-shrink: 0;
+  accent-color: var(--brand);
+}
+th.chk-col, td.chk-col {
+  width: 36px !important; min-width: 36px !important; max-width: 36px !important;
+  text-align: center; padding: 4px 6px !important;
+}
+tr.selected td { background: rgba(0,100,179,.07) !important }
+[data-theme=dark] tr.selected td { background: rgba(0,100,179,.18) !important }
+
+/* ── APPLY FILTERS BUTTON — pending state ── */
+#btn-apply-filters { transition: var(--tr) }
+#btn-apply-filters.pending {
+  background: var(--brand) !important; color: #fff !important;
+  border-color: var(--brand) !important;
+  animation: pulseBtn 1.6s ease-in-out infinite;
+}
+@keyframes pulseBtn {
+  0%,100% { box-shadow: 0 0 0 3px rgba(0,100,179,.25) }
+  50%     { box-shadow: 0 0 0 7px rgba(0,100,179,.07) }
+}
+
+/* DELETE BUTTON ── */
 .btn-del {
   background: transparent; color: var(--red);
   border: 1px solid var(--red); padding: 5px 12px;
@@ -434,8 +502,8 @@ body.col-resizing * { cursor: col-resize !important }
   transition: var(--tr); background: var(--surf2);
   display: flex; flex-direction: column; gap: 4px;
 }
-.pdf-opt:hover { border-color: var(--brand); background: rgba(44,99,199,.05) }
-.pdf-opt.sel   { border-color: var(--brand); background: rgba(44,99,199,.09) }
+.pdf-opt:hover { border-color: var(--brand); background: rgba(0,100,179,.05) }
+.pdf-opt.sel   { border-color: var(--brand); background: rgba(0,100,179,.09) }
 .pdf-opt-icon { font-size: 18px }
 .pdf-opt-lbl  { font-size: 12px; font-weight: 700; color: var(--tx) }
 .pdf-opt-sub  { font-size: 10px; color: var(--tx3) }
@@ -446,7 +514,7 @@ body.col-resizing * { cursor: col-resize !important }
   cursor: pointer; background: var(--surf2); color: var(--tx2);
   transition: var(--tr); user-select: none;
 }
-.pdf-col-chip.on { border-color: var(--brand); background: rgba(44,99,199,.1); color: var(--brand); font-weight: 600 }
+.pdf-col-chip.on { border-color: var(--brand); background: rgba(0,100,179,.1); color: var(--brand); font-weight: 600 }
 .pdf-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--bdr2) }
 #fp,#file-import{display:none}
 
@@ -487,7 +555,23 @@ body.col-resizing * { cursor: col-resize !important }
 <!-- HEADER -->
 <div class="hdr">
   <div class="hdr-l">
-    <img src="data:image/png;base64,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" alt="Röchling" style="height:28px;width:auto;display:block;flex-shrink:0">
+    <!-- Röchling Automotive Logo — wordmark faithful to official brand -->
+    <svg height="38" viewBox="0 0 260 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;flex-shrink:0" aria-label="Röchling Automotive">
+      <!-- Primary wordmark: bold Röchling in official blue -->
+      <text x="0" y="26"
+        font-family="'Arial Black','Arial Bold',Arial,sans-serif"
+        font-size="26" font-weight="900"
+        fill="#0064b3"
+        letter-spacing="-0.5">Röchling</text>
+      <!-- Rule line below wordmark -->
+      <line x1="0" y1="31" x2="155" y2="31" stroke="#0064b3" stroke-width="1.5" opacity="0.35"/>
+      <!-- AUTOMOTIVE subtitle in matching blue, spaced caps -->
+      <text x="1" y="41"
+        font-family="'Arial','Helvetica',sans-serif"
+        font-size="8.5" font-weight="600"
+        fill="#0064b3"
+        letter-spacing="3.2">AUTOMOTIVE</text>
+    </svg>
     <div class="hdr-divider"></div>
     <h1 id="hdr-title">Controle de Equipamentos de Medição</h1>
   </div>
@@ -650,7 +734,7 @@ body.col-resizing * { cursor: col-resize !important }
       </div>
     </div>
     <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#2c63c7;display:inline-block"></span>Previstas (vencem)</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#0064b3;display:inline-block"></span>Previstas (vencem)</div>
       <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#16a34a;display:inline-block"></span>Realizadas (última calib.)</div>
       <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#dc2626;display:inline-block"></span>Vencidas sem realização</div>
     </div>
@@ -689,6 +773,31 @@ body.col-resizing * { cursor: col-resize !important }
         <button class="btn-g" onclick="exportCSV('alert')">↓ CSV</button>
       </div>
     </div>
+    <!-- Bulk action bar — alert -->
+    <div class="bulk-bar" id="bulk-bar-alert">
+      <span>✔</span>
+      <span class="bulk-bar-count" id="bulk-count-alert">0</span>
+      <span>selecionado(s)</span>
+      <div class="bulk-field-row">
+        <label style="font-size:10px;color:var(--tx3);font-weight:700;white-space:nowrap">Editar campo:</label>
+        <select id="bulk-field-alert" onchange="onBulkFieldChange('alert')">
+          <option value="">— escolha —</option>
+          <option value="status">Status Operacional</option>
+          <option value="status_calib">Status Calibração</option>
+          <option value="empresa">Empresa Executante</option>
+          <option value="responsavel">Responsável</option>
+          <option value="localizacao">Localização</option>
+          <option value="freq_dias">Frequência (dias)</option>
+          <option value="ult_calib">Última Calibração</option>
+          <option value="cliente">Cliente</option>
+        </select>
+        <div id="bulk-input-wrap-alert"></div>
+      </div>
+      <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="applyBulkEdit('alert')" id="bulk-apply-alert" disabled>✔ Aplicar</button>
+      <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="openPdfModalBulk('alert')">🖨️ Imprimir</button>
+      <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="clearSelection('alert')">✕ Cancelar</button>
+      <button class="btn-del" style="font-size:11px;padding:4px 10px;margin-left:8px" onclick="bulkDelete('alert')">🗑 Excluir selecionados</button>
+    </div>
     <div class="tbl-wrap" id="alert-wrap"><table id="alert-tbl"><thead id="alert-thead"></thead><tbody id="alert-tbody"></tbody></table></div>
     <div class="pag"><span id="alert-pinfo">—</span><div class="pag-btns" id="alert-pbtns"></div></div>
   </div>
@@ -708,7 +817,10 @@ body.col-resizing * { cursor: col-resize !important }
       <div class="fg"><label>De</label><input type="date" id="f-de" onchange="applyF()"></div>
       <div class="fg"><label>Até</label><input type="date" id="f-ate" onchange="applyF()"></div>
       <div class="fg" style="min-width:170px"><label>Buscar</label><input id="f-search" type="text" placeholder="Código, descrição..." oninput="applyF()"></div>
-      <div style="align-self:flex-end"><button class="btn-g" onclick="clearF()">✕ Limpar</button></div>
+      <div style="align-self:flex-end;display:flex;gap:5px">
+        <button id="btn-apply-filters" class="btn-g" onclick="applyFiltersNow()" title="Reaplicar filtros e atualizar gráficos">🔄 Aplicar</button>
+        <button class="btn-g" onclick="clearF()">✕ Limpar</button>
+      </div>
     </div>
     <div class="tbl-hdr">
       <span class="tbl-title">Equipamentos de Medição</span>
@@ -718,7 +830,32 @@ body.col-resizing * { cursor: col-resize !important }
         <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
       </div>
     </div>
-    <div class="tbl-wrap" id="eq-wrap"><table id="eq-tbl"><thead id="eq-thead"></thead><tbody id="eq-tbody"></tbody></table></div>
+    <!-- Bulk action bar — geral -->
+  <div class="bulk-bar" id="bulk-bar-geral">
+    <span>✔</span>
+    <span class="bulk-bar-count" id="bulk-count-geral">0</span>
+    <span>selecionado(s)</span>
+    <div class="bulk-field-row">
+      <label style="font-size:10px;color:var(--tx3);font-weight:700;white-space:nowrap">Editar campo:</label>
+      <select id="bulk-field-geral" onchange="onBulkFieldChange('geral')">
+        <option value="">— escolha —</option>
+        <option value="status">Status Operacional</option>
+        <option value="status_calib">Status Calibração</option>
+        <option value="empresa">Empresa Executante</option>
+        <option value="responsavel">Responsável</option>
+        <option value="localizacao">Localização</option>
+        <option value="freq_dias">Frequência (dias)</option>
+        <option value="ult_calib">Última Calibração</option>
+        <option value="cliente">Cliente</option>
+      </select>
+      <div id="bulk-input-wrap-geral"></div>
+    </div>
+    <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="applyBulkEdit('geral')" id="bulk-apply-geral" disabled>✔ Aplicar</button>
+    <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="openPdfModalBulk('geral')">🖨️ Imprimir</button>
+    <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="clearSelection('geral')">✕ Cancelar</button>
+    <button class="btn-del" style="font-size:11px;padding:4px 10px;margin-left:8px" onclick="bulkDelete('geral')">🗑 Excluir selecionados</button>
+  </div>
+  <div class="tbl-wrap" id="eq-wrap"><table id="eq-tbl"><thead id="eq-thead"></thead><tbody id="eq-tbody"></tbody></table></div>
     <div class="pag"><span id="eq-pinfo">—</span><div class="pag-btns" id="eq-pbtns"></div></div>
   </div>
 </div>
@@ -1527,7 +1664,8 @@ function applyLang() {
 
 const COL_DEFS = {
   geral: [
-    {k:'_act',       l:'',               def:true, noSort:true, w:44},
+    {k:'_chk',        l:'',               def:true, noSort:true, w:36},
+    {k:'_act',        l:'',               def:true, noSort:true, w:44},
     {k:'id',         l:'Código',         def:true, w:130},
     {k:'tipo',       l:'Tipo',           def:true, w:160},
     {k:'cod_lab',    l:'Cód. Labortec',  def:true, w:130},
@@ -1547,6 +1685,7 @@ const COL_DEFS = {
     {k:'link',       l:'Arquivo',        def:true, w:100},
   ],
   alert: [
+    {k:'_chk',        l:'',               def:true, noSort:true, w:36},
     {k:'id',         l:'Código',         def:true, w:130},
     {k:'tipo',       l:'Tipo',           def:true, w:150},
     {k:'cliente',    l:'Cliente',        def:true, w:100},
@@ -1598,7 +1737,7 @@ function showColMenu(tbl, btn) {
   }
   _colMenuTbl = tbl;
   // Build content
-  _colMenu.innerHTML = COL_DEFS[tbl].filter(col => col.k !== '_act').map(col =>
+  _colMenu.innerHTML = COL_DEFS[tbl].filter(col => col.k !== '_act' && col.k !== '_chk').map(col =>
     `<label style="display:flex;align-items:center;gap:8px;padding:5px 12px;cursor:pointer;font-size:11px;color:var(--tx2);white-space:nowrap;border-radius:3px" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background=''">
       <input type="checkbox" ${colVis[tbl][col.k] ? 'checked' : ''} 
         onchange="colVis['${tbl}']['${col.k}']=this.checked; renderTable('${tbl}'); buildAllColPanels();"
@@ -1676,8 +1815,8 @@ document.addEventListener('mouseup', () => {
 // ═══════════════════════════════════════════════════════
 // THEME
 // ═══════════════════════════════════════════════════════
-const CC = ['#2c63c7','#f59e0b','#16a34a','#dc2626','#7c3aed','#ea580c','#0d9488','#db2777','#60a5fa','#fbbf24','#4ade80','#f87171'];
-const CC_LIGHT = ['rgba(44,99,199,.15)','rgba(245,158,11,.15)','rgba(22,163,74,.15)','rgba(220,38,38,.15)'];
+const CC = ['#0064b3','#f59e0b','#16a34a','#1a1a1a','#7c3aed','#ea580c','#0d9488','#db2777','#1a7fcc','#fbbf24','#4ade80','#f87171'];
+const CC_LIGHT = ['rgba(0,100,179,.15)','rgba(245,158,11,.15)','rgba(22,163,74,.15)','rgba(26,26,26,.15)'];
 let charts = {};
 
 function setTheme(t) {
@@ -1854,7 +1993,7 @@ function fbStartListen() {
       const hasFilter = ['f-tipo','f-cli','f-local','f-resp','f-emp',
         'f-status','f-calib','f-de','f-ate','f-search']
         .some(id => { const el=document.getElementById(id); return el && el.value; });
-      if(hasFilter) applyF(); else { pag.eq.rows=DB.slice(); pag.eq.p=1; renderTable('geral'); }
+      if(hasFilter) applyF(); else refreshInPlace();
       renderAlerts();
       setSyncInd('🔥 Atualizado ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
     }
@@ -2086,7 +2225,7 @@ function buildSparklines() {
     okData.unshift(DB.filter(r=>r.dias_vencer===null||r.dias_vencer>90).length);
     calibData.unshift(DB.filter(r=>(r.status_calib||'').includes('aprovado')&&inMonth(r)).length);
   }
-  drawSparkline('sp-total',   [DB.length,...Array(5).fill(DB.length*.98)], '#2c63c7');
+  drawSparkline('sp-total',   [DB.length,...Array(5).fill(DB.length*.98)], '#0064b3');
   drawSparkline('sp-ativos',  okData,    '#16a34a');
   drawSparkline('sp-inativos',[...d30Data].reverse(), '#6b7280');
   drawSparkline('sp-calib',   calibData, '#0d9488');
@@ -2116,7 +2255,7 @@ function buildAllCharts() {
 
   dc('status');
   const at=DB.filter(r=>(r.status||'').toUpperCase()==='ATIVO').length;
-  charts.status=new Chart(document.getElementById('ch-status'),{type:'doughnut',data:{labels:[t('s_active'),t('s_inactive')],datasets:[{data:[at,tot-at],backgroundColor:['#2c63c7','rgba(100,100,120,.3)'],borderWidth:0,hoverOffset:5}]},options:donutOpts()});
+  charts.status=new Chart(document.getElementById('ch-status'),{type:'doughnut',data:{labels:[t('s_active'),t('s_inactive')],datasets:[{data:[at,tot-at],backgroundColor:['#0064b3','rgba(100,100,120,.3)'],borderWidth:0,hoverOffset:5}]},options:donutOpts()});
 
   dc('tipos');
   const tm={}; DB.forEach(r=>{if(r.tipo)tm[r.tipo]=(tm[r.tipo]||0)+1;});
@@ -2231,7 +2370,7 @@ function buildMensalChart() {
         {
           label: 'Previstas (vencem)',
           data: previstos,
-          backgroundColor: 'rgba(44,99,199,.75)',
+          backgroundColor: 'rgba(0,100,179,.75)',
           borderRadius: 4,
           borderWidth: 0,
           order: 2
@@ -2288,9 +2427,10 @@ function buildMensalChart() {
       const label = charts.mensal.data.labels[p.index];
       const dsLabel = charts.mensal.data.datasets[p.datasetIndex]?.label || '';
       let drillKey;
-      if(dsLabel.includes('Previstas')) drillKey = 'mensal-prev';
+      if(dsLabel.includes('Previstas'))   drillKey = 'mensal-prev';
       else if(dsLabel.includes('Realizadas')) drillKey = 'mensal-real';
-      else drillKey = 'mensal-venc';
+      else                                    drillKey = 'mensal-venc';
+      // Pass the raw label — mensalLabelToDate will parse any locale format
       openDrill(drillKey, label);
     };
   }
@@ -2645,17 +2785,19 @@ function commitInlineEdit(silent) {
     }
 
     _inlineActive = null;
+    saveLS();
     if(!silent) {
       fbSchedulePush();
-      showToast(LANG==='en' ? '✅ Saved' : '✅ Salvo');
+      showToast(LANG==='en' ? '✅ Saved — filters will update when you click Apply' : '✅ Salvo — tabela mantida. Clique em 🔄 para atualizar filtros');
     }
-    applyF();          // re-run current filters (preserves active filter state)
-    renderAlerts();
-    updateKPIs();
-    buildAllCharts();
+    // ── Only re-render the ONE affected row — do NOT re-apply filters ──
+    rerenderRow(uid, 'geral');
+    // Mark that a deferred filter refresh is pending
+    _pendingFilterRefresh = true;
+    updateApplyFilterBtn();
   } else {
     _inlineActive = null;
-    applyF();          // restore filtered view
+    rerenderRow(uid, 'geral');
   }
   _inlineActive = null;
 }
@@ -2667,6 +2809,42 @@ function cancelInlineEdit() {
   td.style.padding = '';
   _inlineActive = null;
 }
+
+// ── Re-render only ONE row without touching page/scroll/filters ────────────
+function rerenderRow(uid, tbl) {
+  const tr = document.querySelector(`tr[data-uid="${uid}"]`);
+  if(!tr) return; // row not on current page — safe to ignore
+  const r = DB.find(x => x._uid === uid);
+  if(!r) return;
+  const cols = (COL_DEFS[tbl]||[]).filter(c => colVis[tbl]?.[c.k] !== false);
+  tr.innerHTML = cols.map(c => renderCell(r, c.k, tbl)).join('');
+  // Restore selected highlight if needed
+  if(_selectedUIDs[tbl]?.has(uid)) tr.classList.add('selected');
+}
+
+// ── Deferred filter refresh — user controls when filters re-apply ──────────
+let _pendingFilterRefresh = false;
+
+function updateApplyFilterBtn() {
+  const btn = document.getElementById('btn-apply-filters');
+  if(!btn) return;
+  if(_pendingFilterRefresh) {
+    btn.classList.add('pending');
+    btn.title = 'Você tem edições não refletidas nos filtros — clique para atualizar';
+  } else {
+    btn.classList.remove('pending');
+    btn.title = 'Reaplicar filtros';
+  }
+}
+
+window.applyFiltersNow = function() {
+  _pendingFilterRefresh = false;
+  updateApplyFilterBtn();
+  refreshInPlace();
+  updateKPIs();
+  buildAllCharts();
+  showToast('🔄 Filtros e gráficos atualizados');
+};
 
 function moveInlineFocus(uid, currentKey, dir) {
   const editableKeys = Object.keys(INLINE_EDITABLE);
@@ -2692,15 +2870,25 @@ function renderCell(r, k, tbl) {
     ? `class="editable-cell" onclick="startInlineEdit(${r._uid},'${k}',this)" title="${LANG==='en'?'Click to edit':'Clique para editar'}"`
     : '';
 
+  // ── Checkbox column ──────────────────────────────────────────────
+  if(k==='_chk') {
+    const sel = _selectedUIDs[tbl] && _selectedUIDs[tbl].has(r._uid);
+    return `<td class="chk-col" onclick="event.stopPropagation()">
+      <input type="checkbox" class="row-chk" data-uid="${r._uid}" data-tbl="${tbl}"
+        ${sel?'checked':''} onchange="onRowCheck(this,'${tbl}')">
+    </td>`;
+  }
+
   if(k==='_act') return `<td ${attr} style="white-space:nowrap">
+    <button class="btn-g" style="padding:1px 6px;font-size:11px;border:none;background:transparent;color:var(--brand)" onclick="openEquipView(${r._uid})" title="Visualizar">👁</button>
     <button class="btn-g" style="padding:1px 6px;font-size:11px;border:none;background:transparent;color:var(--tx3)" onclick="openEdit(${r._uid})" title="${LANG==='en'?'Edit':'Editar'}">✏</button>
     <button class="btn-g" style="padding:1px 6px;font-size:11px;border:none;background:transparent;color:var(--red);opacity:.5" onclick="deleteInline(${r._uid})" title="${LANG==='en'?'Delete':'Excluir'}">🗑</button>
   </td>`;
   if(k==='dias_vencer')  return `<td ${attr}>${diasBadge(r.dias_vencer)}</td>`;
 
   // Editable badge cells — click opens inline select
-  if(k==='status_calib') return `<td ${attr} ${editAttr}>${calibBadge(r.status_calib, r.dias_vencer)}</td>`;
-  if(k==='status')       return `<td ${attr} ${editAttr}>${statusBadge(r.status)}</td>`;
+  if(k==='status_calib') return `<td ${attr} ${editAttr}>${calibBadge(r.status_calib, r.dias_vencer)}<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')"></span></td>`;
+  if(k==='status')       return `<td ${attr} ${editAttr}>${statusBadge(r.status)}<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')"></span></td>`;
 
   if(k==='link'){
     if(r.link){const fn=(r.link.split(/[\/\\]/).pop()||r.link);const has=!!(r.link_data&&r.link_data.startsWith('data:'));return `<td ${attr}><span onclick="openFileForRow(${r._uid})" style="cursor:pointer;font-size:10px" title="${esc(fn)}">${fileIcon(fn)} ${esc(fn.slice(0,14))} <span style="color:${has?'var(--green)':'var(--orange)'}">●</span></span></td>`;}
@@ -2708,14 +2896,15 @@ function renderCell(r, k, tbl) {
   }
 
   if(k==='ult_calib'||k==='prox_calib') {
-    return `<td ${attr} ${editAttr} style="width:${w||105}px;min-width:${w||105}px;max-width:${w||105}px;font-family:var(--mono);font-size:10px">${fmtDate(r[k])}</td>`;
+    return `<td ${attr} ${editAttr} style="width:${w||105}px;min-width:${w||105}px;max-width:${w||105}px;font-family:var(--mono);font-size:10px">${fmtDate(r[k])}<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')"></span></td>`;
   }
 
   const v = r[k];
   const translatableFields = ['tipo','status','status_calib','localizacao',
     'cliente','observacoes','descricao','empresa'];
   const vt = translatableFields.includes(k) ? translateVal(k, v) : v;
-  return `<td ${attr} ${editAttr} title="${esc(vt||'')}">${esc(vt||'—')}</td>`;
+  const fillH = editable ? `<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')"></span>` : '';
+  return `<td ${attr} ${editAttr} title="${esc(vt||'')}">${esc(vt||'—')}${fillH}</td>`;
 }
 
 function renderTable(tbl) {
@@ -2744,6 +2933,10 @@ function renderTable(tbl) {
 
   thead.innerHTML = '<tr>'+cols.map(c => {
     const w = colWidths[tbl]?.[c.k] || c.w || 100;
+    if(c.k === '_chk') {
+      const allSel = p.rows.length > 0 && p.rows.every(r => _selectedUIDs[tbl]?.has(r._uid));
+      return `<th class="chk-col"><input type="checkbox" class="row-chk" id="chk-all-${tbl}" title="Selecionar todos" ${allSel?'checked':''} onchange="onSelectAll(this,'${tbl}')"></th>`;
+    }
     if(c.noSort) return `<th data-col="${c.k}" style="width:${w}px;min-width:${w}px;max-width:${w}px"><div class="th-inner"></div></th>`;
     const arr = s&&s.k===c.k ? (s.d==='asc'?' ↑':' ↓') : '';
     return `<th data-col="${c.k}" style="width:${w}px;min-width:${w}px;max-width:${w}px">
@@ -2752,7 +2945,10 @@ function renderTable(tbl) {
     </th>`;
   }).join('')+'</tr>';
 
-  tbody.innerHTML = slice.map(r=>`<tr data-uid="${r._uid}">`+cols.map(c=>renderCell(r,c.k,tbl)).join('')+'</tr>').join('');
+  tbody.innerHTML = slice.map(r => {
+    const sel = _selectedUIDs[tbl]?.has(r._uid) ? 'class="selected"' : '';
+    return `<tr data-uid="${r._uid}" ${sel}>`+cols.map(c=>renderCell(r,c.k,tbl)).join('')+'</tr>';
+  }).join('');
 
   const el = document.getElementById(cntId); if(el) el.textContent = p.rows.length+' '+t('kpi_sub_total');
   buildPag(p, pInfoId, pBtnsId, ()=>renderTable(tbl));
@@ -2801,6 +2997,8 @@ function populateFilters() {
 }
 
 function applyF() {
+  _pendingFilterRefresh = false;
+  updateApplyFilterBtn();
   const g=id=>(document.getElementById(id)||{}).value||'';
   const tipo=g('f-tipo'),cli=g('f-cli'),local=g('f-local'),resp=g('f-resp'),emp=g('f-emp'),stat=g('f-status'),calib=g('f-calib'),de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
   let rows = DB.slice();
@@ -2821,6 +3019,56 @@ function applyF() {
   if(ate) rows=rows.filter(r=>r.prox_calib&&r.prox_calib<=ate);
   if(q)   rows=rows.filter(r=>Object.values(r).join(' ').toLowerCase().includes(q));
   pag.eq.rows=rows; pag.eq.p=1; renderTable('geral');
+}
+
+// ── refreshInPlace: re-render table WITHOUT resetting page/scroll/sort ──────
+// Use this after any in-place edit so the user stays exactly where they are.
+function refreshInPlace() {
+  // Re-apply active filters to rebuild pag.eq.rows with updated DB values
+  const g = id => (document.getElementById(id)||{}).value||'';
+  const tipo=g('f-tipo'),cli=g('f-cli'),local=g('f-local'),resp=g('f-resp'),
+        emp=g('f-emp'),stat=g('f-status'),calib=g('f-calib'),
+        de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
+  let rows = DB.slice();
+  if(tipo)  rows=rows.filter(r=>r.tipo===tipo);
+  if(cli)   rows=rows.filter(r=>r.cliente===cli);
+  if(local) rows=rows.filter(r=>r.localizacao===local);
+  if(resp)  rows=rows.filter(r=>r.responsavel===resp);
+  if(emp)   rows=rows.filter(r=>r.empresa===emp);
+  if(stat)  rows=rows.filter(r=>(r.status||'').toUpperCase()===stat.toUpperCase());
+  if(calib==='ok')        rows=rows.filter(r=>r.dias_vencer===null||(r.dias_vencer!==null&&r.dias_vencer>=0));
+  else if(calib==='vencido'||calib==='necessaria') rows=rows.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0);
+  if(de)  rows=rows.filter(r=>r.prox_calib&&r.prox_calib>=de);
+  if(ate) rows=rows.filter(r=>r.prox_calib&&r.prox_calib<=ate);
+  if(q)   rows=rows.filter(r=>Object.values(r).join(' ').toLowerCase().includes(q));
+
+  // Re-apply current sort WITHOUT changing it
+  const s = sortState['geral'];
+  if(s) {
+    rows.sort((a,b)=>{
+      const av=a[s.k],bv=b[s.k];
+      if(av==null&&bv==null)return 0;
+      if(av==null)return 1; if(bv==null)return -1;
+      return s.d==='asc'?(av>bv?1:av<bv?-1:0):(av<bv?1:av>bv?-1:0);
+    });
+  }
+
+  // Clamp page in case rows shrank
+  pag.eq.rows = rows;
+  const maxPage = Math.max(1, Math.ceil(rows.length / PER_PAGE));
+  if(pag.eq.p > maxPage) pag.eq.p = maxPage;
+  // ← page stays where it was
+
+  // Capture scroll position, re-render, restore scroll
+  const wrap = document.getElementById('eq-wrap');
+  const scrollTop = wrap ? wrap.scrollTop : 0;
+  renderTable('geral');
+  if(wrap) wrap.scrollTop = scrollTop;
+
+  // Also refresh alerts tab without resetting its page
+  renderAlerts();
+  updateKPIs();
+  buildAllCharts();
 }
 function clearF(){['f-tipo','f-cli','f-local','f-resp','f-emp','f-status','f-calib','f-de','f-ate','f-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});applyF();}
 
@@ -3083,8 +3331,7 @@ function saveRecord(){
   }
   closeModal();
   updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
-  applyF();    // re-run filters to keep filtered view after save
-  renderAlerts();
+  refreshInPlace();
   const luSave=document.getElementById('last-upd');
   if(luSave) luSave.textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
   fbSchedulePush();
@@ -3101,10 +3348,7 @@ function deleteRecord(){
   if(!confirm(msg)) return;
   DB = DB.filter(x => x._uid !== editUID);
   closeModal();
-  applyF();            // re-run current filters
-  renderAlerts();
-  updateKPIs();
-  buildAllCharts();
+  refreshInPlace();
   fbSchedulePush();
   showToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
 }
@@ -3115,10 +3359,7 @@ function deleteInline(uid){
   const name = r.id || r.descricao || 'registro';
   if(!confirm(LANG==='en' ? `Delete "${name}"?` : `Excluir "${name}"?`)) return;
   DB = DB.filter(x => x._uid !== uid);
-  applyF();            // re-run current filters (preserves active filter state)
-  renderAlerts();
-  updateKPIs();
-  buildAllCharts();
+  refreshInPlace();
   fbSchedulePush();
   showToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
 }
@@ -3134,8 +3375,7 @@ function deleteRecord_real(){
   if(!confirm(msg)) return;
   DB = DB.filter(x => x._uid !== editUID);
   closeModal();
-  updateAll();
-  filterAlerts('vencido');
+  refreshInPlace();
   fbSchedulePush();
   showToast(LANG === 'en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
 }
@@ -3248,16 +3488,31 @@ function resetDB(){
 // BOOT
 // ═══════════════════════════════════════════════════════
 function updateAll(){
+  // Clear stale bulk selections
+  if(typeof _selectedUIDs !== 'undefined') {
+    ['geral','alert'].forEach(tbl => {
+      _selectedUIDs[tbl].clear();
+      const bar = document.getElementById('bulk-bar-'+tbl);
+      if(bar) bar.classList.remove('on');
+    });
+  }
   updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
-  // Check if any filter is active — if so, re-apply instead of resetting
+
+  // On first load (rows empty) do a full reset; otherwise preserve position
+  const isFirstLoad = !pag.eq.rows || pag.eq.rows.length === 0;
   const hasFilter = ['f-tipo','f-cli','f-local','f-resp','f-emp',
     'f-status','f-calib','f-de','f-ate','f-search']
     .some(id => { const el=document.getElementById(id); return el && el.value; });
-  if(hasFilter) {
-    applyF();   // preserve active filters
+
+  if(isFirstLoad) {
+    // First boot: full reset to page 1
+    if(hasFilter) applyF();
+    else { pag.eq.rows=DB.slice(); pag.eq.p=1; renderTable('geral'); }
   } else {
-    pag.eq.rows=DB.slice(); pag.eq.p=1; renderTable('geral');
+    // Subsequent calls: preserve page, scroll, sort
+    refreshInPlace();
   }
+
   renderAlerts();
   const luAll=document.getElementById('last-upd');
   if(luAll) luAll.textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
@@ -3288,6 +3543,48 @@ document.addEventListener('DOMContentLoaded', async () => {
   const norm = s => (s==null?'':String(s)).trim();
   const lc   = s => norm(s).toLowerCase();
 
+  // ── Helper: converte label do gráfico mensal → {year, month}
+  // Suporta formatos: "mai./25", "mai/25", "mai. 2025", "May 25", "5/25" etc.
+  function mensalLabelToDate(label) {
+    if(!label) return null;
+    // Strip dots and normalize
+    const clean = label.replace(/\./g,'').trim();
+    // Try split by "/" — format: "mai/25" or "5/25"
+    const parts = clean.split('/');
+    if(parts.length === 2) {
+      const monPart = parts[0].trim().toLowerCase();
+      let yrNum = parseInt(parts[1].trim());
+      if(yrNum < 100) yrNum += 2000; // "25" → 2025
+
+      // Try numeric month
+      const numMon = parseInt(monPart);
+      if(!isNaN(numMon) && numMon >= 1 && numMon <= 12) {
+        return { year: yrNum, month: numMon - 1 };
+      }
+
+      // Try abbreviated month name in PT or EN
+      const PT_MONTHS = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+      const EN_MONTHS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+      let mIdx = PT_MONTHS.findIndex(m => monPart.startsWith(m));
+      if(mIdx < 0) mIdx = EN_MONTHS.findIndex(m => monPart.startsWith(m));
+      if(mIdx >= 0) return { year: yrNum, month: mIdx };
+    }
+    // Try "Jan 2025" or "janeiro 2025" style
+    const spParts = clean.split(/\s+/);
+    if(spParts.length >= 2) {
+      const monPart = spParts[0].toLowerCase();
+      const yrNum   = parseInt(spParts[spParts.length-1]);
+      if(!isNaN(yrNum)) {
+        const PT_MONTHS = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+        const EN_MONTHS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+        let mIdx = PT_MONTHS.findIndex(m => monPart.startsWith(m));
+        if(mIdx < 0) mIdx = EN_MONTHS.findIndex(m => monPart.startsWith(m));
+        if(mIdx >= 0) return { year: yrNum < 100 ? yrNum+2000 : yrNum, month: mIdx };
+      }
+    }
+    return null;
+  }
+
   // Mapa: chartKey → { title, filter(label, idx) → array de registros DB }
   const DRILL = {
     'todos':    { title:'📦 Todos os Equipamentos', filter:()=>DB },
@@ -3301,39 +3598,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     'mensal-prev': {
       title: '📋 Calibrações Previstas no Mês',
       filter: (label) => {
-        const [monStr, yrStr] = label.split('/');
+        const md = mensalLabelToDate(label);
+        if(!md) return [];
         return DB.filter(r => {
           if(!r.prox_calib) return false;
           const pc = new Date(r.prox_calib+'T00:00:00');
-          const lbl = pc.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.','');
-          return lbl.toLowerCase() === label.toLowerCase();
+          return pc.getFullYear()===md.year && pc.getMonth()===md.month;
         });
       }
     },
     'mensal-real': {
       title: '✅ Calibrações Realizadas no Mês',
       filter: (label) => {
+        const md = mensalLabelToDate(label);
+        if(!md) return [];
         return DB.filter(r => {
           if(!r.ult_calib) return false;
           const uc = new Date(r.ult_calib+'T00:00:00');
-          const lbl = uc.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.','');
-          return lbl.toLowerCase() === label.toLowerCase();
+          return uc.getFullYear()===md.year && uc.getMonth()===md.month;
         });
       }
     },
     'mensal-venc': {
       title: '🚨 Previstas Sem Realização no Mês',
       filter: (label) => {
+        const md = mensalLabelToDate(label);
+        if(!md) return [];
         return DB.filter(r => {
           if(!r.prox_calib) return false;
           const pc = new Date(r.prox_calib+'T00:00:00');
-          const lbl = pc.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.','');
-          if(lbl.toLowerCase() !== label.toLowerCase()) return false;
-          // sem ult_calib no mesmo mês
+          if(pc.getFullYear()!==md.year || pc.getMonth()!==md.month) return false;
           if(!r.ult_calib) return true;
           const uc = new Date(r.ult_calib+'T00:00:00');
-          const lblUlt = uc.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.','');
-          return lblUlt.toLowerCase() !== label.toLowerCase();
+          return !(uc.getFullYear()===md.year && uc.getMonth()===md.month);
         });
       }
     },
@@ -3585,8 +3882,311 @@ document.addEventListener('DOMContentLoaded', async () => {
 })();
 
 // ═══════════════════════════════════════════════════════
-// PDF / PRINT SYSTEM
+// FILL HANDLE — arrastar para preencher várias células
 // ═══════════════════════════════════════════════════════
+(function(){
+  let _fd = null; // fill drag state
+
+  // Ghost tooltip element
+  const ghost = document.createElement('div');
+  ghost.className = 'fill-ghost';
+  ghost.id = 'fill-ghost';
+  document.body.appendChild(ghost);
+
+  window.startFillDrag = function(e, uid, k) {
+    e.preventDefault();
+    e.stopPropagation();
+    if(_inlineActive) cancelInlineEdit();
+
+    const r = DB.find(x => x._uid === uid);
+    if(!r) return;
+
+    // Build ordered row list from current filtered table (geral only)
+    const allRows = pag.eq.rows;
+    const srcIdx  = allRows.findIndex(x => x._uid === uid);
+    if(srcIdx < 0) return;
+
+    const srcVal   = r[k];
+    const displayV = srcVal !== null && srcVal !== undefined && srcVal !== '' ? String(srcVal) : '—';
+
+    _fd = { uid, k, srcVal, srcIdx, allRows, previewIdxs: new Set() };
+
+    // Show ghost
+    ghost.textContent = `⬇ Arrastar: "${displayV.slice(0,24)}"`;
+    ghost.style.display = 'block';
+    ghost.style.left = (e.clientX + 12) + 'px';
+    ghost.style.top  = (e.clientY - 14) + 'px';
+
+    // Highlight source cell
+    const srcRow = document.querySelector(`tr[data-uid="${uid}"]`);
+    if(srcRow) srcRow.querySelector(`[data-col="${k}"]`)?.classList.add('fill-active');
+
+    document.addEventListener('mousemove', onFillMove);
+    document.addEventListener('mouseup',   onFillUp);
+  };
+
+  function onFillMove(e) {
+    if(!_fd) return;
+
+    // Move ghost
+    ghost.style.left = (e.clientX + 14) + 'px';
+    ghost.style.top  = (e.clientY - 14) + 'px';
+
+    // Clear previous previews
+    _fd.previewIdxs.forEach(idx => {
+      const row = document.querySelector(`tr[data-uid="${_fd.allRows[idx]?._uid}"]`);
+      if(row) row.querySelector(`[data-col="${_fd.k}"]`)?.classList.remove('fill-preview');
+    });
+    _fd.previewIdxs.clear();
+
+    // Detect which rows the cursor is over by scanning all visible rows
+    const tbody = document.getElementById('eq-tbody');
+    if(!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr[data-uid]'));
+
+    rows.forEach(tr => {
+      const td = tr.querySelector(`[data-col="${_fd.k}"]`);
+      if(!td) return;
+      const rect = td.getBoundingClientRect();
+      if(e.clientY >= rect.top && e.clientY <= rect.bottom) {
+        const hoverUID = parseInt(tr.dataset.uid);
+        const hoverIdx = _fd.allRows.findIndex(x => x._uid === hoverUID);
+        if(hoverIdx < 0 || hoverIdx === _fd.srcIdx) return;
+
+        // Preview all rows between srcIdx and hoverIdx
+        const lo = Math.min(_fd.srcIdx, hoverIdx);
+        const hi = Math.max(_fd.srcIdx, hoverIdx);
+        for(let i = lo; i <= hi; i++) {
+          if(i === _fd.srcIdx) continue;
+          _fd.previewIdxs.add(i);
+          const pr = _fd.allRows[i];
+          if(!pr) continue;
+          const pRow = document.querySelector(`tr[data-uid="${pr._uid}"]`);
+          if(pRow) pRow.querySelector(`[data-col="${_fd.k}"]`)?.classList.add('fill-preview');
+        }
+
+        // Update ghost count
+        ghost.textContent = `⬇ Preencher ${_fd.previewIdxs.size} célula(s) com "${String(_fd.srcVal||'—').slice(0,20)}"`;
+      }
+    });
+  }
+
+  function onFillUp(e) {
+    if(!_fd) return;
+    document.removeEventListener('mousemove', onFillMove);
+    document.removeEventListener('mouseup',   onFillUp);
+
+    const { k, srcVal, allRows, previewIdxs } = _fd;
+
+    // Clear previews
+    previewIdxs.forEach(idx => {
+      const row = document.querySelector(`tr[data-uid="${allRows[idx]?._uid}"]`);
+      if(row) {
+        row.querySelector(`[data-col="${k}"]`)?.classList.remove('fill-preview');
+        row.querySelector(`[data-col="${k}"]`)?.classList.remove('fill-active');
+      }
+    });
+    // Clear source highlight
+    const srcRow = document.querySelector(`tr[data-uid="${allRows[_fd.srcIdx]?._uid}"]`);
+    if(srcRow) srcRow.querySelector(`[data-col="${k}"]`)?.classList.remove('fill-active');
+
+    ghost.style.display = 'none';
+
+    if(previewIdxs.size === 0) { _fd = null; return; }
+
+    // Apply fill to all previewed rows
+    let changed = 0;
+    previewIdxs.forEach(idx => {
+      const r = allRows[idx];
+      if(!r) return;
+      const rec = DB.find(x => x._uid === r._uid);
+      if(!rec) return;
+      rec[k] = k === 'freq_dias' ? (parseInt(srcVal)||null) : srcVal;
+      if(k === 'ult_calib' || k === 'prox_calib' || k === 'freq_dias') recalcRecord(rec);
+      changed++;
+    });
+
+    _fd = null;
+
+    if(changed > 0) {
+      saveLS();
+      if(fbActive()) fbSchedulePush();
+      showToast(`✅ ${changed} célula(s) preenchida(s) — clique em 🔄 para atualizar filtros`);
+      // Re-render only the affected rows — stay in place
+      previewIdxs.forEach(idx => {
+        const r2 = allRows[idx];
+        if(r2) rerenderRow(r2._uid, 'geral');
+      });
+      _pendingFilterRefresh = true;
+      updateApplyFilterBtn();
+    }
+  }
+})();
+const _selectedUIDs = { geral: new Set(), alert: new Set() };
+
+const BULK_FIELDS = {
+  status:       { type:'select', options:['ATIVO','INATIVO'] },
+  status_calib: { type:'select', options:['Instrumento Calibrado e aprovado','Calibração Necessária','DESCARTADO','Não encontrado'] },
+  empresa:      { type:'text' },
+  responsavel:  { type:'text' },
+  localizacao:  { type:'text' },
+  freq_dias:    { type:'number', min:1 },
+  ult_calib:    { type:'date' },
+  cliente:      { type:'text' },
+};
+
+function onRowCheck(chk, tbl) {
+  const uid = parseInt(chk.dataset.uid);
+  if(chk.checked) _selectedUIDs[tbl].add(uid);
+  else            _selectedUIDs[tbl].delete(uid);
+  updateBulkBar(tbl);
+  // Highlight row
+  const row = chk.closest('tr');
+  if(row) row.classList.toggle('selected', chk.checked);
+}
+
+function onSelectAll(chk, tbl) {
+  const p = tbl==='geral' ? pag.eq : pag.alert;
+  // Apply to ALL filtered rows (not just current page)
+  if(chk.checked) p.rows.forEach(r => _selectedUIDs[tbl].add(r._uid));
+  else            p.rows.forEach(r => _selectedUIDs[tbl].delete(r._uid));
+  updateBulkBar(tbl);
+  renderTable(tbl);
+}
+
+function updateBulkBar(tbl) {
+  const n = _selectedUIDs[tbl].size;
+  const bar = document.getElementById('bulk-bar-'+tbl);
+  const cnt = document.getElementById('bulk-count-'+tbl);
+  if(!bar) return;
+  bar.classList.toggle('on', n > 0);
+  if(cnt) cnt.textContent = n;
+  // Reset field when bar hides
+  if(n === 0) {
+    const sel = document.getElementById('bulk-field-'+tbl);
+    const wrap = document.getElementById('bulk-input-wrap-'+tbl);
+    if(sel)  sel.value = '';
+    if(wrap) wrap.innerHTML = '';
+    const btn = document.getElementById('bulk-apply-'+tbl);
+    if(btn)  btn.disabled = true;
+  }
+}
+
+function onBulkFieldChange(tbl) {
+  const field = document.getElementById('bulk-field-'+tbl)?.value;
+  const wrap  = document.getElementById('bulk-input-wrap-'+tbl);
+  const applyBtn = document.getElementById('bulk-apply-'+tbl);
+  if(!wrap) return;
+
+  wrap.innerHTML = '';
+  if(!field) { if(applyBtn) applyBtn.disabled=true; return; }
+
+  const cfg = BULK_FIELDS[field];
+  if(!cfg) return;
+
+  let el;
+  if(cfg.type === 'select') {
+    el = document.createElement('select');
+    el.id = 'bulk-value-'+tbl;
+    el.style.cssText = 'font-size:11px;background:var(--surf);color:var(--tx);border:1px solid var(--brand);border-radius:4px;padding:3px 8px;font-family:var(--font)';
+    cfg.options.forEach(o => {
+      const opt = document.createElement('option');
+      opt.value = o; opt.textContent = o; el.appendChild(opt);
+    });
+  } else {
+    el = document.createElement('input');
+    el.id = 'bulk-value-'+tbl;
+    el.type = cfg.type || 'text';
+    if(cfg.min !== undefined) el.min = cfg.min;
+    el.placeholder = 'Novo valor…';
+    el.style.cssText = 'font-size:11px;background:var(--surf);color:var(--tx);border:1px solid var(--brand);border-radius:4px;padding:3px 8px;font-family:var(--font);width:160px';
+    el.addEventListener('keydown', e => { if(e.key==='Enter') applyBulkEdit(tbl); });
+  }
+
+  wrap.appendChild(el);
+  el.focus();
+  if(applyBtn) applyBtn.disabled = false;
+}
+
+function applyBulkEdit(tbl) {
+  const field    = document.getElementById('bulk-field-'+tbl)?.value;
+  const valueEl  = document.getElementById('bulk-value-'+tbl);
+  const applyBtn = document.getElementById('bulk-apply-'+tbl);
+  if(!field || !valueEl) return;
+
+  const newVal = valueEl.value.trim();
+  if(!newVal && BULK_FIELDS[field]?.type !== 'select') {
+    valueEl.style.borderColor = 'var(--red)';
+    setTimeout(() => valueEl.style.borderColor='var(--brand)', 1500);
+    return;
+  }
+
+  const uids = _selectedUIDs[tbl];
+  let changed = 0;
+
+  DB = DB.map(r => {
+    if(!uids.has(r._uid)) return r;
+    const updated = { ...r, [field]: field==='freq_dias' ? parseInt(newVal)||r.freq_dias : newVal };
+    changed++;
+    return recalcRecord(updated);
+  });
+
+  // Confirm toast
+  showToast(`✔ ${changed} registro(s) atualizado(s) — clique em 🔄 para atualizar filtros`);
+
+  // Persist
+  saveLS();
+  if(fbActive()) fbSchedulePush();
+
+  // Re-render only the changed rows — don't jump page or re-filter
+  uids.forEach(uid => rerenderRow(uid, tbl));
+  clearSelection(tbl);
+
+  // Mark deferred refresh needed
+  _pendingFilterRefresh = true;
+  updateApplyFilterBtn();
+}
+
+function bulkDelete(tbl) {
+  const uids = _selectedUIDs[tbl];
+  if(uids.size === 0) return;
+  if(!confirm(`Excluir ${uids.size} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`)) return;
+
+  // Firestore delete
+  if(fbActive()) {
+    uids.forEach(uid => {
+      const r = DB.find(x => x._uid === uid);
+      if(r?.fbId) {
+        try { _colRef.doc(r.fbId).delete(); } catch(e){}
+      }
+    });
+  }
+
+  DB = DB.filter(r => !uids.has(r._uid));
+  saveLS();
+  clearSelection(tbl);
+  showToast(`🗑 ${uids.size} registro(s) excluído(s)`, 'warn');
+  refreshInPlace();
+}
+
+function clearSelection(tbl) {
+  _selectedUIDs[tbl].clear();
+  updateBulkBar(tbl);
+  renderTable(tbl);
+}
+
+// ── Toast helper (reuse existing or create simple one) ──────────────
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  if(el) {
+    el.textContent = msg;
+    el.className = 'toast on ' + (type||'');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('on'), 3200);
+  }
+}
+
+
 (function(){
   // Colunas disponíveis para impressão
   const PDF_COLS = [
@@ -3700,7 +4300,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const colW = _pdfOri === 'landscape' ? Math.floor(260/cols.length) : Math.floor(180/cols.length);
 
     const thead = cols.map(c =>
-      `<th style="background:#1e2235;color:#c8cde4;padding:7px ${_pdfSz<=8?'4px':'6px'};font-size:${_pdfSz-1}pt;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-right:1px solid #2e3450;min-width:${colW}mm">${c.l}</th>`
+      `<th style="background:#1a1a1a !important;color:#f5f5f5;padding:7px ${_pdfSz<=8?'4px':'6px'};font-size:${_pdfSz-1}pt;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-right:1px solid #333;min-width:${colW}mm">${c.l}</th>`
     ).join('');
 
     const tbody = rows.map((r, i) => {
@@ -3735,10 +4335,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   /* Header */
   .ph { display: flex; align-items: center; justify-content: space-between;
-        padding: 0 0 10px 0; border-bottom: 3px solid #2c63c7; margin-bottom: 10px }
+        padding: 0 0 10px 0; border-bottom: 3px solid #0064b3; margin-bottom: 10px }
   .ph-left { display: flex; align-items: center; gap: 12px }
   .ph-logo { height: 32px; width: auto }
-  .ph-title { font-size: 16pt; font-weight: 800; color: #1a1d2e; letter-spacing: -.3px }
+  .ph-title { font-size: 16pt; font-weight: 800; color: #1a1a1a; letter-spacing: -.3px }
   .ph-sub   { font-size: 9pt; color: #6b7280; margin-top: 2px }
   .ph-right { text-align: right; font-size: 8pt; color: #9ca3bc; line-height: 1.6 }
 
@@ -3752,7 +4352,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   table { width: 100%; border-collapse: collapse; font-size: ${_pdfSz}pt; table-layout: auto }
   thead { display: table-header-group }
   tbody tr { page-break-inside: avoid }
-  th { background: #1e2235 !important; color: #c8cde4; border-bottom: 2px solid #2c63c7 }
+  th { background: #1a1a1a !important; color: #f5f5f5; border-bottom: 2px solid #0064b3 }
   tr:last-child td { border-bottom: none }
 
   /* Footer */
@@ -3760,7 +4360,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         border-top: 1px solid #e0e4f0; padding: 4px 8px;
         display: flex; justify-content: space-between;
         font-size: 7.5pt; color: #9ca3bc; background: #fff }
-  .pf-brand { color: #2c63c7; font-weight: 700 }
+  .pf-brand { color: #0064b3; font-weight: 700 }
 
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -3773,7 +4373,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 <body>
   <div class="ph">
     <div class="ph-left">
-      ${logoB64 ? `<img class="ph-logo" src="${logoB64}" alt="Logo">` : ''}
+      <svg height="42" viewBox="0 0 260 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;flex-shrink:0">
+        <text x="0" y="26" font-family="'Arial Black','Arial Bold',Arial,sans-serif" font-size="26" font-weight="900" fill="#0064b3" letter-spacing="-0.5">Röchling</text>
+        <line x1="0" y1="31" x2="155" y2="31" stroke="#0064b3" stroke-width="1.5" opacity="0.35"/>
+        <text x="1" y="41" font-family="Arial,sans-serif" font-size="8.5" font-weight="600" fill="#0064b3" letter-spacing="3.2">AUTOMOTIVE</text>
+      </svg>
       <div>
         <div class="ph-title">${_pdfTitle}</div>
         <div class="ph-sub">${_pdfSub ? _pdfSub + ' · ' : ''}Gerado em ${now}</div>
@@ -3785,9 +4389,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     </div>
   </div>
 
-  <div class="kpi-strip">
-    <div class="kpi-chip" style="border-color:#bfdbfe;background:#eff6ff">
-      <div class="kpi-chip-val" style="color:#2c63c7">${totalRows}</div>
+    <div class="kpi-strip">
+    <div class="kpi-chip" style="border-color:#fecaca;background:#fff5f5">
+      <div class="kpi-chip-val" style="color:#0064b3">${totalRows}</div>
       <div class="kpi-chip-lbl">Total</div>
     </div>
     <div class="kpi-chip" style="border-color:#fecaca;background:#fef2f2">
@@ -3825,6 +4429,430 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 })();
 
+</script>
+
+<!-- EQUIPMENT DETAIL VIEW MODAL -->
+<style>
+#equip-view-ov {
+  display:none; position:fixed; inset:0; z-index:1100;
+  background:rgba(0,0,0,.72); backdrop-filter:blur(8px);
+  align-items:center; justify-content:center; padding:20px;
+}
+#equip-view-ov.on { display:flex }
+#equip-view-box {
+  background:var(--surf); border:1px solid var(--bdr2);
+  border-radius:16px; width:min(760px,100%); max-height:92vh;
+  overflow-y:auto; box-shadow:0 40px 100px rgba(0,0,0,.6);
+  animation:modalIn .18s cubic-bezier(.34,1.4,.64,1);
+  display:flex; flex-direction:column;
+}
+.ev-header {
+  padding:22px 26px 18px; border-bottom:1px solid var(--bdr2);
+  background:linear-gradient(135deg,var(--surf2) 0%,var(--surf) 100%);
+  border-radius:16px 16px 0 0; position:relative;
+  border-top:4px solid var(--brand);
+}
+.ev-header-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px }
+.ev-badge-row  { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px }
+.ev-id   { font-family:var(--mono); font-size:11px; color:var(--tx3); margin-bottom:4px; letter-spacing:.5px }
+.ev-name { font-size:20px; font-weight:800; color:var(--tx); line-height:1.2; letter-spacing:-.3px }
+.ev-tipo { font-size:12px; color:var(--tx2); margin-top:3px }
+.ev-close {
+  background:var(--surf3); border:1px solid var(--bdr2); color:var(--tx2);
+  width:32px; height:32px; border-radius:50%; font-size:18px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  transition:var(--tr); line-height:1;
+}
+.ev-close:hover { background:var(--red); color:#fff; border-color:var(--red) }
+.ev-body { padding:22px 26px; flex:1 }
+.ev-section { margin-bottom:22px }
+.ev-section-title {
+  font-size:10px; font-weight:800; color:var(--brand); text-transform:uppercase;
+  letter-spacing:1.2px; margin-bottom:12px; display:flex; align-items:center; gap:6px;
+  padding-bottom:6px; border-bottom:1px solid var(--bdr2);
+}
+.ev-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:14px }
+.ev-field { display:flex; flex-direction:column; gap:3px }
+.ev-field-lbl { font-size:9.5px; font-weight:700; color:var(--tx3); text-transform:uppercase; letter-spacing:.8px }
+.ev-field-val { font-size:13px; color:var(--tx); font-weight:500; line-height:1.3 }
+.ev-field-val.mono { font-family:var(--mono); font-size:12px }
+.ev-timeline {
+  display:flex; gap:0; align-items:stretch; background:var(--surf2);
+  border:1px solid var(--bdr2); border-radius:10px; overflow:hidden; margin-bottom:16px;
+}
+.ev-tl-item { flex:1; padding:12px 14px; text-align:center; border-right:1px solid var(--bdr2) }
+.ev-tl-item:last-child { border-right:none }
+.ev-tl-icon { font-size:18px; margin-bottom:4px }
+.ev-tl-lbl  { font-size:9px; font-weight:700; color:var(--tx3); text-transform:uppercase; letter-spacing:.7px; margin-bottom:4px }
+.ev-tl-val  { font-family:var(--mono); font-size:12px; font-weight:700; color:var(--tx) }
+.ev-health-bar { margin-top:10px }
+.ev-hbar-outer { height:10px; background:var(--surf3); border-radius:10px; overflow:hidden; margin-top:5px }
+.ev-hbar-inner { height:100%; border-radius:10px; transition:width .6s cubic-bezier(.4,0,.2,1) }
+.ev-obs {
+  background:var(--surf2); border:1px solid var(--bdr2); border-radius:8px;
+  padding:12px 14px; font-size:12px; color:var(--tx2); line-height:1.6;
+  min-height:48px; white-space:pre-wrap;
+}
+.ev-footer {
+  padding:14px 26px; border-top:1px solid var(--bdr2); display:flex;
+  gap:8px; justify-content:flex-end; flex-wrap:wrap; background:var(--surf2);
+  border-radius:0 0 16px 16px; flex-shrink:0;
+}
+.ev-nav { display:flex; gap:4px; align-items:center; margin-right:auto }
+.ev-nav-btn {
+  background:var(--surf); border:1px solid var(--bdr2); color:var(--tx2);
+  padding:5px 11px; border-radius:5px; cursor:pointer; font-size:13px; transition:var(--tr);
+}
+.ev-nav-btn:hover { border-color:var(--brand); color:var(--brand) }
+.ev-nav-info { font-size:10px; color:var(--tx3); font-family:var(--mono); padding:0 4px }
+</style>
+
+<div id="equip-view-ov" onclick="if(event.target===this)closeEquipView()">
+  <div id="equip-view-box">
+    <div class="ev-header">
+      <div class="ev-header-top">
+        <div>
+          <div class="ev-id"   id="ev-id">—</div>
+          <div class="ev-name" id="ev-name">—</div>
+          <div class="ev-tipo" id="ev-tipo">—</div>
+        </div>
+        <button class="ev-close" onclick="closeEquipView()">×</button>
+      </div>
+      <div class="ev-badge-row" id="ev-badges"></div>
+    </div>
+    <div class="ev-body">
+      <div class="ev-timeline" id="ev-timeline"></div>
+      <div class="ev-health-bar">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px">Validade da Calibração</span>
+          <span id="ev-health-pct" style="font-size:11px;font-weight:800;font-family:var(--mono)">—</span>
+        </div>
+        <div class="ev-hbar-outer"><div class="ev-hbar-inner" id="ev-hbar"></div></div>
+      </div>
+      <div class="ev-section" style="margin-top:18px">
+        <div class="ev-section-title">🔖 Identificação</div>
+        <div class="ev-grid" id="ev-grid-id"></div>
+      </div>
+      <div class="ev-section">
+        <div class="ev-section-title">🎯 Calibração</div>
+        <div class="ev-grid" id="ev-grid-calib"></div>
+      </div>
+      <div class="ev-section">
+        <div class="ev-section-title">📍 Localização &amp; Responsabilidade</div>
+        <div class="ev-grid" id="ev-grid-loc"></div>
+      </div>
+      <div class="ev-section" id="ev-obs-wrap">
+        <div class="ev-section-title">📝 Observações</div>
+        <div class="ev-obs" id="ev-obs-text"></div>
+      </div>
+      <div class="ev-section" id="ev-file-wrap" style="display:none">
+        <div class="ev-section-title">📎 Certificado / Arquivo</div>
+        <div id="ev-file-area"></div>
+      </div>
+    </div>
+    <div class="ev-footer">
+      <div class="ev-nav">
+        <button class="ev-nav-btn" onclick="navEquipView(-1)">◀</button>
+        <span class="ev-nav-info" id="ev-nav-info">—</span>
+        <button class="ev-nav-btn" onclick="navEquipView(1)">▶</button>
+      </div>
+      <button class="btn-g" style="font-size:11px" onclick="printEquipView()">🖨️ Imprimir PDF</button>
+      <button class="btn-g" style="font-size:11px" onclick="openEdit(_viewUID);closeEquipView()">✏ Editar</button>
+      <button class="btn-p" style="font-size:11px" onclick="closeEquipView()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// EQUIPMENT DETAIL VIEW
+// ═══════════════════════════════════════════════════════
+let _viewUID  = null;
+let _viewList = [];  // list of UIDs for navigation (current table rows)
+let _viewIdx  = 0;
+
+function openEquipView(uid) {
+  // Build nav list from current active table rows
+  const tbl = document.getElementById('tab-equipamentos')?.classList.contains('on') ? 'geral' : 'alert';
+  const p   = tbl === 'geral' ? pag.eq : pag.alert;
+  _viewList = p.rows.map(r => r._uid);
+  _viewIdx  = _viewList.indexOf(uid);
+  if(_viewIdx < 0) { _viewList = [uid]; _viewIdx = 0; }
+  _viewUID = uid;
+  renderEquipView(uid);
+  document.getElementById('equip-view-ov').classList.add('on');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeEquipView() {
+  document.getElementById('equip-view-ov').classList.remove('on');
+  document.body.style.overflow = '';
+}
+
+function navEquipView(dir) {
+  const newIdx = _viewIdx + dir;
+  if(newIdx < 0 || newIdx >= _viewList.length) return;
+  _viewIdx = newIdx;
+  _viewUID = _viewList[_viewIdx];
+  renderEquipView(_viewUID);
+}
+
+function field(lbl, val, mono) {
+  const v = val === null || val === undefined || val === '' ? '—' : val;
+  return `<div class="ev-field">
+    <div class="ev-field-lbl">${lbl}</div>
+    <div class="ev-field-val${mono?' mono':''}">${v}</div>
+  </div>`;
+}
+
+function renderEquipView(uid) {
+  const r = DB.find(x => x._uid === uid);
+  if(!r) return;
+
+  // Header
+  document.getElementById('ev-id').textContent   = r.id || '—';
+  document.getElementById('ev-name').textContent = r.descricao || r.tipo || '—';
+  document.getElementById('ev-tipo').textContent = [r.tipo, r.fabricante].filter(Boolean).join(' · ') || '—';
+
+  // Badges
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = r.dias_vencer;
+  let urgBadge = '';
+  if(d !== null && d !== undefined) {
+    if(d < 0)       urgBadge = `<span class="badge b-err">⛔ Vencido ${Math.abs(d)}d</span>`;
+    else if(d <= 30) urgBadge = `<span class="badge b-warn">⚠ Vence em ${d}d</span>`;
+    else if(d <= 90) urgBadge = `<span class="badge" style="background:#fff7ed;color:#b45309;border:1px solid #fde68a">📅 ${d} dias</span>`;
+    else             urgBadge = `<span class="badge b-ok">✓ Em dia</span>`;
+  }
+  document.getElementById('ev-badges').innerHTML =
+    (r.status ? `<span class="badge ${r.status.toUpperCase()==='ATIVO'?'b-ok':'b-gray'}">${r.status}</span>` : '') +
+    calibBadge(r.status_calib, r.dias_vencer) + urgBadge;
+
+  // Timeline
+  const fmt = v => v ? fmtDate(v) : '—';
+  document.getElementById('ev-timeline').innerHTML = `
+    <div class="ev-tl-item">
+      <div class="ev-tl-icon">📅</div>
+      <div class="ev-tl-lbl">Últ. Calibração</div>
+      <div class="ev-tl-val">${fmt(r.ult_calib)}</div>
+    </div>
+    <div class="ev-tl-item">
+      <div class="ev-tl-icon">🔁</div>
+      <div class="ev-tl-lbl">Frequência</div>
+      <div class="ev-tl-val">${r.freq_dias ? r.freq_dias+'d' : '—'}</div>
+    </div>
+    <div class="ev-tl-item">
+      <div class="ev-tl-icon" id="ev-tl-prox-icon">${d < 0 ? '🚨' : d <= 30 ? '⚠️' : '📆'}</div>
+      <div class="ev-tl-lbl">Próx. Calibração</div>
+      <div class="ev-tl-val">${fmt(r.prox_calib)}</div>
+    </div>
+    <div class="ev-tl-item">
+      <div class="ev-tl-icon">${d < 0 ? '🔴' : d <= 30 ? '🟠' : d <= 90 ? '🟡' : '🟢'}</div>
+      <div class="ev-tl-lbl">Dias Restantes</div>
+      <div class="ev-tl-val" style="color:${d < 0 ? 'var(--red)' : d <= 30 ? 'var(--orange)' : d <= 90 ? 'var(--accent)' : 'var(--green)'}">${d !== null && d !== undefined ? (d < 0 ? d+'d' : '+'+d+'d') : '—'}</div>
+    </div>`;
+
+  // Health bar
+  let pct = 0, barColor = '#16a34a';
+  if(r.freq_dias && d !== null) {
+    pct = Math.max(0, Math.min(100, Math.round((d / r.freq_dias) * 100)));
+    barColor = d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : d <= 90 ? '#f59e0b' : '#16a34a';
+  }
+  document.getElementById('ev-hbar').style.width = pct + '%';
+  document.getElementById('ev-hbar').style.background = barColor;
+  document.getElementById('ev-health-pct').textContent = pct + '%';
+  document.getElementById('ev-health-pct').style.color = barColor;
+
+  // Identification grid
+  document.getElementById('ev-grid-id').innerHTML =
+    field('Código de Controle', r.id, true) +
+    field('Tipo', r.tipo) +
+    field('Fabricante', r.fabricante) +
+    field('Código Labortec', r.cod_lab, true) +
+    field('Cliente', r.cliente) +
+    field('Descrição', r.descricao);
+
+  // Calibration grid
+  document.getElementById('ev-grid-calib').innerHTML =
+    field('Última Calibração', fmt(r.ult_calib), true) +
+    field('Próxima Calibração', fmt(r.prox_calib), true) +
+    field('Frequência (dias)', r.freq_dias ? r.freq_dias+'d' : '—', true) +
+    field('Empresa Executante', r.empresa) +
+    field('Status Calibração', r.status_calib) +
+    field('Dias Restantes', d !== null ? (d < 0 ? '⛔ '+Math.abs(d)+'d vencido' : '+'+d+'d') : '—', true);
+
+  // Location grid
+  document.getElementById('ev-grid-loc').innerHTML =
+    field('Localização', r.localizacao) +
+    field('Responsável', r.responsavel) +
+    field('Status Operacional', r.status);
+
+  // Notes
+  const obsEl = document.getElementById('ev-obs-text');
+  obsEl.textContent = r.observacoes || r.notes || '(sem observações)';
+  document.getElementById('ev-obs-wrap').style.display = '';
+
+  // File
+  const fwrap = document.getElementById('ev-file-wrap');
+  const farea = document.getElementById('ev-file-area');
+  if(r.link) {
+    fwrap.style.display = '';
+    const fname = r.link.split(/[\/\\]/).pop() || r.link;
+    const hasData = !!(r.link_data && r.link_data.startsWith('data:'));
+    farea.innerHTML = `<div style="display:flex;align-items:center;gap:10px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:10px 14px">
+      <span style="font-size:22px">${fileIcon(fname)}</span>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--tx)">${esc(fname)}</div>
+        <div style="font-size:10px;color:var(--tx3)">${hasData?'✅ Arquivo disponível':'⚠ Caminho externo'}</div>
+      </div>
+      ${hasData ? `<button class="btn-g" style="margin-left:auto;font-size:11px" onclick="openFileForRow(${r._uid})">🔗 Abrir</button>` : ''}
+    </div>`;
+  } else {
+    fwrap.style.display = 'none';
+  }
+
+  // Nav info
+  document.getElementById('ev-nav-info').textContent = `${_viewIdx+1} / ${_viewList.length}`;
+}
+
+function printEquipView() {
+  const r = DB.find(x => x._uid === _viewUID);
+  if(!r) return;
+  const d = r.dias_vencer;
+  const fmt = v => v ? new Date(v+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  const barColor = d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : d <= 90 ? '#f59e0b' : '#16a34a';
+  const pct = r.freq_dias && d !== null ? Math.max(0,Math.min(100,Math.round(d/r.freq_dias*100))) : 0;
+  const now = new Date().toLocaleString('pt-BR');
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Ficha — ${r.id||r.descricao}</title>
+<style>
+@page { size:A4 portrait; margin:12mm 14mm }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.ph{display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:3px solid #0064b3;margin-bottom:14px}
+.ph-logo svg{display:block}
+.ph-right{text-align:right;font-size:8pt;color:#9ca3bc;line-height:1.7}
+.name{font-size:18pt;font-weight:800;letter-spacing:-.3px;color:#1a1a1a;margin-bottom:3px}
+.sub{font-size:10pt;color:#6b7280}
+.badge-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;margin-bottom:14px}
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:4px;font-size:9pt;font-weight:700;border:1px solid}
+.b-ok{background:#dcfce7;color:#15803d;border-color:#bbf7d0}
+.b-err{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+.b-warn{background:#fff7ed;color:#c2410c;border-color:#fed7aa}
+.b-gray{background:#f3f4f6;color:#6b7280;border-color:#e5e7eb}
+.timeline{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:14px}
+.tl{padding:10px;text-align:center;border-right:1px solid #e5e7eb}
+.tl:last-child{border-right:none}
+.tl-icon{font-size:16pt;margin-bottom:3px}
+.tl-lbl{font-size:7pt;font-weight:700;color:#9ca3bc;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.tl-val{font-family:monospace;font-size:10pt;font-weight:700}
+.hbar-outer{height:9px;background:#f3f4f6;border-radius:6px;overflow:hidden;margin:4px 0 14px}
+.hbar-inner{height:100%;border-radius:6px;background:${barColor};width:${pct}%}
+.hbar-label{display:flex;justify-content:space-between;font-size:8pt;color:#6b7280;margin-bottom:3px}
+.sec{margin-bottom:14px}
+.sec-title{font-size:8pt;font-weight:800;color:#0064b3;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #e5e7eb;padding-bottom:5px;margin-bottom:10px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.f-lbl{font-size:7.5pt;font-weight:700;color:#9ca3bc;text-transform:uppercase;letter-spacing:.6px}
+.f-val{font-size:10.5pt;font-weight:500;color:#1a1a1a;margin-top:2px}
+.f-val.mono{font-family:monospace;font-size:9.5pt}
+.obs{background:#f8f9fc;border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px;font-size:10pt;color:#374151;line-height:1.6;white-space:pre-wrap}
+.pf{border-top:1px solid #e5e7eb;padding-top:6px;display:flex;justify-content:space-between;font-size:7pt;color:#9ca3bc;margin-top:14px}
+.pf-brand{color:#0064b3;font-weight:700}
+</style></head><body>
+<div class="ph">
+  <div class="ph-logo">
+    <svg height="36" viewBox="0 0 240 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <text x="0" y="26" font-family="'Arial Black',Arial,sans-serif" font-size="26" font-weight="900" fill="#0064b3" letter-spacing="-0.5">Röchling</text>
+      <line x1="0" y1="31" x2="155" y2="31" stroke="#0064b3" stroke-width="1.5" opacity="0.35"/>
+      <text x="1" y="41" font-family="Arial,sans-serif" font-size="8.5" font-weight="600" fill="#0064b3" letter-spacing="3.2">AUTOMOTIVE</text>
+    </svg>
+  </div>
+  <div class="ph-right">Ficha de Equipamento de Medição<br>${now}</div>
+</div>
+
+<div class="name">${r.descricao||r.tipo||'—'}</div>
+<div class="sub">${[r.tipo,r.fabricante].filter(Boolean).join(' · ')||'—'}</div>
+<div class="badge-row">
+  ${r.status?`<span class="badge ${r.status.toUpperCase()==='ATIVO'?'b-ok':'b-gray'}">${r.status}</span>`:''}
+  ${d!==null&&d!==undefined?(d<0?`<span class="badge b-err">⛔ Vencido ${Math.abs(d)}d</span>`:d<=30?`<span class="badge b-warn">⚠ Vence em ${d}d</span>`:`<span class="badge b-ok">✓ Em dia +${d}d</span>`):''}
+  ${r.status_calib?`<span class="badge b-gray">${r.status_calib}</span>`:''}
+</div>
+
+<div class="timeline">
+  <div class="tl"><div class="tl-icon">📅</div><div class="tl-lbl">Últ. Calibração</div><div class="tl-val">${fmt(r.ult_calib)}</div></div>
+  <div class="tl"><div class="tl-icon">🔁</div><div class="tl-lbl">Frequência</div><div class="tl-val">${r.freq_dias?r.freq_dias+'d':'—'}</div></div>
+  <div class="tl"><div class="tl-icon">📆</div><div class="tl-lbl">Próx. Calibração</div><div class="tl-val">${fmt(r.prox_calib)}</div></div>
+  <div class="tl"><div class="tl-icon">${d<0?'🔴':d<=30?'🟠':d<=90?'🟡':'🟢'}</div><div class="tl-lbl">Dias Restantes</div><div class="tl-val" style="color:${barColor}">${d!==null?(d<0?d+'d':'+'+d+'d'):'—'}</div></div>
+</div>
+<div class="hbar-label"><span>Validade da Calibração</span><span style="font-weight:700;color:${barColor}">${pct}%</span></div>
+<div class="hbar-outer"><div class="hbar-inner"></div></div>
+
+<div class="sec"><div class="sec-title">Identificação</div>
+<div class="grid">
+  <div><div class="f-lbl">Código de Controle</div><div class="f-val mono">${r.id||'—'}</div></div>
+  <div><div class="f-lbl">Tipo</div><div class="f-val">${r.tipo||'—'}</div></div>
+  <div><div class="f-lbl">Fabricante</div><div class="f-val">${r.fabricante||'—'}</div></div>
+  <div><div class="f-lbl">Cód. Labortec</div><div class="f-val mono">${r.cod_lab||'—'}</div></div>
+  <div><div class="f-lbl">Cliente</div><div class="f-val">${r.cliente||'—'}</div></div>
+</div></div>
+
+<div class="sec"><div class="sec-title">Calibração</div>
+<div class="grid">
+  <div><div class="f-lbl">Última Calibração</div><div class="f-val mono">${fmt(r.ult_calib)}</div></div>
+  <div><div class="f-lbl">Próxima Calibração</div><div class="f-val mono">${fmt(r.prox_calib)}</div></div>
+  <div><div class="f-lbl">Frequência</div><div class="f-val mono">${r.freq_dias?r.freq_dias+'d':'—'}</div></div>
+  <div><div class="f-lbl">Empresa Executante</div><div class="f-val">${r.empresa||'—'}</div></div>
+  <div><div class="f-lbl">Status Calibração</div><div class="f-val">${r.status_calib||'—'}</div></div>
+</div></div>
+
+<div class="sec"><div class="sec-title">Localização &amp; Responsabilidade</div>
+<div class="grid">
+  <div><div class="f-lbl">Localização</div><div class="f-val">${r.localizacao||'—'}</div></div>
+  <div><div class="f-lbl">Responsável</div><div class="f-val">${r.responsavel||'—'}</div></div>
+  <div><div class="f-lbl">Status Operacional</div><div class="f-val">${r.status||'—'}</div></div>
+</div></div>
+
+${(r.observacoes||r.notes)?`<div class="sec"><div class="sec-title">Observações</div><div class="obs">${r.observacoes||r.notes}</div></div>`:''}
+
+<div class="pf">
+  <span><span class="pf-brand">Röchling Automotive</span> — Controle de Equipamentos de Medição</span>
+  <span>${r.id||'—'} · ${now}</span>
+</div>
+</body></html>`;
+
+  const win = window.open('','_blank','width=900,height=1100');
+  if(!win){ alert('Permita popups para gerar o PDF.'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>win.print(), 500);
+}
+
+// Bulk print from selection
+window.openPdfModalBulk = function(tbl) {
+  const uids = _selectedUIDs[tbl];
+  if(!uids || uids.size === 0) return;
+  // Store selected rows in drill state and open PDF modal
+  const rows = DB.filter(r => uids.has(r._uid));
+  window.__getDrillState = () => ({
+    filter: () => rows
+  });
+  // Update desc in pdf modal
+  const titleEl = document.getElementById('drill-title');
+  const subEl   = document.getElementById('drill-sub');
+  if(titleEl) titleEl.textContent = `🖨️ Seleção — ${rows.length} equipamento(s)`;
+  if(subEl)   subEl.textContent   = rows.map(r=>r.id||r.descricao).join(', ').slice(0,80) + (rows.length>5?'…':'');
+  openPdfModal();
+};
+
+// Keyboard nav for view modal
+document.addEventListener('keydown', e => {
+  if(!document.getElementById('equip-view-ov')?.classList.contains('on')) return;
+  if(e.key === 'Escape')      { closeEquipView(); return; }
+  if(e.key === 'ArrowRight' || e.key === 'ArrowDown')  navEquipView(1);
+  if(e.key === 'ArrowLeft'  || e.key === 'ArrowUp')    navEquipView(-1);
+});
 </script>
 </body>
 </html>
