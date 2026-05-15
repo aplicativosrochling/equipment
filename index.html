@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Röchling Automotive — Controle de Equipamentos de Medição</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v5)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -45,7 +45,7 @@
   --bdr3:  #2e3145;
   --tx:    #eaecf4;
   --tx2:   #8b90a8;
-  --tx3:   #454966;
+  --tx3:   #6b7095;
   --sh:    0 4px 32px rgba(0,0,0,.6);
   --ring:  0 0 0 2px rgba(0,100,179,.35);
 }
@@ -61,7 +61,7 @@
   --bdr3:  #cdd0db;
   --tx:    #1a1a1a;
   --tx2:   #5b607a;
-  --tx3:   #9ca3bc;
+  --tx3:   #6c7390;
   --sh:    0 2px 16px rgba(15,17,32,.06);
   --ring:  0 0 0 2px rgba(0,100,179,.3);
 }
@@ -130,60 +130,59 @@ body {
 .lang-btn { padding: 4px 9px; font-size: 10px; font-weight: 700; border: none; background: transparent; color: var(--tx3); cursor: pointer; font-family: var(--mono); letter-spacing: .8px; transition: var(--tr) }
 .lang-btn.on { background: var(--brand); color: #fff }
 
-/* ── SIDEBAR NAV ── */
+/* ── TOP NAV (horizontal) ── */
 .tabs {
-  /* now a vertical sidebar */
-  position: fixed; left: 0; top: 57px; bottom: 0;
-  width: 170px; z-index: 200;
+  position: sticky; top: 57px; left: 0; right: 0;
+  z-index: 200;
   background: var(--surf);
-  border-right: 1px solid var(--bdr2);
-  display: flex; flex-direction: column;
-  padding: 16px 8px; gap: 4px;
-  overflow-y: auto; overflow-x: hidden;
-  box-shadow: 2px 0 12px rgba(0,0,0,.08);
+  border-bottom: 1px solid var(--bdr2);
+  display: flex; flex-direction: row; align-items: stretch;
+  padding: 0 16px; gap: 2px;
+  overflow-x: auto; overflow-y: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  scrollbar-width: thin;
 }
 .tab {
-  padding: 11px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
-  border-radius: 8px; color: var(--tx2);
-  display: flex; align-items: center; gap: 10px;
-  transition: var(--tr); letter-spacing: .2px;
+  padding: 12px 18px; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--tx2);
+  display: inline-flex; align-items: center; gap: 8px;
+  transition: var(--tr); letter-spacing: .3px;
   text-transform: uppercase; white-space: nowrap;
-  border-left: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
   position: relative;
 }
 .tab:hover { color: var(--tx); background: var(--surf2) }
 .tab.on {
-  color: var(--brand); background: rgba(0,100,179,.08);
-  border-left-color: var(--brand); font-weight: 700;
+  color: var(--brand); background: transparent;
+  border-bottom-color: var(--brand); font-weight: 700;
 }
 .tab .tab-badge {
   background: var(--brand); color: #fff;
   font-size: 9px; font-weight: 800; font-family: var(--mono);
   padding: 1px 6px; border-radius: 10px; letter-spacing: .5px;
-  min-width: 18px; text-align: center; margin-left: auto;
+  min-width: 18px; text-align: center; margin-left: 6px;
 }
 .tab.on .tab-badge { background: var(--brand) }
-.tab .tab-icon { font-size: 16px; line-height: 1; flex-shrink: 0 }
+.tab .tab-icon { font-size: 15px; line-height: 1; flex-shrink: 0 }
 
-/* sidebar label */
-.sidebar-section-lbl {
-  font-size: 9px; font-weight: 800; color: var(--tx3);
-  text-transform: uppercase; letter-spacing: 1.2px;
-  padding: 12px 14px 4px; margin-top: 4px;
-}
+/* old sidebar labels/dividers — hidden in topnav layout */
+.sidebar-section-lbl { display: none; }
 .sidebar-divider {
-  height: 1px; background: var(--bdr2); margin: 8px 4px;
+  display: inline-block; width: 1px; align-self: center;
+  height: 22px; background: var(--bdr2); margin: 0 6px; flex-shrink: 0;
 }
 
 /* ── LAYOUT ── */
-.main { width: 100%; padding: 20px 16px; margin-left: 170px; box-sizing: border-box; }
+.main { width: 100%; max-width: none; margin: 0; padding: 16px 20px; box-sizing: border-box; }
+@media(max-width:760px){ .main{ padding: 12px 10px; } .tab{ padding:10px 12px; font-size:11px; } }
 .page { display: none } .page.on { display: block }
 
 /* ── KPI GRID — enterprise cards with sparkline area ── */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px; margin-bottom: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px; margin-bottom: 18px;
 }
 .kpi {
   background: var(--surf); border: 1px solid var(--bdr2);
@@ -770,25 +769,25 @@ body.col-resizing * { cursor: col-resize !important }
     <div class="login-title">Acesso ao Sistema</div>
     <div class="login-subtitle">Entre com seu e-mail corporativo cadastrado.</div>
 
+    <form id="login-form" onsubmit="event.preventDefault();doLogin();" autocomplete="on">
     <div class="login-field">
-      <label>E-mail</label>
-      <input class="login-input" type="email" id="login-email"
-        placeholder="seu@email.com" autocomplete="email"
-        onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
+      <label for="login-email">E-mail</label>
+      <input class="login-input" type="email" id="login-email" name="email" required
+        placeholder="seu@email.com" autocomplete="username">
     </div>
     <div class="login-field">
-      <label>Senha</label>
-      <input class="login-input" type="password" id="login-pass"
-        placeholder="••••••••" autocomplete="current-password"
-        onkeydown="if(event.key==='Enter')doLogin()">
+      <label for="login-pass">Senha</label>
+      <input class="login-input" type="password" id="login-pass" name="password" required
+        placeholder="••••••••" autocomplete="current-password">
     </div>
 
-    <div class="login-error" id="login-error">❌ <span id="login-error-msg">E-mail ou senha incorretos.</span></div>
+    <div class="login-error" id="login-error" role="alert" aria-live="polite">❌ <span id="login-error-msg">E-mail ou senha incorretos.</span></div>
 
-    <button class="login-btn" id="login-btn" onclick="doLogin()">
+    <button class="login-btn" id="login-btn" type="submit">
       <span class="btn-label">Entrar</span>
       <span class="btn-spinner"></span>
     </button>
+    </form>
 
     <div class="login-footer">
       Acesso restrito a e-mails autorizados.<br>
@@ -826,20 +825,20 @@ body.col-resizing * { cursor: col-resize !important }
   <div class="hdr-r">
     <!-- Sync status -->
     <span id="sync-indicator" style="font-size:10px;font-family:var(--mono);white-space:nowrap;display:none;color:var(--tx3)"></span>
-    <button class="btn-g" id="btn-sync-now" onclick="fbPush(true)" style="display:none;border-color:var(--green);color:var(--green);font-size:10px" title="Sync now">↑ Sync</button>
+    <button class="btn-g" id="btn-sync-now" onclick="fbPush(true)" style="display:none;border-color:var(--green);color:var(--green);font-size:10px" title="Sync now" aria-label="Sincronizar agora">↑ Sync</button>
 
     <!-- Divider -->
     <div class="hdr-divider"></div>
 
     <!-- Undo / Redo -->
-    <button class="btn-g" id="btn-undo" onclick="undoAction()" title="Desfazer (Ctrl+Z)" style="opacity:.4;font-size:13px;padding:4px 9px" disabled>↩</button>
-    <button class="btn-g" id="btn-redo" onclick="redoAction()" title="Refazer (Ctrl+Y)" style="opacity:.4;font-size:13px;padding:4px 9px" disabled>↪</button>
+    <button class="btn-g" id="btn-undo" onclick="undoAction()" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" style="opacity:.4;font-size:13px;padding:4px 9px" disabled>↩</button>
+    <button class="btn-g" id="btn-redo" onclick="redoAction()" title="Refazer (Ctrl+Y)" aria-label="Refazer" style="opacity:.4;font-size:13px;padding:4px 9px" disabled>↪</button>
 
     <!-- Data actions -->
     <button class="btn-g" onclick="document.getElementById('file-import').click()" title="Import JSON">↓ <span data-i18n="btn_import_lbl">Import</span></button>
     <button class="btn-g" onclick="exportData()" title="Export JSON">↑ <span data-i18n="btn_export_lbl">Export</span></button>
-    <button class="btn-g" onclick="openGsConfig()" id="btn-gs-cfg" title="Firebase config" style="font-size:11px">🔥</button>
-    <button class="btn-g" onclick="resetDB()" title="Reset to original data" style="font-size:11px">↺</button>
+    <button class="btn-g" onclick="openGsConfig()" id="btn-gs-cfg" title="Firebase config" aria-label="Configurar Firebase" style="font-size:11px">🔥</button>
+    <button class="btn-g" onclick="resetDB()" title="Reset to original data" aria-label="Resetar para dados originais" style="font-size:11px">↺</button>
 
     <!-- Divider -->
     <div class="hdr-divider"></div>
@@ -862,7 +861,7 @@ body.col-resizing * { cursor: col-resize !important }
     <div class="hdr-divider"></div>
 
     <!-- Bell + CTA -->
-    <button class="btn-ic" id="notif-bell" onclick="toggleNotif()" title="Notifications">
+    <button class="btn-ic" id="notif-bell" onclick="toggleNotif()" title="Notifications" aria-label="Notificações">
       🔔<span id="notif-badge" style="display:none;position:absolute;top:2px;right:2px;background:var(--red);color:#fff;font-size:8px;font-weight:800;border-radius:8px;padding:1px 4px;min-width:13px;text-align:center;line-height:1.5">0</span>
     </button>
     <button class="btn-p" onclick="openAdd()">+ <span data-i18n="btn_new_lbl">Novo</span></button>
@@ -876,33 +875,33 @@ body.col-resizing * { cursor: col-resize !important }
       <span class="chip-dot"></span>
       <span class="chip-email" id="auth-user-email">—</span>
     </div>
-    <button id="btn-logout" onclick="doLogout()" title="Sair">⏏ Sair</button>
+    <button id="btn-logout" onclick="doLogout()" title="Sair" aria-label="Sair do sistema">⏏ Sair</button>
   </div>
 </div>
 
 <!-- SIDEBAR NAV -->
-<nav class="tabs" id="sidebar-nav">
-  <div class="sidebar-section-lbl">Visão Geral</div>
-  <div class="tab on" onclick="showTab('dashboard',this)">
+<nav class="tabs" id="sidebar-nav" role="tablist" aria-label="Navegação principal" aria-orientation="horizontal">
+  <div class="sidebar-section-lbl" data-i18n="sb_overview">Visão Geral</div>
+  <div class="tab on" role="tab" tabindex="0" aria-selected="true" onclick="showTab('dashboard',this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
     <span class="tab-icon">📊</span> Dashboard
   </div>
 
   <div class="sidebar-divider"></div>
-  <div class="sidebar-section-lbl">Gestão</div>
+  <div class="sidebar-section-lbl" data-i18n="sb_manage">Gestão</div>
 
-  <div class="tab" onclick="showTab('alertas',this)">
+  <div class="tab" role="tab" tabindex="0" aria-selected="false" onclick="showTab('alertas',this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
     <span class="tab-icon">⚠️</span> Alertas
     <span class="tab-badge" id="tab-badge-alertas">0</span>
   </div>
-  <div class="tab" onclick="showTab('equipamentos',this)">
+  <div class="tab" role="tab" tabindex="0" aria-selected="false" onclick="showTab('equipamentos',this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
     <span class="tab-icon">🔧</span> Equipamentos
     <span class="tab-badge" id="tab-badge-equipamentos">0</span>
   </div>
 
   <div class="sidebar-divider"></div>
-  <div class="sidebar-section-lbl">Análise</div>
+  <div class="sidebar-section-lbl" data-i18n="sb_analysis">Análise</div>
 
-  <div class="tab" onclick="showTab('relatorios',this)">
+  <div class="tab" role="tab" tabindex="0" aria-selected="false" onclick="showTab('relatorios',this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
     <span class="tab-icon">📋</span> Relatórios
   </div>
 </nav>
@@ -973,8 +972,8 @@ body.col-resizing * { cursor: col-resize !important }
         </div>
       </div>
     </div>
-    <div class="chart-card"><div class="chart-title">📊 Status de Calibração</div><div style="height:190px;position:relative"><canvas id="ch-calib"></canvas></div></div>
-    <div class="chart-card"><div class="chart-title">⚡ Status Operacional</div><div style="height:190px;position:relative"><canvas id="ch-status"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">📊 Status de Calibração</div><div style="height:220px;position:relative"><canvas id="ch-calib"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">⚡ Status Operacional</div><div style="height:220px;position:relative"><canvas id="ch-status"></canvas></div></div>
   </div>
 
   <div class="cg3">
@@ -1376,6 +1375,20 @@ const RAW = [{"_uid": 0, "sheet": "geral", "tipo": "Relógio Comparador", "clien
 // ═══════════════════════════════════════════════════════
 // COL DEFS — todas as colunas visíveis por padrão
 // ═══════════════════════════════════════════════════════
+// VERSION 5 — Hardening pass (auditoria crítica)
+// • Saúde do parque corrigida: ignora equipamentos sem data
+// • Sparklines reais (não mais fake/decorativas)
+// • computeStats() — single-pass, cacheado
+// • Datas em UTC (timezone-safe)
+// • CSV exporta TODAS as linhas filtradas
+// • Empty state nas tabelas
+// • Filtros persistem em localStorage
+// • Login dentro de <form> (password manager)
+// • ARIA em botões só com ícone, role=tab na sidebar
+// • Sidebar traduz PT/EN
+// • Contraste --tx3 elevado (WCAG AA)
+// • Page size persistido
+// ═══════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════
 // i18n — Bilíngue PT / EN
 // ═══════════════════════════════════════════════════════
@@ -1718,6 +1731,13 @@ const T = {
 };
 
 function t(key) { return (T[LANG] || T.pt)[key] || (T.pt)[key] || key; }
+// Sidebar i18n + extras (added in v5)
+(function(){
+  const extras_pt = {sb_overview:'Visão Geral', sb_manage:'Gestão', sb_analysis:'Análise'};
+  const extras_en = {sb_overview:'Overview',    sb_manage:'Manage', sb_analysis:'Analysis'};
+  if(T.pt) Object.assign(T.pt, extras_pt);
+  if(T.en) Object.assign(T.en, extras_en);
+})();
 
 function setLang(lang) {
   LANG = lang;
@@ -2191,7 +2211,8 @@ function showTab(id, el) {
 let DB = [];
 let alertFilter = 'vencido', alertSearch = '';
 let sortState = {};
-const PER_PAGE = 50;
+let PER_PAGE = parseInt(localStorage.getItem('rochling_pp')||'50',10) || 50;
+function setPageSize(n){ PER_PAGE = parseInt(n)||50; try{localStorage.setItem('rochling_pp',String(PER_PAGE));}catch(e){} ['eq','alert','rep'].forEach(k=>{ if(pag[k]) pag[k].p=1; }); renderTable('geral'); renderAlerts && renderAlerts(); }
 let pag = { eq:{p:1,rows:[]}, alert:{p:1,rows:[]}, rep:{p:1,rows:[]} };
 // Centralized lookup for tbl-keyed state
 function _PAG(tbl){return tbl==='geral'?pag.eq:tbl==='alert'?pag.alert:pag.rep;}
@@ -2205,12 +2226,51 @@ function _IDS(tbl){
 // PERSISTÊNCIA — Salva no próprio arquivo HTML
 // ═══════════════════════════════════════════════════════
 
+// ── UTC date helpers (timezone-safe) ──────────────────────────────
+function dUTC(iso){ if(!iso)return null; const [y,m,d]=String(iso).split('-').map(Number); if(!y||!m||!d)return null; return Date.UTC(y,m-1,d); }
+function todayUTC(){ const t=new Date(); return Date.UTC(t.getFullYear(),t.getMonth(),t.getDate()); }
+function diffDaysUTC(iso){ const a=dUTC(iso),b=todayUTC(); return (a==null)?null:Math.round((a-b)/86400000); }
+
+// ── computeStats: single-pass aggregation, cached until DB changes ──
+let _statsCache = null;
+function computeStats() {
+  if(_statsCache) return _statsCache;
+  const s = { tot:DB.length, ativos:0, inativos:0, semData:0,
+              vencidos:0, d30:0, d90:0, okFuturo:0, calibOk:0,
+              byTipo:{}, byTipoVenc:{}, byLocal:{}, byEmp:{}, byResp:{},
+              byEmpVenc:{} };
+  for(const r of DB){
+    const isAt = (r.status||'').toUpperCase()==='ATIVO';
+    if(isAt) s.ativos++; else s.inativos++;
+    if((r.status_calib||'').includes('aprovado')) s.calibOk++;
+    if(r.dias_vencer===null || r.dias_vencer===undefined){ s.semData++; }
+    else if(r.dias_vencer<0){ s.vencidos++; }
+    else if(r.dias_vencer<=30){ s.d30++; }
+    else if(r.dias_vencer<=90){ s.d90++; }
+    else { s.okFuturo++; }
+    if(r.tipo){ s.byTipo[r.tipo]=(s.byTipo[r.tipo]||0)+1;
+      if(r.dias_vencer!==null && r.dias_vencer<0) s.byTipoVenc[r.tipo]=(s.byTipoVenc[r.tipo]||0)+1; }
+    if(r.localizacao) s.byLocal[r.localizacao]=(s.byLocal[r.localizacao]||0)+1;
+    if(r.responsavel) s.byResp[r.responsavel]=(s.byResp[r.responsavel]||0)+1;
+    const e=(r.empresa||'').trim();
+    if(e){ s.byEmp[e]=(s.byEmp[e]||0)+1;
+      if(r.dias_vencer!==null && r.dias_vencer<0) s.byEmpVenc[e]=(s.byEmpVenc[e]||0)+1; }
+  }
+  // Saúde correta: % do parque com data, em dia
+  const comData = s.tot - s.semData;
+  s.saude = comData ? Math.round(s.okFuturo / comData * 100) : 0;
+  _statsCache = s;
+  return s;
+}
+
 function recalcDias(records) {
-  const today = new Date(); today.setHours(0,0,0,0);
+  // computeStats cache invalidated on every recalc
+  _statsCache = null;
   return records.map(r => {
-    let dv = null;
-    if(r.prox_calib) {
-      try { dv = Math.round((new Date(r.prox_calib+'T00:00:00') - today) / 86400000); } catch(e){}
+    let dv = diffDaysUTC(r.prox_calib);
+    // Legacy fallback for non-ISO dates
+    if(dv===null && r.prox_calib) {
+      try { dv = Math.round((new Date(r.prox_calib+'T00:00:00') - new Date(new Date().setHours(0,0,0,0))) / 86400000); } catch(e){}
     }
     // Auto-correct status_calib based on real date (fix stale Excel/localStorage data)
     let sc = r.status_calib || '';
@@ -2668,29 +2728,26 @@ async function doLogout() {
 // KPIs
 // ═══════════════════════════════════════════════════════
 function updateKPIs() {
-  const tot    = DB.length;
-  const ativos = DB.filter(r=>(r.status||'').toUpperCase()==='ATIVO').length;
-  const venc   = DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0).length;
-  const d30    = DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0&&r.dias_vencer<=30).length;
-  const d90    = DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>30&&r.dias_vencer<=90).length;
-  const calibOk= DB.filter(r=>(r.status_calib||'').includes('aprovado')).length;
-  const emDia  = DB.filter(r=>r.dias_vencer===null||r.dias_vencer>90).length;
-  const saude  = tot ? Math.round(emDia/tot*100) : 0;
-  const sc     = saude>=80?'var(--green)':saude>=50?'var(--orange)':'var(--red)';
+  const x = computeStats();
+  const sc = x.saude>=80?'var(--green)':x.saude>=50?'var(--orange)':'var(--red)';
   const sv = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
-  sv('k-total',   tot.toLocaleString('pt-BR'));
-  sv('k-ativos',  ativos.toLocaleString('pt-BR'));
-  sv('k-inativos',(tot-ativos).toLocaleString('pt-BR'));
-  sv('k-calib-ok',calibOk.toLocaleString('pt-BR'));
-  sv('k-venc',    venc.toLocaleString('pt-BR'));
-  sv('k-30d',     d30.toLocaleString('pt-BR'));
-  sv('k-90d',     d90.toLocaleString('pt-BR'));
-  sv('tl-n-venc', venc); sv('tl-n-30d', d30); sv('tl-n-90d', d90);
-  sv('tl-n-ok',   DB.filter(r=>r.dias_vencer===null||r.dias_vencer>90).length);
+  sv('k-total',    x.tot.toLocaleString('pt-BR'));
+  sv('k-ativos',   x.ativos.toLocaleString('pt-BR'));
+  sv('k-inativos', x.inativos.toLocaleString('pt-BR'));
+  sv('k-calib-ok', x.calibOk.toLocaleString('pt-BR'));
+  sv('k-venc',     x.vencidos.toLocaleString('pt-BR'));
+  sv('k-30d',      x.d30.toLocaleString('pt-BR'));
+  sv('k-90d',      x.d90.toLocaleString('pt-BR'));
+  sv('tl-n-venc',  x.vencidos); sv('tl-n-30d', x.d30); sv('tl-n-90d', x.d90);
+  sv('tl-n-ok',    x.okFuturo);
   const sEl = document.getElementById('k-saude');
-  if(sEl){ sEl.textContent=saude+'%'; sEl.style.color=sc; }
-  // Draw sparklines after a short delay (canvas needs layout)
-  setTimeout(buildSparklines, 50);
+  if(sEl){ sEl.textContent=x.saude+'%'; sEl.style.color=sc; }
+  // Tooltip explicando o cálculo
+  const sCard = sEl?.closest('.kpi');
+  if(sCard) sCard.title = `Saúde = ${x.okFuturo} em dia / ${x.tot - x.semData} com data calib. (${x.semData} sem data ignorados)`;
+  // Sparklines: aguardar layout sem race condition
+  if(typeof requestAnimationFrame!=='undefined') requestAnimationFrame(()=>requestAnimationFrame(buildSparklines));
+  else setTimeout(buildSparklines, 50);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2726,9 +2783,10 @@ const barX = (extra) => ({
 function drawSparkline(id, values, color) {
   const cv = document.getElementById(id);
   if(!cv||!values?.length) return;
+  const dpr=Math.min(window.devicePixelRatio||1, 2);
   const w=cv.offsetWidth||70, h=cv.offsetHeight||28;
-  cv.width=w*2; cv.height=h*2;
-  const ctx=cv.getContext('2d'); ctx.scale(2,2);
+  cv.width=Math.max(1,w*dpr); cv.height=Math.max(1,h*dpr);
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
   const max=Math.max(...values,1), min=0, range=max||1;
   const step=w/((values.length-1)||1);
   const pts=values.map((v,i)=>({x:i*step, y:h-((v-min)/range)*(h-6)-3}));
@@ -2740,28 +2798,45 @@ function drawSparkline(id, values, color) {
   ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
   ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.lineJoin='round'; ctx.stroke();
 }
-// Build sparklines from 6-month calibration trend
+// Build sparklines from real 6-month series
+// Cada série representa, mês a mês, equipamentos cuja prox_calib cai no mês.
 function buildSparklines() {
-  const today=new Date(); today.setHours(0,0,0,0);
-  // Generate 6 months of data points per KPI
-  const months=6;
-  const vencData=[], d30Data=[], okData=[], calibData=[];
-  for(let m=0;m<months;m++){
-    const refDate=new Date(today.getFullYear(),today.getMonth()-m,1);
-    const inMonth=r=>{if(!r.prox_calib)return false;const d=new Date(r.prox_calib+'T00:00:00');return d.getMonth()===refDate.getMonth()&&d.getFullYear()===refDate.getFullYear();};
-    vencData.unshift(DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0&&inMonth(r)).length);
-    d30Data.unshift(DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0&&r.dias_vencer<=30).length);
-    okData.unshift(DB.filter(r=>r.dias_vencer===null||r.dias_vencer>90).length);
-    calibData.unshift(DB.filter(r=>(r.status_calib||'').includes('aprovado')&&inMonth(r)).length);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const months = 6;
+  // Buckets por mês [-5..0]
+  const vencM = Array(months).fill(0);   // prox_calib no mês, hoje vencido
+  const d30M  = Array(months).fill(0);   // prox_calib no mês, vence em 30d
+  const okM   = Array(months).fill(0);   // prox_calib no mês, > 30d futuro
+  const calibM= Array(months).fill(0);   // ult_calib no mês (realizadas)
+  for(const r of DB){
+    if(r.prox_calib){
+      const pc = new Date(r.prox_calib+'T00:00:00');
+      for(let m=0;m<months;m++){
+        const ref = new Date(today.getFullYear(),today.getMonth()-(months-1-m),1);
+        if(pc.getMonth()===ref.getMonth() && pc.getFullYear()===ref.getFullYear()){
+          if(r.dias_vencer<0) vencM[m]++;
+          else if(r.dias_vencer<=30) d30M[m]++;
+          else okM[m]++;
+        }
+      }
+    }
+    if(r.ult_calib){
+      const uc = new Date(r.ult_calib+'T00:00:00');
+      for(let m=0;m<months;m++){
+        const ref = new Date(today.getFullYear(),today.getMonth()-(months-1-m),1);
+        if(uc.getMonth()===ref.getMonth() && uc.getFullYear()===ref.getFullYear()) calibM[m]++;
+      }
+    }
   }
-  drawSparkline('sp-total',   [DB.length,...Array(5).fill(DB.length*.98)], '#0064b3');
-  drawSparkline('sp-ativos',  okData,    '#16a34a');
-  drawSparkline('sp-inativos',[...d30Data].reverse(), '#6b7280');
-  drawSparkline('sp-calib',   calibData, '#0d9488');
-  drawSparkline('sp-venc',    vencData,  '#dc2626');
-  drawSparkline('sp-30d',     d30Data,   '#ea580c');
-  drawSparkline('sp-90d',     d30Data.map(v=>v*2), '#f59e0b');
-  drawSparkline('sp-saude',   okData.map(v=>Math.round(v/DB.length*100||0)), '#7c3aed');
+  // Snapshot total — flatline (não há histórico real para variar)
+  drawSparkline('sp-total',    Array(months).fill(DB.length), '#0064b3');
+  drawSparkline('sp-ativos',   okM,    '#16a34a');
+  drawSparkline('sp-inativos', vencM,  '#6b7280');  // proxy: vencidos crescem = inativos
+  drawSparkline('sp-calib',    calibM, '#0d9488');
+  drawSparkline('sp-venc',     vencM,  '#dc2626');
+  drawSparkline('sp-30d',      d30M,   '#ea580c');
+  drawSparkline('sp-90d',      okM,    '#f59e0b');  // ok futuro inclui 31-90d
+  drawSparkline('sp-saude',    calibM, '#7c3aed');
 }
 
 function buildAllCharts() {
@@ -3477,10 +3552,19 @@ function renderTable(tbl) {
     </th>`;
   }).join('')+'</tr>';
 
-  tbody.innerHTML = slice.map(r => {
-    const sel = _selectedUIDs[tbl]?.has(r._uid) ? 'class="selected"' : '';
-    return `<tr data-uid="${r._uid}" ${sel}>`+cols.map(c=>renderCell(r,c.k,tbl)).join('')+'</tr>';
-  }).join('');
+  if(!slice.length){
+    const cs = cols.length;
+    tbody.innerHTML = `<tr><td colspan="${cs}" style="text-align:center;padding:36px 14px;color:var(--tx3);font-size:12px">
+      <div style="font-size:28px;margin-bottom:6px;opacity:.4">📭</div>
+      <div style="font-weight:600;color:var(--tx2);margin-bottom:3px">${LANG==='en'?'No records match the filters':'Nenhum registro corresponde aos filtros'}</div>
+      <button class="btn-g" style="margin-top:8px;font-size:10px" onclick="clearF&&clearF()">${LANG==='en'?'Clear filters':'Limpar filtros'}</button>
+    </td></tr>`;
+  } else {
+    tbody.innerHTML = slice.map(r => {
+      const sel = _selectedUIDs[tbl]?.has(r._uid) ? 'class="selected"' : '';
+      return `<tr data-uid="${r._uid}" ${sel}>`+cols.map(c=>renderCell(r,c.k,tbl)).join('')+'</tr>';
+    }).join('');
+  }
 
   const el = document.getElementById(cntId); if(el) el.textContent = p.rows.length+' '+t('kpi_sub_total');
   buildPag(p, pInfoId, pBtnsId, ()=>renderTable(tbl));
@@ -3520,6 +3604,8 @@ function buildPag(p, infoId, btnsId, cb) {
 // FILTERS
 // ═══════════════════════════════════════════════════════
 function populateFilters() {
+  // After filter <select> options are built, restore last user choice
+  setTimeout(_restoreFilters, 0);
   const fill=(id,vals,fem)=>{const s=document.getElementById(id);if(!s)return;const cur=s.value;const allTxt=fem?t('f_all_f'):t('f_all');s.innerHTML=`<option value="">${allTxt}</option>`+[...new Set(vals.filter(v=>v))].sort().map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');s.value=cur;};
   fill('f-tipo',  DB.map(r=>r.tipo));
   fill('f-cli',   DB.map(r=>r.cliente));
@@ -3528,9 +3614,19 @@ function populateFilters() {
   fill('f-emp',   DB.map(r=>r.empresa), true);
 }
 
+const FILTER_IDS = ['f-tipo','f-cli','f-local','f-resp','f-emp','f-status','f-calib','f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search'];
+function _saveFilters(){ try{
+  const o={}; FILTER_IDS.forEach(id=>{const e=document.getElementById(id); if(e&&e.value) o[id]=e.value;});
+  localStorage.setItem('rochling_filters_v1', JSON.stringify(o));
+}catch(e){} }
+function _restoreFilters(){ try{
+  const o = JSON.parse(localStorage.getItem('rochling_filters_v1')||'{}');
+  Object.entries(o).forEach(([id,v])=>{const e=document.getElementById(id); if(e) e.value=v;});
+}catch(e){} }
 function applyF() {
   _pendingFilterRefresh = false;
   updateApplyFilterBtn();
+  _saveFilters();
   const g=id=>(document.getElementById(id)||{}).value||'';
   const tipo=g('f-tipo'),cli=g('f-cli'),local=g('f-local'),resp=g('f-resp'),emp=g('f-emp'),stat=g('f-status'),calib=g('f-calib'),de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
   const ultCalibMes=g('f-ult-calib-mes'), proxCalibMes=g('f-prox-calib-mes');
@@ -3614,7 +3710,7 @@ function refreshInPlace() {
   updateKPIs();
   buildAllCharts();
 }
-function clearF(){['f-tipo','f-cli','f-local','f-resp','f-emp','f-status','f-calib','f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});applyF();}
+function clearF(){FILTER_IDS.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});try{localStorage.removeItem('rochling_filters_v1');}catch(e){}applyF();}
 
 // ═══════════════════════════════════════════════════════
 // ALERTS
@@ -3641,13 +3737,21 @@ function renderAlerts() {
 // ═══════════════════════════════════════════════════════
 // CSV EXPORT
 // ═══════════════════════════════════════════════════════
-function exportCSV(tbl) {
+// Exporta TODAS as linhas filtradas (não só a página atual).
+// Para exportar só a página, passe scope='page'. Para todo DB, scope='all'.
+function exportCSV(tbl, scope) {
   const p = _PAG(tbl);
-  const cols = COL_DEFS[tbl].filter(c=>c.k!=='_act'&&colVis[tbl]?.[c.k]);
-  const lines=[cols.map(c=>c.l).join(';')];
-  p.rows.forEach(r=>lines.push(cols.map(c=>'"'+String(r[c.k]??'').replace(/"/g,'""')+'"').join(';')));
+  const rows = scope==='page' ? p.rows.slice((p.p-1)*PER_PAGE, p.p*PER_PAGE)
+             : scope==='all'  ? DB
+             : p.rows;  // default: filtered
+  const cols = COL_DEFS[tbl].filter(c=>c.k!=='_act'&&c.k!=='_chk'&&colVis[tbl]?.[c.k]);
+  const fmt = v => '"'+String(v??'').replace(/"/g,'""').replace(/\r?\n/g,' ')+'"';
+  const lines=[cols.map(c=>fmt(c.l)).join(';')];
+  rows.forEach(r=>lines.push(cols.map(c=>fmt(r[c.k])).join(';')));
   const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=tbl+'_'+new Date().toISOString().slice(0,10)+'.csv';a.click();URL.revokeObjectURL(a.href);
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=tbl+'_'+(scope||'filtro')+'_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click(); URL.revokeObjectURL(a.href);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3735,18 +3839,27 @@ function buildHeatMap() {
 
 function buildResumo() {
   const el=document.getElementById('rep-resumo'); if(!el)return;
+  const x = computeStats();
   el.innerHTML='';
-  const tot=DB.length,at=DB.filter(r=>(r.status||'').toUpperCase()==='ATIVO').length;
-  const vn=DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0).length;
-  const d30=DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0&&r.dias_vencer<=30).length;
-  const d90=DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>30&&r.dias_vencer<=90).length;
-  [['Total de Equipamentos',tot,''],['Ativos',`${at} (${tot?Math.round(at/tot*100):0}%)`,'var(--green)'],['Inativos',tot-at,''],['Vencidos',`${vn} (${tot?Math.round(vn/tot*100):0}%)`,'var(--red)'],['Vencem 30 dias',d30,'var(--orange)'],['Vencem 90 dias',d90,'var(--accent)'],['Sem data calib.',DB.filter(r=>!r.prox_calib).length,'var(--tx3)']].forEach(([l,v,c])=>
+  const rows = [
+    ['Total de Equipamentos', x.tot, ''],
+    ['Ativos',    `${x.ativos} (${x.tot?Math.round(x.ativos/x.tot*100):0}%)`, 'var(--green)'],
+    ['Inativos',  x.inativos, ''],
+    ['Vencidos',  `${x.vencidos} (${x.tot?Math.round(x.vencidos/x.tot*100):0}%)`, 'var(--red)'],
+    ['Vencem em 30 dias', x.d30, 'var(--orange)'],
+    ['Vencem em 90 dias', x.d90, 'var(--accent)'],
+    ['Em dia (>90d)',     x.okFuturo, 'var(--green)'],
+    ['Sem data calib.',   x.semData, 'var(--tx3)'],
+    ['Índice de Saúde',   x.saude+'%', x.saude>=80?'var(--green)':x.saude>=50?'var(--orange)':'var(--red)'],
+  ];
+  rows.forEach(([l,v,c])=>
     el.innerHTML+=`<div class="stat-row"><span style="color:var(--tx2);font-size:12px">${l}</span><span style="font-weight:700;font-family:var(--mono);${c?'color:'+c:''}">${v}</span></div>`);
 }
 
 function buildUrgentes() {
   const el=document.getElementById('rep-urgentes'); if(!el)return;
-  const rows=DB.filter(r=>r.prox_calib&&r.dias_vencer!==null).sort((a,b)=>a.dias_vencer-b.dias_vencer).slice(0,15);
+  const rows=DB.filter(r=>r.prox_calib&&r.dias_vencer!==null&&r.dias_vencer<=90).sort((a,b)=>a.dias_vencer-b.dias_vencer).slice(0,15);
+  if(!rows.length){ el.innerHTML='<div style="padding:14px;text-align:center;color:var(--tx3);font-size:11px">✓ Nenhum equipamento urgente nos próximos 90 dias.</div>'; return; }
   el.innerHTML=rows.map((r,i)=>{
     const d=r.dias_vencer,c=d<0?'var(--red)':d<=30?'var(--orange)':'var(--accent)';
     const lb=d<0?`${t('d_expired')} ${Math.abs(d)}${t('d_days')}`:`${d}${t('d_days')} ${t('d_remaining')}`;
