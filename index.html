@@ -1081,6 +1081,14 @@ body.col-resizing * { cursor: col-resize !important }
       <div class="fg"><label>Calibração</label><select id="f-calib" onchange="applyF()"><option value="">Todos</option><option value="ok">OK</option><option value="vencido">Vencido</option><option value="necessaria">Necessária</option></select></div>
       <div class="fg"><label>De</label><input type="date" id="f-de" onchange="applyF()"></div>
       <div class="fg"><label>Até</label><input type="date" id="f-ate" onchange="applyF()"></div>
+      <div class="fg" style="min-width:150px">
+        <label>Últ. Calib. (mês/ano)</label>
+        <input type="month" id="f-ult-calib-mes" onchange="applyF()" style="width:100%">
+      </div>
+      <div class="fg" style="min-width:150px">
+        <label>Próx. Calib. (mês/ano)</label>
+        <input type="month" id="f-prox-calib-mes" onchange="applyF()" style="width:100%">
+      </div>
       <div class="fg" style="min-width:170px"><label>Buscar</label><input id="f-search" type="text" placeholder="Código, descrição..." oninput="applyF()"></div>
       <div style="align-self:flex-end;display:flex;gap:5px">
         <button id="btn-apply-filters" class="btn-g" onclick="applyFiltersNow()" title="Reaplicar filtros e atualizar gráficos">🔄 Aplicar</button>
@@ -2289,7 +2297,7 @@ function fbStartListen() {
       // Preserve active filters when receiving live updates
       updateKPIs(); buildAllCharts(); populateFilters();
       const hasFilter = ['f-tipo','f-cli','f-local','f-resp','f-emp',
-        'f-status','f-calib','f-de','f-ate','f-search']
+        'f-status','f-calib','f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search']
         .some(id => { const el=document.getElementById(id); return el && el.value; });
       if(hasFilter) applyF(); else refreshInPlace();
       renderAlerts();
@@ -3443,6 +3451,7 @@ function applyF() {
   updateApplyFilterBtn();
   const g=id=>(document.getElementById(id)||{}).value||'';
   const tipo=g('f-tipo'),cli=g('f-cli'),local=g('f-local'),resp=g('f-resp'),emp=g('f-emp'),stat=g('f-status'),calib=g('f-calib'),de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
+  const ultCalibMes=g('f-ult-calib-mes'), proxCalibMes=g('f-prox-calib-mes');
   let rows = DB.slice();
   if(tipo)  rows=rows.filter(r=>r.tipo===tipo);
   if(cli)   rows=rows.filter(r=>r.cliente===cli);
@@ -3459,6 +3468,10 @@ function applyF() {
     rows=rows.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0);
   if(de)  rows=rows.filter(r=>r.prox_calib&&r.prox_calib>=de);
   if(ate) rows=rows.filter(r=>r.prox_calib&&r.prox_calib<=ate);
+  // Filtro Últ. Calib. por mês/ano (ex: "2025-10" filtra todos de outubro/2025)
+  if(ultCalibMes) rows=rows.filter(r=>r.ult_calib&&r.ult_calib.slice(0,7)===ultCalibMes);
+  // Filtro Próx. Calib. por mês/ano (ex: "2027-05" filtra todos de maio/2027)
+  if(proxCalibMes) rows=rows.filter(r=>r.prox_calib&&r.prox_calib.slice(0,7)===proxCalibMes);
   if(q)   rows=rows.filter(r=>Object.values(r).join(' ').toLowerCase().includes(q));
   pag.eq.rows=rows; pag.eq.p=1; renderTable('geral');
 }
@@ -3471,6 +3484,7 @@ function refreshInPlace() {
   const tipo=g('f-tipo'),cli=g('f-cli'),local=g('f-local'),resp=g('f-resp'),
         emp=g('f-emp'),stat=g('f-status'),calib=g('f-calib'),
         de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
+  const ultCalibMes=g('f-ult-calib-mes'), proxCalibMes=g('f-prox-calib-mes');
   let rows = DB.slice();
   if(tipo)  rows=rows.filter(r=>r.tipo===tipo);
   if(cli)   rows=rows.filter(r=>r.cliente===cli);
@@ -3482,6 +3496,8 @@ function refreshInPlace() {
   else if(calib==='vencido'||calib==='necessaria') rows=rows.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0);
   if(de)  rows=rows.filter(r=>r.prox_calib&&r.prox_calib>=de);
   if(ate) rows=rows.filter(r=>r.prox_calib&&r.prox_calib<=ate);
+  if(ultCalibMes)  rows=rows.filter(r=>r.ult_calib&&r.ult_calib.slice(0,7)===ultCalibMes);
+  if(proxCalibMes) rows=rows.filter(r=>r.prox_calib&&r.prox_calib.slice(0,7)===proxCalibMes);
   if(q)   rows=rows.filter(r=>Object.values(r).join(' ').toLowerCase().includes(q));
 
   // Re-apply current sort WITHOUT changing it
@@ -3512,7 +3528,7 @@ function refreshInPlace() {
   updateKPIs();
   buildAllCharts();
 }
-function clearF(){['f-tipo','f-cli','f-local','f-resp','f-emp','f-status','f-calib','f-de','f-ate','f-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});applyF();}
+function clearF(){['f-tipo','f-cli','f-local','f-resp','f-emp','f-status','f-calib','f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});applyF();}
 
 // ═══════════════════════════════════════════════════════
 // ALERTS
@@ -3944,7 +3960,7 @@ function updateAll(){
   // On first load (rows empty) do a full reset; otherwise preserve position
   const isFirstLoad = !pag.eq.rows || pag.eq.rows.length === 0;
   const hasFilter = ['f-tipo','f-cli','f-local','f-resp','f-emp',
-    'f-status','f-calib','f-de','f-ate','f-search']
+    'f-status','f-calib','f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search']
     .some(id => { const el=document.getElementById(id); return el && el.value; });
 
   if(isFirstLoad) {
