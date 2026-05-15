@@ -134,11 +134,11 @@ body {
 .tabs {
   /* now a vertical sidebar */
   position: fixed; left: 0; top: 57px; bottom: 0;
-  width: 200px; z-index: 200;
+  width: 170px; z-index: 200;
   background: var(--surf);
   border-right: 1px solid var(--bdr2);
   display: flex; flex-direction: column;
-  padding: 16px 10px; gap: 4px;
+  padding: 16px 8px; gap: 4px;
   overflow-y: auto; overflow-x: hidden;
   box-shadow: 2px 0 12px rgba(0,0,0,.08);
 }
@@ -176,7 +176,7 @@ body {
 }
 
 /* ── LAYOUT ── */
-.main { max-width: 1900px; margin: 0 auto; padding: 20px 24px; margin-left: 200px }
+.main { width: 100%; padding: 20px 16px; margin-left: 170px; box-sizing: border-box; }
 .page { display: none } .page.on { display: block }
 
 /* ── KPI GRID — enterprise cards with sparkline area ── */
@@ -256,17 +256,17 @@ body {
 .tbl-hdr { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--bdr2) }
 .tbl-title { font-size: 13px; font-weight: 600; color: var(--tx) }
 .tbl-cnt { font-size: 10px; color: var(--tx3); font-family: var(--mono); background: var(--surf2); padding: 2px 9px; border-radius: 20px; border: 1px solid var(--bdr2) }
-.tbl-wrap { overflow-x: auto; overflow-y: auto; max-height: 520px }
+.tbl-wrap { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 220px) }
 
 /* ── TABLE ── */
-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed }
+table { width: 100%; min-width: max-content; border-collapse: collapse; font-size: 11px; table-layout: auto }
 thead { position: sticky; top: 0; z-index: 10 }
 th {
-  padding: 9px 12px; text-align: left;
+  padding: 8px 8px; text-align: left;
   background: var(--surf2); border-bottom: 1px solid var(--bdr2);
   border-right: 1px solid var(--bdr);
-  color: var(--tx3); font-weight: 600; font-size: 10.5px;
-  text-transform: uppercase; letter-spacing: .7px;
+  color: var(--tx3); font-weight: 600; font-size: 9.5px;
+  text-transform: uppercase; letter-spacing: .5px;
   white-space: nowrap; user-select: none; position: relative;
 }
 th .th-inner { display: flex; align-items: center; gap: 4px; cursor: pointer; overflow: hidden }
@@ -275,11 +275,11 @@ th .th-inner:hover { color: var(--tx) }
 th .resizer { position: absolute; right: 0; top: 0; width: 4px; height: 100%; cursor: col-resize; background: transparent; z-index: 1 }
 th .resizer:hover, th .resizer.resizing { background: var(--accent2); opacity: .6 }
 td {
-  padding: 7px 12px; border-bottom: 1px solid var(--bdr);
+  padding: 6px 8px; border-bottom: 1px solid var(--bdr);
   border-right: 1px solid transparent;
   color: var(--tx); vertical-align: middle;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 12px;
+  font-size: 11px;
 }
 tr:hover td { background: var(--surf2) !important; box-shadow: inset 3px 0 0 var(--brand) }
 tr:nth-child(even) td { background: rgba(255,255,255,.012) }
@@ -473,6 +473,8 @@ tr.selected td { background: rgba(0,100,179,.07) !important }
   0%,100% { box-shadow: 0 0 0 3px rgba(0,100,179,.25) }
   50%     { box-shadow: 0 0 0 7px rgba(0,100,179,.07) }
 }
+
+.btn-g:disabled { cursor: not-allowed !important; pointer-events: none }
 
 /* DELETE BUTTON ── */
 .btn-del {
@@ -829,6 +831,10 @@ body.col-resizing * { cursor: col-resize !important }
     <!-- Divider -->
     <div class="hdr-divider"></div>
 
+    <!-- Undo / Redo -->
+    <button class="btn-g" id="btn-undo" onclick="undoAction()" title="Desfazer (Ctrl+Z)" style="opacity:.4;font-size:13px;padding:4px 9px" disabled>↩</button>
+    <button class="btn-g" id="btn-redo" onclick="redoAction()" title="Refazer (Ctrl+Y)" style="opacity:.4;font-size:13px;padding:4px 9px" disabled>↪</button>
+
     <!-- Data actions -->
     <button class="btn-g" onclick="document.getElementById('file-import').click()" title="Import JSON">↓ <span data-i18n="btn_import_lbl">Import</span></button>
     <button class="btn-g" onclick="exportData()" title="Export JSON">↑ <span data-i18n="btn_export_lbl">Export</span></button>
@@ -1158,19 +1164,66 @@ body.col-resizing * { cursor: col-resize !important }
       <div style="margin-top:14px"><div class="chart-title">⏱️ Top 15 Mais Urgentes</div><div id="rep-urgentes" style="overflow:auto;max-height:180px"></div></div>
     </div>
   </div>
-  <!-- Tabela por período -->
+  <!-- Tabela por período — full-featured -->
   <div class="tbl-card" style="margin-bottom:14px">
-    <div class="tbl-hdr">
-      <span class="tbl-title">📋 Relatório por Período</span>
-      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
-        <label style="font-size:10px;color:var(--tx3);font-weight:700">De:</label>
-        <input type="date" id="rep-de" style="font-size:11px;background:var(--surf2);border:1px solid var(--bdr2);color:var(--tx);border-radius:4px;padding:3px 8px" onchange="buildRepTable()">
-        <label style="font-size:10px;color:var(--tx3);font-weight:700">Até:</label>
-        <input type="date" id="rep-ate" style="font-size:11px;background:var(--surf2);border:1px solid var(--bdr2);color:var(--tx);border-radius:4px;padding:3px 8px" onchange="buildRepTable()">
-        <button class="btn-g" onclick="exportRepCSV()">↓ CSV do Período</button>
+    <!-- Reorganized filters: responsive grid so every field is visible -->
+    <div class="filters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 10px;align-items:end">
+      <div class="fg"><label>De</label><input type="date" id="rep-de" onchange="applyRepF()"></div>
+      <div class="fg"><label>Até</label><input type="date" id="rep-ate" onchange="applyRepF()"></div>
+      <div class="fg"><label>Tipo</label><select id="rep-f-tipo" onchange="applyRepF()"><option value="">Todos</option></select></div>
+      <div class="fg"><label>Cliente</label><select id="rep-f-cli" onchange="applyRepF()"><option value="">Todos</option></select></div>
+      <div class="fg"><label>Localização</label><select id="rep-f-local" onchange="applyRepF()"><option value="">Todas</option></select></div>
+      <div class="fg"><label>Responsável</label><select id="rep-f-resp" onchange="applyRepF()"><option value="">Todos</option></select></div>
+      <div class="fg"><label>Empresa</label><select id="rep-f-emp" onchange="applyRepF()"><option value="">Todas</option></select></div>
+      <div class="fg"><label>Status Op.</label><select id="rep-f-status" onchange="applyRepF()"><option value="">Todos</option><option>ATIVO</option><option>INATIVO</option></select></div>
+      <div class="fg"><label>Calibração</label><select id="rep-f-calib" onchange="applyRepF()"><option value="">Todos</option><option value="ok">OK</option><option value="vencido">Vencido</option></select></div>
+      <div class="fg"><label>Últ. Calib. (mês/ano)</label><input type="month" id="rep-f-ult-mes" onchange="applyRepF()"></div>
+      <div class="fg"><label>Próx. Calib. (mês/ano)</label><input type="month" id="rep-f-prox-mes" onchange="applyRepF()"></div>
+      <div class="fg"><label>Buscar</label><input id="rep-f-search" type="text" placeholder="Código, descrição..." oninput="applyRepF()"></div>
+      <div style="display:flex;gap:5px;align-items:end">
+        <button class="btn-g" onclick="applyRepF()" title="Reaplicar filtros">🔄 Aplicar</button>
+        <button class="btn-g" onclick="clearRepF()">✕ Limpar</button>
       </div>
     </div>
-    <div id="rep-table-wrap" style="overflow:auto;max-height:360px"></div>
+    <div class="tbl-hdr">
+      <span class="tbl-title">📋 Relatório por Período</span>
+      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+        <span class="tbl-cnt" id="rep-cnt">—</span>
+        <input class="search-box" placeholder="🔍 Buscar..." oninput="document.getElementById('rep-f-search').value=this.value;applyRepF()">
+        <div class="col-panel"><button class="btn-g" id="btn-cols-rep" onclick="showColMenu('rep',this)">⚙ Colunas</button></div>
+        <button class="btn-g" onclick="exportCSV('rep')">↓ CSV</button>
+        <button class="btn-g" onclick="exportRepCSV()">↓ CSV (legado)</button>
+      </div>
+    </div>
+    <!-- Bulk action bar — rep -->
+    <div class="bulk-bar" id="bulk-bar-rep">
+      <span>✔</span>
+      <span class="bulk-bar-count" id="bulk-count-rep">0</span>
+      <span>selecionado(s)</span>
+      <div class="bulk-field-row">
+        <label style="font-size:10px;color:var(--tx3);font-weight:700;white-space:nowrap">Editar campo:</label>
+        <select id="bulk-field-rep" onchange="onBulkFieldChange('rep')">
+          <option value="">— escolha —</option>
+          <option value="status">Status Operacional</option>
+          <option value="status_calib">Status Calibração</option>
+          <option value="empresa">Empresa Executante</option>
+          <option value="responsavel">Responsável</option>
+          <option value="localizacao">Localização</option>
+          <option value="freq_dias">Frequência (dias)</option>
+          <option value="ult_calib">Última Calibração</option>
+          <option value="cliente">Cliente</option>
+        </select>
+        <div id="bulk-input-wrap-rep"></div>
+      </div>
+      <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="applyBulkEdit('rep')" id="bulk-apply-rep" disabled>✔ Aplicar</button>
+      <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="openPdfModalBulk('rep')">🖨️ Imprimir</button>
+      <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="clearSelection('rep')">✕ Cancelar</button>
+      <button class="btn-del" style="font-size:11px;padding:4px 10px;margin-left:8px" onclick="bulkDelete('rep')">🗑 Excluir selecionados</button>
+    </div>
+    <div class="tbl-wrap" id="rep-wrap" style="max-height:420px;overflow:auto"><table id="rep-tbl"><thead id="rep-thead"></thead><tbody id="rep-tbody"></tbody></table></div>
+    <div class="pag"><span id="rep-pinfo">—</span><div class="pag-btns" id="rep-pbtns"></div></div>
+    <!-- Legacy plain table kept for backwards compatibility (hidden) -->
+    <div id="rep-table-wrap" style="display:none"></div>
   </div>
   <div style="text-align:center;margin-bottom:20px;display:flex;gap:8px;justify-content:center">
     <button class="btn-g" onclick="window.print()">🖨️ Imprimir / PDF</button>
@@ -1937,25 +1990,25 @@ function applyLang() {
 
 const COL_DEFS = {
   geral: [
-    {k:'_chk',        l:'',               def:true, noSort:true, w:36},
-    {k:'_act',        l:'',               def:true, noSort:true, w:44},
-    {k:'id',         l:'Código',         def:true, w:130},
-    {k:'tipo',       l:'Tipo',           def:true, w:160},
-    {k:'cod_lab',    l:'Cód. Labortec',  def:true, w:130},
-    {k:'cliente',    l:'Cliente',        def:true, w:100},
-    {k:'descricao',  l:'Descrição',      def:true, w:220},
-    {k:'fabricante', l:'Fabricante',     def:true, w:110},
-    {k:'localizacao',l:'Localização',    def:true, w:140},
-    {k:'responsavel',l:'Responsável',    def:true, w:140},
-    {k:'empresa',    l:'Empresa',        def:true, w:120},
-    {k:'ult_calib',  l:'Últ. Calib.',    def:true, w:105},
-    {k:'prox_calib', l:'Próx. Calib.',   def:true, w:105},
-    {k:'freq_dias',  l:'Freq.(d)',        def:true, w:80},
-    {k:'status_calib',l:'Calib.',        def:true, w:100},
-    {k:'status',     l:'Status',         def:true, w:80},
-    {k:'dias_vencer',l:'Dias',           def:true, w:90},
-    {k:'observacoes',l:'Observações',    def:true, w:150},
-    {k:'link',       l:'Arquivo',        def:true, w:100},
+    {k:'_chk',        l:'',               def:true, noSort:true, w:30},
+    {k:'_act',        l:'',               def:true, noSort:true, w:34},
+    {k:'id',         l:'Código',         def:true, w:105},
+    {k:'tipo',       l:'Tipo',           def:true, w:120},
+    {k:'cod_lab',    l:'Cód. Lab.',      def:true, w:95},
+    {k:'cliente',    l:'Cliente',        def:true, w:75},
+    {k:'descricao',  l:'Descrição',      def:true, w:190},
+    {k:'fabricante', l:'Fabricante',     def:true, w:90},
+    {k:'localizacao',l:'Localização',    def:true, w:105},
+    {k:'responsavel',l:'Responsável',    def:true, w:120},
+    {k:'empresa',    l:'Empresa',        def:true, w:90},
+    {k:'ult_calib',  l:'Últ. Calib.',    def:true, w:90},
+    {k:'prox_calib', l:'Próx. Calib.',   def:true, w:90},
+    {k:'freq_dias',  l:'Freq.(d)',        def:true, w:65},
+    {k:'status_calib',l:'Calib.',        def:true, w:80},
+    {k:'status',     l:'Status',         def:true, w:70},
+    {k:'dias_vencer',l:'Dias',           def:true, w:65},
+    {k:'observacoes',l:'Obs.',           def:true, w:100},
+    {k:'link',       l:'Arquivo',        def:true, w:75},
   ],
   alert: [
     {k:'_chk',        l:'',               def:true, noSort:true, w:36},
@@ -1970,6 +2023,25 @@ const COL_DEFS = {
     {k:'dias_vencer',l:'Dias',           def:true, w:90},
     {k:'status_calib',l:'Calib.',        def:true, w:100},
     {k:'_act',       l:'',               def:true, noSort:true, w:44},
+  ],
+  rep: [
+    {k:'_chk',        l:'',               def:true, noSort:true, w:30},
+    {k:'_act',        l:'',               def:true, noSort:true, w:80},
+    {k:'id',         l:'Código',         def:true, w:110},
+    {k:'tipo',       l:'Tipo',           def:true, w:130},
+    {k:'cliente',    l:'Cliente',        def:true, w:90},
+    {k:'descricao',  l:'Descrição',      def:true, w:200},
+    {k:'fabricante', l:'Fabricante',     def:true, w:100},
+    {k:'localizacao',l:'Localização',    def:true, w:120},
+    {k:'responsavel',l:'Responsável',    def:true, w:130},
+    {k:'empresa',    l:'Empresa',        def:true, w:100},
+    {k:'ult_calib',  l:'Últ. Calib.',    def:true, w:95},
+    {k:'prox_calib', l:'Próx. Calib.',   def:true, w:95},
+    {k:'freq_dias',  l:'Freq.(d)',        def:true, w:65},
+    {k:'status_calib',l:'Calib.',        def:true, w:90},
+    {k:'status',     l:'Status',         def:true, w:75},
+    {k:'dias_vencer',l:'Dias',           def:true, w:80},
+    {k:'observacoes',l:'Obs.',           def:false, w:120},
   ],
 };
 
@@ -2120,7 +2192,14 @@ let DB = [];
 let alertFilter = 'vencido', alertSearch = '';
 let sortState = {};
 const PER_PAGE = 50;
-let pag = { eq:{p:1,rows:[]}, alert:{p:1,rows:[]} };
+let pag = { eq:{p:1,rows:[]}, alert:{p:1,rows:[]}, rep:{p:1,rows:[]} };
+// Centralized lookup for tbl-keyed state
+function _PAG(tbl){return tbl==='geral'?pag.eq:tbl==='alert'?pag.alert:pag.rep;}
+function _IDS(tbl){
+  if(tbl==='geral') return {tbl:'eq-tbl',thead:'eq-thead',tbody:'eq-tbody',cnt:'eq-cnt',pinfo:'eq-pinfo',pbtns:'eq-pbtns',wrap:'eq-wrap'};
+  if(tbl==='alert') return {tbl:'alert-tbl',thead:'alert-thead',tbody:'alert-tbody',cnt:'alert-cnt',pinfo:'alert-pinfo',pbtns:'alert-pbtns',wrap:'alert-wrap'};
+  return {tbl:'rep-tbl',thead:'rep-thead',tbody:'rep-tbody',cnt:'rep-cnt',pinfo:'rep-pinfo',pbtns:'rep-pbtns',wrap:'rep-wrap'};
+}
 
 // ═══════════════════════════════════════════════════════
 // PERSISTÊNCIA — Salva no próprio arquivo HTML
@@ -3227,6 +3306,7 @@ function commitInlineEdit(silent) {
   const r = DB.find(x => x._uid === uid);
 
   if(r && (String(r[k]||'') !== String(newVal||''))) {
+    pushUndo();
     r[k] = newVal;
 
     // Recalcula campos derivados quando muda data ou frequência
@@ -3297,16 +3377,21 @@ window.applyFiltersNow = function() {
 };
 
 function moveInlineFocus(uid, currentKey, dir) {
-  const editableKeys = Object.keys(INLINE_EDITABLE);
-  const visibleKeys = COL_DEFS.geral
-    .filter(c => c.k !== '_act' && colVis.geral[c.k] && INLINE_EDITABLE[c.k])
+  // Detect which table the row is in (geral / alert / rep)
+  const row = document.querySelector(`tr[data-uid="${uid}"]`);
+  if(!row) return;
+  const tblEl = row.closest('table');
+  let tbl = 'geral';
+  if(tblEl) {
+    if(tblEl.id === 'alert-tbl') tbl = 'alert';
+    else if(tblEl.id === 'rep-tbl') tbl = 'rep';
+  }
+  const visibleKeys = (COL_DEFS[tbl] || COL_DEFS.geral)
+    .filter(c => c.k !== '_act' && c.k !== '_chk' && colVis[tbl]?.[c.k] && INLINE_EDITABLE[c.k])
     .map(c => c.k);
   const idx = visibleKeys.indexOf(currentKey);
   const nextKey = visibleKeys[idx + dir];
   if(!nextKey) return;
-  // Find the td in the rendered table
-  const row = document.querySelector(`tr[data-uid="${uid}"]`);
-  if(!row) return;
   const nextTd = row.querySelector(`[data-col="${nextKey}"]`);
   if(nextTd) startInlineEdit(uid, nextKey, nextTd);
 }
@@ -3315,7 +3400,7 @@ function renderCell(r, k, tbl) {
   const w = colWidths[tbl]?.[k];
   const ws = w ? `style="width:${w}px;min-width:${w}px;max-width:${w}px"` : '';
   const attr = `data-col="${k}" ${ws}`;
-  const editable = tbl === 'geral' && INLINE_EDITABLE[k];
+  const editable = (tbl === 'geral' || tbl === 'alert' || tbl === 'rep') && INLINE_EDITABLE[k];
   const editAttr = editable
     ? `class="editable-cell" onclick="startInlineEdit(${r._uid},'${k}',this)" title="${LANG==='en'?'Click to edit':'Clique para editar'}"`
     : '';
@@ -3358,14 +3443,11 @@ function renderCell(r, k, tbl) {
 }
 
 function renderTable(tbl) {
-  const p = tbl==='geral' ? pag.eq : pag.alert;
+  const p = _PAG(tbl);
   const cols = COL_DEFS[tbl].filter(c=>colVis[tbl][c.k]);
-  const tblId   = tbl==='geral' ? 'eq-tbl'   : 'alert-tbl';
-  const theadId = tbl==='geral' ? 'eq-thead'  : 'alert-thead';
-  const tbodyId = tbl==='geral' ? 'eq-tbody'  : 'alert-tbody';
-  const cntId   = tbl==='geral' ? 'eq-cnt'    : 'alert-cnt';
-  const pInfoId = tbl==='geral' ? 'eq-pinfo'  : 'alert-pinfo';
-  const pBtnsId = tbl==='geral' ? 'eq-pbtns'  : 'alert-pbtns';
+  const ids = _IDS(tbl);
+  const tblId = ids.tbl, theadId = ids.thead, tbodyId = ids.tbody;
+  const cntId = ids.cnt, pInfoId = ids.pinfo, pBtnsId = ids.pbtns;
   const thead = document.getElementById(theadId);
   const tbody = document.getElementById(tbodyId);
   if(!thead||!tbody) return;
@@ -3406,7 +3488,7 @@ function renderTable(tbl) {
 }
 
 function sortTable(tbl, k) {
-  const p = tbl==='geral'?pag.eq:pag.alert;
+  const p = _PAG(tbl);
   const cur = sortState[tbl];
   const dir = cur&&cur.k===k&&cur.d==='asc'?'desc':'asc';
   sortState[tbl]={k,d:dir};
@@ -3525,6 +3607,10 @@ function refreshInPlace() {
 
   // Also refresh alerts tab without resetting its page
   renderAlerts();
+  // Refresh rep table if it's been built
+  if(typeof buildRepTable === 'function' && document.getElementById('rep-tbl')) {
+    buildRepTable();
+  }
   updateKPIs();
   buildAllCharts();
 }
@@ -3556,7 +3642,7 @@ function renderAlerts() {
 // CSV EXPORT
 // ═══════════════════════════════════════════════════════
 function exportCSV(tbl) {
-  const p = tbl==='geral'?pag.eq:pag.alert;
+  const p = _PAG(tbl);
   const cols = COL_DEFS[tbl].filter(c=>c.k!=='_act'&&colVis[tbl]?.[c.k]);
   const lines=[cols.map(c=>c.l).join(';')];
   p.rows.forEach(r=>lines.push(cols.map(c=>'"'+String(r[c.k]??'').replace(/"/g,'""')+'"').join(';')));
@@ -3673,36 +3759,61 @@ function buildUrgentes() {
 }
 
 let _repRows=[];
-function buildRepTable() {
-  const wrap=document.getElementById('rep-table-wrap'); if(!wrap)return;
+function _populateRepFilters(){
+  const fill=(id,vals)=>{const s=document.getElementById(id);if(!s)return;const cur=s.value;s.innerHTML='<option value="">Todos</option>'+[...new Set(vals.filter(v=>v))].sort().map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');s.value=cur;};
+  fill('rep-f-tipo',  DB.map(r=>r.tipo));
+  fill('rep-f-cli',   DB.map(r=>r.cliente));
+  fill('rep-f-local', DB.map(r=>r.localizacao));
+  fill('rep-f-resp',  DB.map(r=>r.responsavel));
+  fill('rep-f-emp',   DB.map(r=>r.empresa));
+}
+function _repFilterRows(){
   const today=new Date();today.setHours(0,0,0,0);
   const deI=document.getElementById('rep-de'),ateI=document.getElementById('rep-ate');
-  if(!deI||!ateI)return;
-  if(!deI.value) deI.value=today.toISOString().slice(0,10);
-  if(!ateI.value){const a=new Date(today);a.setDate(a.getDate()+90);ateI.value=a.toISOString().slice(0,10);}
-  const de=new Date(deI.value+'T00:00:00'),ate=new Date(ateI.value+'T00:00:00');
-  _repRows=DB.filter(r=>{if(!r.prox_calib)return false;const d=new Date(r.prox_calib+'T00:00:00');return d>=de&&d<=ate;}).sort((a,b)=>new Date(a.prox_calib)-new Date(b.prox_calib));
-  if(!_repRows.length){wrap.innerHTML='<div style="padding:16px;text-align:center;color:var(--tx3);font-size:13px">Nenhum equipamento no período.</div>';return;}
-  let html=`<div style="font-size:10px;color:var(--tx3);padding:6px 10px">${_repRows.length} equipamentos no período</div>`;
-  html+='<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr>';
-  ['Código','Tipo','Cliente','Descrição','Localização','Responsável','Empresa','Próx. Calib.','Dias'].forEach(h=>
-    html+=`<th style="padding:5px 10px;text-align:left;background:var(--surf2);border-bottom:2px solid var(--bdr2);color:var(--tx2);white-space:nowrap;font-size:9px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;position:sticky;top:0">${h}</th>`);
-  html+='</tr></thead><tbody>';
-  _repRows.forEach((r,i)=>{
-    const d=r.dias_vencer,c=d===null?'':d<0?'var(--red)':d<=30?'var(--orange)':d<=90?'var(--accent)':'var(--green)';
-    const lb=d===null?'—':d<0?`⛔ ${Math.abs(d)}d`:d===0?'🔴 Hoje':`${d}d`;
-    html+=`<tr style="${i%2?'background:var(--surf2)':''}border-bottom:1px solid var(--bdr)">
-      <td style="padding:5px 10px;font-family:var(--mono);font-size:10px;color:var(--accent2)">${esc(r.id||'—')}</td>
-      <td style="padding:5px 10px;color:var(--tx2)">${esc(r.tipo||'—')}</td>
-      <td style="padding:5px 10px;color:var(--tx2)">${esc(r.cliente||'—')}</td>
-      <td style="padding:5px 10px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.descricao||'')}">${esc((r.descricao||'—').slice(0,30))}</td>
-      <td style="padding:5px 10px;color:var(--tx2)">${esc(r.localizacao||'—')}</td>
-      <td style="padding:5px 10px;color:var(--tx2)">${esc(r.responsavel||'—')}</td>
-      <td style="padding:5px 10px;color:var(--tx2)">${esc(r.empresa||'—')}</td>
-      <td style="padding:5px 10px;font-family:var(--mono);font-size:10px">${r.prox_calib||'—'}</td>
-      <td style="padding:5px 10px;font-family:var(--mono);font-weight:800;color:${c}">${lb}</td></tr>`;
+  if(deI&&!deI.value) deI.value=today.toISOString().slice(0,10);
+  if(ateI&&!ateI.value){const a=new Date(today);a.setDate(a.getDate()+90);ateI.value=a.toISOString().slice(0,10);}
+  const de=deI&&deI.value?new Date(deI.value+'T00:00:00'):null;
+  const ate=ateI&&ateI.value?new Date(ateI.value+'T00:00:00'):null;
+  const g=id=>(document.getElementById(id)||{}).value||'';
+  const tipo=g('rep-f-tipo'),cli=g('rep-f-cli'),local=g('rep-f-local'),resp=g('rep-f-resp'),
+        emp=g('rep-f-emp'),stat=g('rep-f-status'),calib=g('rep-f-calib'),
+        ultM=g('rep-f-ult-mes'),proxM=g('rep-f-prox-mes'),q=g('rep-f-search').toLowerCase();
+  let rows=DB.filter(r=>{
+    if(!r.prox_calib) return false;
+    const d=new Date(r.prox_calib+'T00:00:00');
+    if(de&&d<de) return false;
+    if(ate&&d>ate) return false;
+    return true;
   });
-  wrap.innerHTML=html+'</tbody></table>';
+  if(tipo)  rows=rows.filter(r=>r.tipo===tipo);
+  if(cli)   rows=rows.filter(r=>r.cliente===cli);
+  if(local) rows=rows.filter(r=>r.localizacao===local);
+  if(resp)  rows=rows.filter(r=>r.responsavel===resp);
+  if(emp)   rows=rows.filter(r=>r.empresa===emp);
+  if(stat)  rows=rows.filter(r=>(r.status||'').toUpperCase()===stat.toUpperCase());
+  if(calib==='ok')      rows=rows.filter(r=>r.dias_vencer===null||r.dias_vencer>=0);
+  if(calib==='vencido') rows=rows.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0);
+  if(ultM)  rows=rows.filter(r=>r.ult_calib&&r.ult_calib.slice(0,7)===ultM);
+  if(proxM) rows=rows.filter(r=>r.prox_calib&&r.prox_calib.slice(0,7)===proxM);
+  if(q)     rows=rows.filter(r=>Object.values(r).join(' ').toLowerCase().includes(q));
+  rows.sort((a,b)=>new Date(a.prox_calib)-new Date(b.prox_calib));
+  return rows;
+}
+function buildRepTable() {
+  if(!document.getElementById('rep-tbl')) return;
+  _populateRepFilters();
+  const rows = _repFilterRows();
+  _repRows = rows;
+  pag.rep.rows = rows;
+  pag.rep.p = 1;
+  renderTable('rep');
+}
+function applyRepF(){ buildRepTable(); }
+function clearRepF(){
+  ['rep-f-tipo','rep-f-cli','rep-f-local','rep-f-resp','rep-f-emp','rep-f-status','rep-f-calib','rep-f-ult-mes','rep-f-prox-mes','rep-f-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const de=document.getElementById('rep-de'),ate=document.getElementById('rep-ate');
+  if(de) de.value=''; if(ate) ate.value='';
+  buildRepTable();
 }
 
 function exportRepCSV() {
@@ -3779,9 +3890,10 @@ function saveRecord(){
   };
   if(editUID!==null){
     const idx=DB.findIndex(x=>x._uid===editUID);
-    if(idx>=0){ DB[idx]={...DB[idx],...upd}; recalcRecord(DB[idx]); }
+    if(idx>=0){ pushUndo(); DB[idx]={...DB[idx],...upd}; recalcRecord(DB[idx]); }
     showToast(t('t_updated'));
   } else {
+    pushUndo();
     const newRec={...upd,_uid:Date.now(),sheet:'geral'};
     recalcRecord(newRec);
     DB.push(newRec);
@@ -3805,6 +3917,7 @@ function deleteRecord(){
     ? `Delete "${name}"?\nThis action cannot be undone.`
     : `Excluir "${name}"?\nEsta ação não pode ser desfeita.`;
   if(!confirm(msg)) return;
+  pushUndo();
   DB = DB.filter(x => x._uid !== editUID);
   closeModal();
   refreshInPlace();
@@ -3817,6 +3930,7 @@ function deleteInline(uid){
   if(!r) return;
   const name = r.id || r.descricao || 'registro';
   if(!confirm(LANG==='en' ? `Delete "${name}"?` : `Excluir "${name}"?`)) return;
+  pushUndo();
   DB = DB.filter(x => x._uid !== uid);
   refreshInPlace();
   fbSchedulePush();
@@ -3832,6 +3946,7 @@ function deleteRecord_real(){
     ? `Delete "${name}"?\nThis action cannot be undone.`
     : `Excluir "${name}"?\nEsta ação não pode ser desfeita.`;
   if(!confirm(msg)) return;
+  pushUndo();
   DB = DB.filter(x => x._uid !== editUID);
   closeModal();
   refreshInPlace();
@@ -3942,6 +4057,75 @@ function resetDB(){
   fbSchedulePush();
   showToast('✅ Dados resetados ('+DB.length+' registros). Sincronizando…');
 }
+
+// ═══════════════════════════════════════════════════════
+// UNDO / REDO SYSTEM
+// ═══════════════════════════════════════════════════════
+let _undoStack = [];
+let _redoStack = [];
+const MAX_UNDO = 50;
+
+function pushUndo() {
+  // Snapshot current DB (without dias_vencer — will be recalculated)
+  _undoStack.push(JSON.stringify(DB.map(r => { const {dias_vencer,...rest}=r; return rest; })));
+  if (_undoStack.length > MAX_UNDO) _undoStack.shift();
+  _redoStack = []; // clear redo on any new action
+  updateUndoRedoBtns();
+}
+
+function undoAction() {
+  if (!_undoStack.length) { showToast('Nada para desfazer','err'); return; }
+  _redoStack.push(JSON.stringify(DB.map(r => { const {dias_vencer,...rest}=r; return rest; })));
+  DB = recalcDias(JSON.parse(_undoStack.pop()));
+  saveLS();
+  fbSchedulePush();
+  updateAll();
+  filterAlerts('vencido');
+  showToast('↩ Desfeito');
+  updateUndoRedoBtns();
+}
+
+function redoAction() {
+  if (!_redoStack.length) { showToast('Nada para refazer','err'); return; }
+  _undoStack.push(JSON.stringify(DB.map(r => { const {dias_vencer,...rest}=r; return rest; })));
+  DB = recalcDias(JSON.parse(_redoStack.pop()));
+  saveLS();
+  fbSchedulePush();
+  updateAll();
+  filterAlerts('vencido');
+  showToast('↪ Refeito');
+  updateUndoRedoBtns();
+}
+
+function updateUndoRedoBtns() {
+  const undoBtn = document.getElementById('btn-undo');
+  const redoBtn = document.getElementById('btn-redo');
+  if (undoBtn) {
+    undoBtn.disabled = _undoStack.length === 0;
+    undoBtn.style.opacity = _undoStack.length === 0 ? '0.4' : '1';
+    undoBtn.title = _undoStack.length
+      ? `Desfazer — ${_undoStack.length} ação(ões) (Ctrl+Z)`
+      : 'Desfazer (Ctrl+Z)';
+  }
+  if (redoBtn) {
+    redoBtn.disabled = _redoStack.length === 0;
+    redoBtn.style.opacity = _redoStack.length === 0 ? '0.4' : '1';
+    redoBtn.title = _redoStack.length
+      ? `Refazer — ${_redoStack.length} ação(ões) (Ctrl+Y)`
+      : 'Refazer (Ctrl+Y)';
+  }
+}
+
+// Keyboard shortcuts: Ctrl+Z = undo, Ctrl+Y or Ctrl+Shift+Z = redo
+document.addEventListener('keydown', e => {
+  // Skip if user is typing inside an input/textarea/select
+  const tag = (e.target.tagName||'').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+  if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+    if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undoAction(); return; }
+    if ((e.key === 'y') || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); redoAction(); return; }
+  }
+});
 
 // ═══════════════════════════════════════════════════════
 // BOOT
@@ -4480,7 +4664,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 })();
-const _selectedUIDs = { geral: new Set(), alert: new Set() };
+const _selectedUIDs = { geral: new Set(), alert: new Set(), rep: new Set() };
 
 const BULK_FIELDS = {
   status:       { type:'select', options:['ATIVO','INATIVO'] },
@@ -4504,7 +4688,7 @@ function onRowCheck(chk, tbl) {
 }
 
 function onSelectAll(chk, tbl) {
-  const p = tbl==='geral' ? pag.eq : pag.alert;
+  const p = _PAG(tbl);
   // Apply to ALL filtered rows (not just current page)
   if(chk.checked) p.rows.forEach(r => _selectedUIDs[tbl].add(r._uid));
   else            p.rows.forEach(r => _selectedUIDs[tbl].delete(r._uid));
@@ -5032,7 +5216,7 @@ let _viewIdx  = 0;
 function openEquipView(uid) {
   // Build nav list from current active table rows
   const tbl = document.getElementById('tab-equipamentos')?.classList.contains('on') ? 'geral' : 'alert';
-  const p   = tbl === 'geral' ? pag.eq : pag.alert;
+  const p   = _PAG(tbl);
   _viewList = p.rows.map(r => r._uid);
   _viewIdx  = _viewList.indexOf(uid);
   if(_viewIdx < 0) { _viewList = [uid]; _viewIdx = 0; }
