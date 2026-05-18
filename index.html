@@ -5,130 +5,33 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Röchling Automotive — Controle de Equipamentos de Medição (v5)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- qrcodejs — biblioteca QR robusta e testada (mesma API: new QRCode(el, opts)) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-// ═══════════════════════════════════════════════════════
-// QR Code — geração 100% local, sem internet, via canvas
-// Implementação mínima de QR versão 1-10, modo byte, ECC M
-// ═══════════════════════════════════════════════════════
+// Wrapper: garante compatibilidade com o .toDataURL() usado no restante do código
 (function(){
-"use strict";
-// --- Galois field tables for ECC ---
-var GF_EXP=[],GF_LOG=[];
-(function(){var x=1;for(var i=0;i<256;i++){GF_EXP[i]=x;GF_LOG[x]=i;x<<=1;if(x&256)x^=285;}for(var i=256;i<512;i++)GF_EXP[i]=GF_EXP[i-255];}());
-function gfMul(a,b){if(!a||!b)return 0;return GF_EXP[(GF_LOG[a]+GF_LOG[b])%255];}
-function gfPoly(degree){var p=[1];for(var i=0;i<degree;i++){var q=[1,GF_EXP[i]];var r=new Array(p.length+q.length-1).fill(0);for(var j=0;j<p.length;j++)for(var k=0;k<q.length;k++)r[j+k]^=gfMul(p[j],q[k]);p=r;}return p;}
-function eccBytes(data,nsym){var gen=gfPoly(nsym);var msg=data.slice();for(var i=0;i<nsym;i++)msg.push(0);for(var i=0;i<data.length;i++){var c=msg[i];if(c)for(var j=0;j<gen.length;j++)msg[i+j]^=gfMul(gen[j],c);}return msg.slice(data.length);}
-// --- QR capacity & ECC parameters (ver 1-10, ECC M) ---
-var QR_PARAMS=[null,
-  {cap:16, ecc:10, g1b:1, g1c:16, g2b:0, g2c:0},
-  {cap:28, ecc:16, g1b:1, g1c:28, g2b:0, g2c:0},
-  {cap:44, ecc:26, g1b:1, g1c:44, g2b:0, g2c:0},
-  {cap:64, ecc:18, g1b:2, g1c:32, g2b:0, g2c:0},
-  {cap:86, ecc:24, g1b:2, g1c:43, g2b:0, g2c:0},
-  {cap:108,ecc:16, g1b:4, g1c:27, g2b:0, g2c:0},
-  {cap:124,ecc:18, g1b:4, g1c:31, g2b:0, g2c:0},
-  {cap:154,ecc:22, g1b:2, g1c:38, g2b:2, g2c:39},
-  {cap:182,ecc:22, g1b:3, g1c:36, g2b:2, g2c:37},
-  {cap:216,ecc:26, g1b:4, g1c:43, g2b:1, g2c:44}
-];
-var ALIGN_POS=[null,[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50]];
-// --- Encode data to bits ---
-function encodeData(text, ver){
-  var bytes=[];for(var i=0;i<text.length;i++){var c=text.charCodeAt(i);if(c>127){bytes.push(0xEF,0xBB,0xBF);break;}bytes.push(c&0xFF);}
-  bytes=[];for(var i=0;i<text.length;i++){var cp=text.codePointAt(i);if(cp>0x7FF){bytes.push(0xE0|(cp>>12),0x80|((cp>>6)&0x3F),0x80|(cp&0x3F));}else if(cp>0x7F){bytes.push(0xC0|(cp>>6),0x80|(cp&0x3F));}else{bytes.push(cp);}}
-  var p=QR_PARAMS[ver],cap=p.cap;
-  var bits=[];
-  function addBits(val,len){for(var i=len-1;i>=0;i--)bits.push((val>>i)&1);}
-  addBits(4,4);addBits(bytes.length,8);
-  for(var i=0;i<bytes.length;i++)addBits(bytes[i],8);
-  addBits(0,4);
-  while(bits.length%8)bits.push(0);
-  var pads=[0xEC,0x11],pi=0;
-  while(bits.length<cap*8){var pb=pads[pi%2];pi++;for(var i=7;i>=0;i--)bits.push((pb>>i)&1);}
-  var dataBytes=[];for(var i=0;i<cap;i++){var b=0;for(var j=0;j<8;j++)b=(b<<1)|bits[i*8+j];dataBytes.push(b);}
-  return dataBytes;
-}
-// --- Interleave blocks ---
-function interleave(data, p){
-  var blocks=[],idx=0;
-  for(var i=0;i<p.g1b;i++){blocks.push(data.slice(idx,idx+p.g1c));idx+=p.g1c;}
-  for(var i=0;i<p.g2b;i++){blocks.push(data.slice(idx,idx+p.g2c));idx+=p.g2c;}
-  var ecc=blocks.map(function(b){return eccBytes(b,p.ecc);});
-  var out=[];
-  var maxLen=Math.max.apply(null,blocks.map(function(b){return b.length;}));
-  for(var i=0;i<maxLen;i++)for(var j=0;j<blocks.length;j++)if(i<blocks[j].length)out.push(blocks[j][i]);
-  for(var i=0;i<p.ecc;i++)for(var j=0;j<ecc.length;j++)out.push(ecc[j][i]);
-  return out;
-}
-// --- Matrix operations ---
-function makeMatrix(size){var m=[];for(var i=0;i<size;i++){m.push(new Uint8Array(size));}return m;}
-function setFinder(m,r,c){for(var i=0;i<7;i++)for(var j=0;j<7;j++){var v=(i===0||i===6||j===0||j===6||( i>=2&&i<=4&&j>=2&&j<=4))?1:0;if(r+i<m.length&&c+j<m.length)m[r+i][c+j]=v|128;}
-  // separator
-  for(var i=-1;i<=7;i++){if(r+i>=0&&r+i<m.length&&c-1>=0)m[r+i][c-1]=128;if(r+i>=0&&r+i<m.length&&c+7<m.length)m[r+i][c+7]=128;if(c+i>=0&&c+i<m.length&&r-1>=0)m[r-1][c+i]=128;if(c+i>=0&&c+i<m.length&&r+7<m.length)m[r+7][c+i]=128;}}
-function setAlign(m,r,c){for(var i=-2;i<=2;i++)for(var j=-2;j<=2;j++){var v=(Math.abs(i)===2||Math.abs(j)===2||( i===0&&j===0))?1:0;m[r+i][c+j]=v|128;}}
-function setTiming(m,size){for(var i=8;i<size-8;i++){m[6][i]=(i%2===0?1:0)|128;m[i][6]=(i%2===0?1:0)|128;}}
-function setDark(m,size){m[size-8][8]=1|128;}
-function reserveFormat(m,size){var fp=[[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8],[size-7,8],[size-6,8],[size-5,8],[size-4,8],[size-3,8],[size-2,8],[size-1,8],[8,size-8],[8,size-7],[8,size-6],[8,size-5],[8,size-4],[8,size-3],[8,size-2],[8,size-1]];fp.forEach(function(p){m[p[0]][p[1]]=128;});}
-// Format info for ECC M, masks 0-7
-var FORMAT_INFO=[0x5742,0x5355,0x5068,0x577F,0x4F1A,0x480D,0x4D30,0x4A27];
-function writeFormat(m,size,mask){var fi=FORMAT_INFO[mask];var bits=[];for(var i=14;i>=0;i--)bits.push((fi>>i)&1);var pos=[[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]];for(var i=0;i<15;i++){m[pos[i][0]][pos[i][1]]=(bits[i])|128;}var pos2=[[size-1,8],[size-2,8],[size-3,8],[size-4,8],[size-5,8],[size-6,8],[size-7,8],[8,size-8],[8,size-7],[8,size-6],[8,size-5],[8,size-4],[8,size-3],[8,size-2],[8,size-1]];for(var i=0;i<15;i++){m[pos2[i][0]][pos2[i][1]]=(bits[i])|128;}}
-function placeBits(m,size,data){var bitArr=[];for(var i=0;i<data.length;i++)for(var j=7;j>=0;j--)bitArr.push((data[i]>>j)&1);var idx=0,up=true;for(var col=size-1;col>=1;col-=2){if(col===6)col--;for(var i=0;i<size;i++){var r=up?(size-1-i):i;[col,col-1].forEach(function(c){if(!(m[r][c]&128)&&idx<bitArr.length){m[r][c]=bitArr[idx++];}});}}
-// Remainder bits (ver>=2 need some, ver1 = 0)
-}
-var MASK_FNS=[
-  function(r,c){return (r+c)%2===0;},
-  function(r,c){return r%2===0;},
-  function(r,c){return c%3===0;},
-  function(r,c){return (r+c)%3===0;},
-  function(r,c){return (Math.floor(r/2)+Math.floor(c/3))%2===0;},
-  function(r,c){return (r*c)%2+(r*c)%3===0;},
-  function(r,c){return ((r*c)%2+(r*c)%3)%2===0;},
-  function(r,c){return ((r+c)%2+(r*c)%3)%2===0;}
-];
-function applyMask(m,size,maskIdx){var fn=MASK_FNS[maskIdx];var out=makeMatrix(size);for(var r=0;r<size;r++)for(var c=0;c<size;c++){if(m[r][c]&128)out[r][c]=m[r][c]&1;else out[r][c]=fn(r,c)?m[r][c]^1:m[r][c];}return out;}
-function penalty(m,size){var p=0;
-  // P1
-  for(var r=0;r<size;r++){var run=1;for(var c=1;c<size;c++){if(m[r][c]===(m[r][c-1]&1)){run++;}else{if(run>=5)p+=run-2;run=1;}}if(run>=5)p+=run-2;}
-  for(var c=0;c<size;c++){var run=1;for(var r=1;r<size;r++){if((m[r][c]&1)===(m[r-1][c]&1)){run++;}else{if(run>=5)p+=run-2;run=1;}}if(run>=5)p+=run-2;}
-  return p;}
-function bestMask(m,size){var best=999999,bm=0;for(var i=0;i<8;i++){var t=applyMask(m,size,i);var pen=penalty(t,size);if(pen<best){best=pen;bm=i;}}return bm;}
-// --- Public API ---
-function QRCode(el, opts){
-  if(typeof opts==='string')opts={text:opts};
-  var text=opts.text||'';
-  var size=opts.width||220;
-  // Find version
-  var ver=1;
-  var utf8len=0;
-  for(var i=0;i<text.length;i++){var cp=text.codePointAt(i);utf8len+=cp>0x7FF?3:cp>0x7F?2:1;}
-  for(var v=1;v<=10;v++){if(QR_PARAMS[v]&&QR_PARAMS[v].cap>=utf8len+2){ver=v;break;}}
-  if(utf8len+2>QR_PARAMS[10].cap)text=text.slice(0,80); // truncate if too long
-  var p=QR_PARAMS[ver],msize=ver*4+17;
-  var m=makeMatrix(msize);
-  setFinder(m,0,0);setFinder(m,msize-7,0);setFinder(m,0,msize-7);
-  setTiming(m,msize);setDark(m,msize);reserveFormat(m,msize);
-  var ap=ALIGN_POS[ver];
-  for(var i=0;i<ap.length;i++)for(var j=0;j<ap.length;j++){var r=ap[i],c=ap[j];if(!(m[r][c]&128))setAlign(m,r,c);}
-  var data=encodeData(text,ver);
-  var final=interleave(data,p);
-  placeBits(m,msize,final);
-  var mask=bestMask(m,msize);
-  var fm=applyMask(m,msize,mask);
-  writeFormat(fm,msize,mask);
-  // Draw to canvas
-  var canvas=document.createElement('canvas');
-  var scale=Math.floor(size/msize);var quiet=scale*4;
-  canvas.width=canvas.height=msize*scale+quiet*2;
-  var ctx=canvas.getContext('2d');
-  ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle='#000';
-  for(var r=0;r<msize;r++)for(var c=0;c<msize;c++){if(fm[r][c]&1)ctx.fillRect(quiet+c*scale,quiet+r*scale,scale,scale);}
-  el.innerHTML='';el.appendChild(canvas);
-  this._canvas=canvas;
-  this.toDataURL=function(type){return canvas.toDataURL(type||'image/png');};
-}
-QRCode.CorrectLevel={L:1,M:0,Q:3,H:2};
-window.QRCode=QRCode;
+  var _OrigQR = window.QRCode;
+  window.QRCode = function(el, opts) {
+    if (typeof opts === 'string') opts = { text: opts };
+    // qrcodejs usa width/height como px do elemento; garante fundo branco
+    var w = opts.width  || 220;
+    var h = opts.height || opts.width || 220;
+    var instance = new _OrigQR(el, {
+      text:           opts.text || '',
+      width:          w,
+      height:         h,
+      colorDark:      opts.colorDark  || '#000000',
+      colorLight:     opts.colorLight || '#ffffff',
+      correctLevel:   _OrigQR.CorrectLevel.M   // ECC M — bom equilíbrio densidade/robustez
+    });
+    // Expõe .toDataURL() — qrcodejs cria um <canvas> dentro do el
+    this.toDataURL = function(type) {
+      var canvas = el.querySelector('canvas');
+      return canvas ? canvas.toDataURL(type || 'image/png') : '';
+    };
+    this._instance = instance;
+  };
+  window.QRCode.CorrectLevel = _OrigQR.CorrectLevel;
 })();
 </script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
