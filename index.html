@@ -5,6 +5,132 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Röchling Automotive — Controle de Equipamentos de Medição (v5)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════
+// QR Code — geração 100% local, sem internet, via canvas
+// Implementação mínima de QR versão 1-10, modo byte, ECC M
+// ═══════════════════════════════════════════════════════
+(function(){
+"use strict";
+// --- Galois field tables for ECC ---
+var GF_EXP=[],GF_LOG=[];
+(function(){var x=1;for(var i=0;i<256;i++){GF_EXP[i]=x;GF_LOG[x]=i;x<<=1;if(x&256)x^=285;}for(var i=256;i<512;i++)GF_EXP[i]=GF_EXP[i-255];}());
+function gfMul(a,b){if(!a||!b)return 0;return GF_EXP[(GF_LOG[a]+GF_LOG[b])%255];}
+function gfPoly(degree){var p=[1];for(var i=0;i<degree;i++){var q=[1,GF_EXP[i]];var r=new Array(p.length+q.length-1).fill(0);for(var j=0;j<p.length;j++)for(var k=0;k<q.length;k++)r[j+k]^=gfMul(p[j],q[k]);p=r;}return p;}
+function eccBytes(data,nsym){var gen=gfPoly(nsym);var msg=data.slice();for(var i=0;i<nsym;i++)msg.push(0);for(var i=0;i<data.length;i++){var c=msg[i];if(c)for(var j=0;j<gen.length;j++)msg[i+j]^=gfMul(gen[j],c);}return msg.slice(data.length);}
+// --- QR capacity & ECC parameters (ver 1-10, ECC M) ---
+var QR_PARAMS=[null,
+  {cap:16, ecc:10, g1b:1, g1c:16, g2b:0, g2c:0},
+  {cap:28, ecc:16, g1b:1, g1c:28, g2b:0, g2c:0},
+  {cap:44, ecc:26, g1b:1, g1c:44, g2b:0, g2c:0},
+  {cap:64, ecc:18, g1b:2, g1c:32, g2b:0, g2c:0},
+  {cap:86, ecc:24, g1b:2, g1c:43, g2b:0, g2c:0},
+  {cap:108,ecc:16, g1b:4, g1c:27, g2b:0, g2c:0},
+  {cap:124,ecc:18, g1b:4, g1c:31, g2b:0, g2c:0},
+  {cap:154,ecc:22, g1b:2, g1c:38, g2b:2, g2c:39},
+  {cap:182,ecc:22, g1b:3, g1c:36, g2b:2, g2c:37},
+  {cap:216,ecc:26, g1b:4, g1c:43, g2b:1, g2c:44}
+];
+var ALIGN_POS=[null,[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50]];
+// --- Encode data to bits ---
+function encodeData(text, ver){
+  var bytes=[];for(var i=0;i<text.length;i++){var c=text.charCodeAt(i);if(c>127){bytes.push(0xEF,0xBB,0xBF);break;}bytes.push(c&0xFF);}
+  bytes=[];for(var i=0;i<text.length;i++){var cp=text.codePointAt(i);if(cp>0x7FF){bytes.push(0xE0|(cp>>12),0x80|((cp>>6)&0x3F),0x80|(cp&0x3F));}else if(cp>0x7F){bytes.push(0xC0|(cp>>6),0x80|(cp&0x3F));}else{bytes.push(cp);}}
+  var p=QR_PARAMS[ver],cap=p.cap;
+  var bits=[];
+  function addBits(val,len){for(var i=len-1;i>=0;i--)bits.push((val>>i)&1);}
+  addBits(4,4);addBits(bytes.length,8);
+  for(var i=0;i<bytes.length;i++)addBits(bytes[i],8);
+  addBits(0,4);
+  while(bits.length%8)bits.push(0);
+  var pads=[0xEC,0x11],pi=0;
+  while(bits.length<cap*8){var pb=pads[pi%2];pi++;for(var i=7;i>=0;i--)bits.push((pb>>i)&1);}
+  var dataBytes=[];for(var i=0;i<cap;i++){var b=0;for(var j=0;j<8;j++)b=(b<<1)|bits[i*8+j];dataBytes.push(b);}
+  return dataBytes;
+}
+// --- Interleave blocks ---
+function interleave(data, p){
+  var blocks=[],idx=0;
+  for(var i=0;i<p.g1b;i++){blocks.push(data.slice(idx,idx+p.g1c));idx+=p.g1c;}
+  for(var i=0;i<p.g2b;i++){blocks.push(data.slice(idx,idx+p.g2c));idx+=p.g2c;}
+  var ecc=blocks.map(function(b){return eccBytes(b,p.ecc);});
+  var out=[];
+  var maxLen=Math.max.apply(null,blocks.map(function(b){return b.length;}));
+  for(var i=0;i<maxLen;i++)for(var j=0;j<blocks.length;j++)if(i<blocks[j].length)out.push(blocks[j][i]);
+  for(var i=0;i<p.ecc;i++)for(var j=0;j<ecc.length;j++)out.push(ecc[j][i]);
+  return out;
+}
+// --- Matrix operations ---
+function makeMatrix(size){var m=[];for(var i=0;i<size;i++){m.push(new Uint8Array(size));}return m;}
+function setFinder(m,r,c){for(var i=0;i<7;i++)for(var j=0;j<7;j++){var v=(i===0||i===6||j===0||j===6||( i>=2&&i<=4&&j>=2&&j<=4))?1:0;if(r+i<m.length&&c+j<m.length)m[r+i][c+j]=v|128;}
+  // separator
+  for(var i=-1;i<=7;i++){if(r+i>=0&&r+i<m.length&&c-1>=0)m[r+i][c-1]=128;if(r+i>=0&&r+i<m.length&&c+7<m.length)m[r+i][c+7]=128;if(c+i>=0&&c+i<m.length&&r-1>=0)m[r-1][c+i]=128;if(c+i>=0&&c+i<m.length&&r+7<m.length)m[r+7][c+i]=128;}}
+function setAlign(m,r,c){for(var i=-2;i<=2;i++)for(var j=-2;j<=2;j++){var v=(Math.abs(i)===2||Math.abs(j)===2||( i===0&&j===0))?1:0;m[r+i][c+j]=v|128;}}
+function setTiming(m,size){for(var i=8;i<size-8;i++){m[6][i]=(i%2===0?1:0)|128;m[i][6]=(i%2===0?1:0)|128;}}
+function setDark(m,size){m[size-8][8]=1|128;}
+function reserveFormat(m,size){var fp=[[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8],[size-7,8],[size-6,8],[size-5,8],[size-4,8],[size-3,8],[size-2,8],[size-1,8],[8,size-8],[8,size-7],[8,size-6],[8,size-5],[8,size-4],[8,size-3],[8,size-2],[8,size-1]];fp.forEach(function(p){m[p[0]][p[1]]=128;});}
+// Format info for ECC M, masks 0-7
+var FORMAT_INFO=[0x5742,0x5355,0x5068,0x577F,0x4F1A,0x480D,0x4D30,0x4A27];
+function writeFormat(m,size,mask){var fi=FORMAT_INFO[mask];var bits=[];for(var i=14;i>=0;i--)bits.push((fi>>i)&1);var pos=[[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]];for(var i=0;i<15;i++){m[pos[i][0]][pos[i][1]]=(bits[i])|128;}var pos2=[[size-1,8],[size-2,8],[size-3,8],[size-4,8],[size-5,8],[size-6,8],[size-7,8],[8,size-8],[8,size-7],[8,size-6],[8,size-5],[8,size-4],[8,size-3],[8,size-2],[8,size-1]];for(var i=0;i<15;i++){m[pos2[i][0]][pos2[i][1]]=(bits[i])|128;}}
+function placeBits(m,size,data){var bitArr=[];for(var i=0;i<data.length;i++)for(var j=7;j>=0;j--)bitArr.push((data[i]>>j)&1);var idx=0,up=true;for(var col=size-1;col>=1;col-=2){if(col===6)col--;for(var i=0;i<size;i++){var r=up?(size-1-i):i;[col,col-1].forEach(function(c){if(!(m[r][c]&128)&&idx<bitArr.length){m[r][c]=bitArr[idx++];}});}}
+// Remainder bits (ver>=2 need some, ver1 = 0)
+}
+var MASK_FNS=[
+  function(r,c){return (r+c)%2===0;},
+  function(r,c){return r%2===0;},
+  function(r,c){return c%3===0;},
+  function(r,c){return (r+c)%3===0;},
+  function(r,c){return (Math.floor(r/2)+Math.floor(c/3))%2===0;},
+  function(r,c){return (r*c)%2+(r*c)%3===0;},
+  function(r,c){return ((r*c)%2+(r*c)%3)%2===0;},
+  function(r,c){return ((r+c)%2+(r*c)%3)%2===0;}
+];
+function applyMask(m,size,maskIdx){var fn=MASK_FNS[maskIdx];var out=makeMatrix(size);for(var r=0;r<size;r++)for(var c=0;c<size;c++){if(m[r][c]&128)out[r][c]=m[r][c]&1;else out[r][c]=fn(r,c)?m[r][c]^1:m[r][c];}return out;}
+function penalty(m,size){var p=0;
+  // P1
+  for(var r=0;r<size;r++){var run=1;for(var c=1;c<size;c++){if(m[r][c]===(m[r][c-1]&1)){run++;}else{if(run>=5)p+=run-2;run=1;}}if(run>=5)p+=run-2;}
+  for(var c=0;c<size;c++){var run=1;for(var r=1;r<size;r++){if((m[r][c]&1)===(m[r-1][c]&1)){run++;}else{if(run>=5)p+=run-2;run=1;}}if(run>=5)p+=run-2;}
+  return p;}
+function bestMask(m,size){var best=999999,bm=0;for(var i=0;i<8;i++){var t=applyMask(m,size,i);var pen=penalty(t,size);if(pen<best){best=pen;bm=i;}}return bm;}
+// --- Public API ---
+function QRCode(el, opts){
+  if(typeof opts==='string')opts={text:opts};
+  var text=opts.text||'';
+  var size=opts.width||220;
+  // Find version
+  var ver=1;
+  var utf8len=0;
+  for(var i=0;i<text.length;i++){var cp=text.codePointAt(i);utf8len+=cp>0x7FF?3:cp>0x7F?2:1;}
+  for(var v=1;v<=10;v++){if(QR_PARAMS[v]&&QR_PARAMS[v].cap>=utf8len+2){ver=v;break;}}
+  if(utf8len+2>QR_PARAMS[10].cap)text=text.slice(0,80); // truncate if too long
+  var p=QR_PARAMS[ver],msize=ver*4+17;
+  var m=makeMatrix(msize);
+  setFinder(m,0,0);setFinder(m,msize-7,0);setFinder(m,0,msize-7);
+  setTiming(m,msize);setDark(m,msize);reserveFormat(m,msize);
+  var ap=ALIGN_POS[ver];
+  for(var i=0;i<ap.length;i++)for(var j=0;j<ap.length;j++){var r=ap[i],c=ap[j];if(!(m[r][c]&128))setAlign(m,r,c);}
+  var data=encodeData(text,ver);
+  var final=interleave(data,p);
+  placeBits(m,msize,final);
+  var mask=bestMask(m,msize);
+  var fm=applyMask(m,msize,mask);
+  writeFormat(fm,msize,mask);
+  // Draw to canvas
+  var canvas=document.createElement('canvas');
+  var scale=Math.floor(size/msize);var quiet=scale*4;
+  canvas.width=canvas.height=msize*scale+quiet*2;
+  var ctx=canvas.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#000';
+  for(var r=0;r<msize;r++)for(var c=0;c<msize;c++){if(fm[r][c]&1)ctx.fillRect(quiet+c*scale,quiet+r*scale,scale,scale);}
+  el.innerHTML='';el.appendChild(canvas);
+  this._canvas=canvas;
+  this.toDataURL=function(type){return canvas.toDataURL(type||'image/png');};
+}
+QRCode.CorrectLevel={L:1,M:0,Q:3,H:2};
+window.QRCode=QRCode;
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
@@ -65,6 +191,118 @@
   --sh:    0 2px 16px rgba(15,17,32,.06);
   --ring:  0 0 0 2px rgba(0,100,179,.3);
 }
+
+/* ── EQUIPMENT CARD LIST ── */
+.eq-card {
+  background: var(--surf);
+  border: 1px solid var(--bdr2);
+  border-radius: var(--r2);
+  padding: 14px 16px 12px;
+  cursor: pointer;
+  transition: var(--tr);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.eq-card:hover {
+  border-color: var(--brand);
+  box-shadow: 0 4px 20px rgba(0,100,179,.15);
+  transform: translateY(-1px);
+}
+.eq-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: 10px 0 0 10px;
+}
+.eq-card.card-ok::before    { background: var(--green); }
+.eq-card.card-warn::before  { background: var(--orange); }
+.eq-card.card-err::before   { background: var(--red); }
+.eq-card.card-gray::before  { background: var(--tx3); }
+
+.eq-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.eq-card-id {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--brand);
+  letter-spacing: .5px;
+  background: rgba(0,100,179,.08);
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.eq-card-tipo {
+  font-size: 10px;
+  color: var(--tx3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+.eq-card-desc {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx);
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.eq-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.eq-card-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--tx2);
+}
+.eq-card-meta-icon { color: var(--tx3); }
+.eq-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--bdr);
+}
+.eq-card-calib {
+  font-size: 10px;
+  color: var(--tx3);
+  font-family: var(--mono);
+}
+.eq-card-days {
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--mono);
+}
+.eq-card-click-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,100,179,.07);
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity .15s;
+  pointer-events: none;
+}
+.eq-card:hover .eq-card-click-hint { opacity: 0; }
 
 * { box-sizing: border-box; margin: 0; padding: 0 }
 body {
@@ -1075,67 +1313,91 @@ body.col-resizing * { cursor: col-resize !important }
 
 <!-- ═══════════════ EQUIPAMENTOS ═══════════════ -->
 <div id="tab-equipamentos" class="page">
-  <div class="tbl-card">
-    <div class="filters">
-      <div class="fg"><label>Tipo</label><select id="f-tipo" onchange="applyF()"><option value="">Todos</option></select></div>
-      <div class="fg"><label>Cliente</label><select id="f-cli" onchange="applyF()"><option value="">Todos</option></select></div>
-      <div class="fg"><label>Localização</label><select id="f-local" onchange="applyF()"><option value="">Todas</option></select></div>
-      <div class="fg"><label>Responsável</label><select id="f-resp" onchange="applyF()"><option value="">Todos</option></select></div>
-      <div class="fg"><label>Empresa</label><select id="f-emp" onchange="applyF()"><option value="">Todas</option></select></div>
-      <div class="fg"><label>Status Op.</label><select id="f-status" onchange="applyF()"><option value="">Todos</option><option>ATIVO</option><option>INATIVO</option></select></div>
-      <div class="fg"><label>Calibração</label><select id="f-calib" onchange="applyF()"><option value="">Todos</option><option value="ok">OK</option><option value="vencido">Vencido</option><option value="necessaria">Necessária</option></select></div>
-      <div class="fg"><label>De</label><input type="date" id="f-de" onchange="applyF()"></div>
-      <div class="fg"><label>Até</label><input type="date" id="f-ate" onchange="applyF()"></div>
-      <div class="fg" style="min-width:150px">
-        <label>Últ. Calib. (mês/ano)</label>
-        <input type="month" id="f-ult-calib-mes" onchange="applyF()" style="width:100%">
+
+  <!-- ── CARD LIST VIEW (padrão) ── -->
+  <div id="eq-list-view">
+    <div class="tbl-card" style="margin-bottom:12px">
+      <div class="filters">
+        <div class="fg"><label>Tipo</label><select id="f-tipo" onchange="applyF()"><option value="">Todos</option></select></div>
+        <div class="fg"><label>Cliente</label><select id="f-cli" onchange="applyF()"><option value="">Todos</option></select></div>
+        <div class="fg"><label>Localização</label><select id="f-local" onchange="applyF()"><option value="">Todas</option></select></div>
+        <div class="fg"><label>Responsável</label><select id="f-resp" onchange="applyF()"><option value="">Todos</option></select></div>
+        <div class="fg"><label>Empresa</label><select id="f-emp" onchange="applyF()"><option value="">Todas</option></select></div>
+        <div class="fg"><label>Status Op.</label><select id="f-status" onchange="applyF()"><option value="">Todos</option><option>ATIVO</option><option>INATIVO</option></select></div>
+        <div class="fg"><label>Calibração</label><select id="f-calib" onchange="applyF()"><option value="">Todos</option><option value="ok">OK</option><option value="vencido">Vencido</option><option value="necessaria">Necessária</option></select></div>
+        <div class="fg"><label>De</label><input type="date" id="f-de" onchange="applyF()"></div>
+        <div class="fg"><label>Até</label><input type="date" id="f-ate" onchange="applyF()"></div>
+        <div class="fg" style="min-width:150px">
+          <label>Últ. Calib. (mês/ano)</label>
+          <input type="month" id="f-ult-calib-mes" onchange="applyF()" style="width:100%">
+        </div>
+        <div class="fg" style="min-width:150px">
+          <label>Próx. Calib. (mês/ano)</label>
+          <input type="month" id="f-prox-calib-mes" onchange="applyF()" style="width:100%">
+        </div>
+        <div class="fg" style="min-width:170px"><label>Buscar</label><input id="f-search" type="text" placeholder="Código, descrição..." oninput="applyF()"></div>
+        <div style="align-self:flex-end;display:flex;gap:5px">
+          <button id="btn-apply-filters" class="btn-g" onclick="applyFiltersNow()" title="Reaplicar filtros e atualizar gráficos">🔄 Aplicar</button>
+          <button class="btn-g" onclick="clearF()">✕ Limpar</button>
+        </div>
       </div>
-      <div class="fg" style="min-width:150px">
-        <label>Próx. Calib. (mês/ano)</label>
-        <input type="month" id="f-prox-calib-mes" onchange="applyF()" style="width:100%">
-      </div>
-      <div class="fg" style="min-width:170px"><label>Buscar</label><input id="f-search" type="text" placeholder="Código, descrição..." oninput="applyF()"></div>
-      <div style="align-self:flex-end;display:flex;gap:5px">
-        <button id="btn-apply-filters" class="btn-g" onclick="applyFiltersNow()" title="Reaplicar filtros e atualizar gráficos">🔄 Aplicar</button>
-        <button class="btn-g" onclick="clearF()">✕ Limpar</button>
+      <div class="tbl-hdr" style="border-bottom:none;padding-bottom:0">
+        <span class="tbl-title">Equipamentos de Medição</span>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+          <span class="tbl-cnt" id="eq-cnt">—</span>
+          <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
+          <button class="btn-g" onclick="toggleEqView()" id="btn-toggle-eq-view" title="Alternar para visão de tabela">⊞ Tabela</button>
+        </div>
       </div>
     </div>
-    <div class="tbl-hdr">
-      <span class="tbl-title">Equipamentos de Medição</span>
-      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
-        <span class="tbl-cnt" id="eq-cnt">—</span>
-        <div class="col-panel"><button class="btn-g" id="btn-cols-eq" onclick="showColMenu('geral',this)">⚙ <span data-i18n="btn_cols_lbl">Colunas</span></button></div>
-        <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
-      </div>
-    </div>
-    <!-- Bulk action bar — geral -->
-  <div class="bulk-bar" id="bulk-bar-geral">
-    <span>✔</span>
-    <span class="bulk-bar-count" id="bulk-count-geral">0</span>
-    <span>selecionado(s)</span>
-    <div class="bulk-field-row">
-      <label style="font-size:10px;color:var(--tx3);font-weight:700;white-space:nowrap">Editar campo:</label>
-      <select id="bulk-field-geral" onchange="onBulkFieldChange('geral')">
-        <option value="">— escolha —</option>
-        <option value="status">Status Operacional</option>
-        <option value="status_calib">Status Calibração</option>
-        <option value="empresa">Empresa Executante</option>
-        <option value="responsavel">Responsável</option>
-        <option value="localizacao">Localização</option>
-        <option value="freq_dias">Frequência (dias)</option>
-        <option value="ult_calib">Última Calibração</option>
-        <option value="cliente">Cliente</option>
-      </select>
-      <div id="bulk-input-wrap-geral"></div>
-    </div>
-    <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="applyBulkEdit('geral')" id="bulk-apply-geral" disabled>✔ Aplicar</button>
-    <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="openPdfModalBulk('geral')">🖨️ Imprimir</button>
-    <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="clearSelection('geral')">✕ Cancelar</button>
-    <button class="btn-del" style="font-size:11px;padding:4px 10px;margin-left:8px" onclick="bulkDelete('geral')">🗑 Excluir selecionados</button>
+
+    <!-- CARD GRID -->
+    <div id="eq-card-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:10px;margin-bottom:16px"></div>
+    <div class="pag" id="eq-card-pag-wrap"><span id="eq-card-pinfo">—</span><div class="pag-btns" id="eq-card-pbtns"></div></div>
   </div>
-  <div class="tbl-wrap" id="eq-wrap"><table id="eq-tbl"><thead id="eq-thead"></thead><tbody id="eq-tbody"></tbody></table></div>
-    <div class="pag"><span id="eq-pinfo">—</span><div class="pag-btns" id="eq-pbtns"></div></div>
+
+  <!-- ── TABLE VIEW (alternativo) ── -->
+  <div id="eq-table-view" style="display:none">
+    <div class="tbl-card">
+      <div class="tbl-hdr">
+        <span class="tbl-title">Equipamentos de Medição</span>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+          <span class="tbl-cnt" id="eq-cnt-tbl">—</span>
+          <div class="col-panel"><button class="btn-g" id="btn-cols-eq" onclick="showColMenu('geral',this)">⚙ <span data-i18n="btn_cols_lbl">Colunas</span></button></div>
+          <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
+          <button class="btn-g" onclick="toggleEqView()" title="Voltar para lista de cards">☰ Lista</button>
+        </div>
+      </div>
+      <!-- Bulk action bar — geral -->
+      <div class="bulk-bar" id="bulk-bar-geral">
+        <span>✔</span>
+        <span class="bulk-bar-count" id="bulk-count-geral">0</span>
+        <span>selecionado(s)</span>
+        <div class="bulk-field-row">
+          <label style="font-size:10px;color:var(--tx3);font-weight:700;white-space:nowrap">Editar campo:</label>
+          <select id="bulk-field-geral" onchange="onBulkFieldChange('geral')">
+            <option value="">— escolha —</option>
+            <option value="status">Status Operacional</option>
+            <option value="status_calib">Status Calibração</option>
+            <option value="empresa">Empresa Executante</option>
+            <option value="responsavel">Responsável</option>
+            <option value="localizacao">Localização</option>
+            <option value="freq_dias">Frequência (dias)</option>
+            <option value="ult_calib">Última Calibração</option>
+            <option value="cliente">Cliente</option>
+          </select>
+          <div id="bulk-input-wrap-geral"></div>
+        </div>
+        <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="applyBulkEdit('geral')" id="bulk-apply-geral" disabled>✔ Aplicar</button>
+        <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="openPdfModalBulk('geral')">🖨️ Imprimir</button>
+        <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="clearSelection('geral')">✕ Cancelar</button>
+        <button class="btn-del" style="font-size:11px;padding:4px 10px;margin-left:8px" onclick="bulkDelete('geral')">🗑 Excluir selecionados</button>
+      </div>
+      <div class="tbl-wrap" id="eq-wrap"><table id="eq-tbl"><thead id="eq-thead"></thead><tbody id="eq-tbody"></tbody></table></div>
+      <div class="pag"><span id="eq-pinfo">—</span><div class="pag-btns" id="eq-pbtns"></div></div>
+    </div>
   </div>
+
 </div>
 
 <!-- ═══════════════ RELATÓRIOS ═══════════════ -->
@@ -2011,24 +2273,24 @@ function applyLang() {
 const COL_DEFS = {
   geral: [
     {k:'_chk',        l:'',               def:true, noSort:true, w:30},
-    {k:'_act',        l:'',               def:true, noSort:true, w:34},
-    {k:'id',         l:'Código',         def:true, w:105},
-    {k:'tipo',       l:'Tipo',           def:true, w:120},
-    {k:'cod_lab',    l:'Cód. Lab.',      def:true, w:95},
-    {k:'cliente',    l:'Cliente',        def:true, w:75},
-    {k:'descricao',  l:'Descrição',      def:true, w:190},
-    {k:'fabricante', l:'Fabricante',     def:true, w:90},
-    {k:'localizacao',l:'Localização',    def:true, w:105},
-    {k:'responsavel',l:'Responsável',    def:true, w:120},
-    {k:'empresa',    l:'Empresa',        def:true, w:90},
-    {k:'ult_calib',  l:'Últ. Calib.',    def:true, w:90},
-    {k:'prox_calib', l:'Próx. Calib.',   def:true, w:90},
-    {k:'freq_dias',  l:'Freq.(d)',        def:true, w:65},
-    {k:'status_calib',l:'Calib.',        def:true, w:80},
-    {k:'status',     l:'Status',         def:true, w:70},
-    {k:'dias_vencer',l:'Dias',           def:true, w:65},
-    {k:'observacoes',l:'Obs.',           def:true, w:100},
-    {k:'link',       l:'Arquivo',        def:true, w:75},
+    {k:'_act',        l:'Ações',          def:true, noSort:true, w:115},
+    {k:'id',          l:'Código',         def:true, w:105},
+    {k:'tipo',        l:'Tipo',           def:true, w:120},
+    {k:'cod_lab',     l:'Cód. Labortec',  def:true, w:95},
+    {k:'cliente',     l:'Cliente',        def:true, w:75},
+    {k:'descricao',   l:'Descrição',      def:true, w:190},
+    {k:'fabricante',  l:'Fabricante',     def:true, w:90},
+    {k:'localizacao', l:'Localização',    def:true, w:105},
+    {k:'responsavel', l:'Responsável',    def:true, w:120},
+    {k:'empresa',     l:'Empresa',        def:true, w:90},
+    {k:'ult_calib',   l:'Últ. Calib.',    def:true, w:90},
+    {k:'prox_calib',  l:'Próx. Calib.',   def:true, w:90},
+    {k:'freq_dias',   l:'Freq.(d)',        def:true, w:65},
+    {k:'status_calib',l:'Calib.',         def:true, w:80},
+    {k:'status',      l:'Status',         def:true, w:70},
+    {k:'dias_vencer', l:'Dias',           def:true, w:65},
+    {k:'observacoes', l:'Obs.',           def:true, w:100},
+    {k:'link',        l:'Arquivo',        def:true, w:75},
   ],
   alert: [
     {k:'_chk',        l:'',               def:true, noSort:true, w:36},
@@ -3490,9 +3752,10 @@ function renderCell(r, k, tbl) {
   }
 
   if(k==='_act') return `<td ${attr} style="white-space:nowrap">
-    <button class="btn-g" style="padding:1px 6px;font-size:11px;border:none;background:transparent;color:var(--brand)" onclick="openEquipView(${r._uid})" title="Visualizar">👁</button>
-    <button class="btn-g" style="padding:1px 6px;font-size:11px;border:none;background:transparent;color:var(--tx3)" onclick="openEdit(${r._uid})" title="${LANG==='en'?'Edit':'Editar'}">✏</button>
-    <button class="btn-g" style="padding:1px 6px;font-size:11px;border:none;background:transparent;color:var(--red);opacity:.5" onclick="deleteInline(${r._uid})" title="${LANG==='en'?'Delete':'Excluir'}">🗑</button>
+    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--brand)" onclick="openEquipView(${r._uid})" title="Visualizar">👁</button>
+    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--tx3)" onclick="openEdit(${r._uid})" title="${LANG==='en'?'Edit':'Editar'}">✏</button>
+    <button onclick="openQrModal(${r._uid})" title="QR Code / Etiqueta" style="padding:2px 6px;font-size:10px;font-weight:700;border:1px solid var(--brand);background:rgba(0,100,179,.12);color:var(--brand);border-radius:4px;cursor:pointer;font-family:var(--font);line-height:1.4">▦ QR</button>
+    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--red);opacity:.5" onclick="deleteInline(${r._uid})" title="${LANG==='en'?'Delete':'Excluir'}">🗑</button>
   </td>`;
   if(k==='dias_vencer')  return `<td ${attr}>${diasBadge(r.dias_vencer)}</td>`;
 
@@ -3519,7 +3782,8 @@ function renderCell(r, k, tbl) {
 
 function renderTable(tbl) {
   const p = _PAG(tbl);
-  const cols = COL_DEFS[tbl].filter(c=>colVis[tbl][c.k]);
+  // _act and _chk are always visible — never filtered by colVis
+  const cols = COL_DEFS[tbl].filter(c => c.k==='_act' || c.k==='_chk' || colVis[tbl][c.k]);
   const ids = _IDS(tbl);
   const tblId = ids.tbl, theadId = ids.thead, tbodyId = ids.tbody;
   const cntId = ids.cnt, pInfoId = ids.pinfo, pBtnsId = ids.pbtns;
@@ -3544,7 +3808,9 @@ function renderTable(tbl) {
       const allSel = p.rows.length > 0 && p.rows.every(r => _selectedUIDs[tbl]?.has(r._uid));
       return `<th class="chk-col"><input type="checkbox" class="row-chk" id="chk-all-${tbl}" title="Selecionar todos" ${allSel?'checked':''} onchange="onSelectAll(this,'${tbl}')"></th>`;
     }
-    if(c.noSort) return `<th data-col="${c.k}" style="width:${w}px;min-width:${w}px;max-width:${w}px"><div class="th-inner"></div></th>`;
+    if(c.noSort) {
+      return `<th data-col="${c.k}" style="width:${w}px;min-width:${w}px;max-width:${w}px"><div class="th-inner" style="font-size:10px;color:var(--tx3);font-weight:600;letter-spacing:.3px">${c.l||''}</div></th>`;
+    }
     const arr = s&&s.k===c.k ? (s.d==='asc'?' ↑':' ↓') : '';
     return `<th data-col="${c.k}" style="width:${w}px;min-width:${w}px;max-width:${w}px">
       <div class="th-inner" onclick="sortTable('${tbl}','${c.k}')"><span>${c.l}${arr}</span></div>
@@ -4241,6 +4507,192 @@ document.addEventListener('keydown', e => {
 });
 
 // ═══════════════════════════════════════════════════════
+// CARD LIST VIEW — Aba Equipamentos
+// ═══════════════════════════════════════════════════════
+let _eqViewMode = localStorage.getItem('rochling_eq_view') || 'cards'; // 'cards' | 'table'
+const CARDS_PER_PAGE = 24;
+let _cardPage = 1;
+
+function toggleEqView() {
+  _eqViewMode = _eqViewMode === 'cards' ? 'table' : 'cards';
+  localStorage.setItem('rochling_eq_view', _eqViewMode);
+  _applyEqView();
+}
+
+function _applyEqView() {
+  const listView  = document.getElementById('eq-list-view');
+  const tableView = document.getElementById('eq-table-view');
+  if (!listView || !tableView) return;
+  if (_eqViewMode === 'cards') {
+    listView.style.display  = 'block';
+    tableView.style.display = 'none';
+    renderCardList();
+  } else {
+    listView.style.display  = 'none';
+    tableView.style.display = 'block';
+    renderTable('geral');
+    // sync counter
+    const cntTbl = document.getElementById('eq-cnt-tbl');
+    const cntMain = document.getElementById('eq-cnt');
+    if (cntTbl && cntMain) cntTbl.textContent = cntMain.textContent;
+  }
+}
+
+function _cardStatusClass(r) {
+  const dv = r.dias_vencer;
+  const sc = (r.status_calib || '').toLowerCase();
+  if (sc.includes('descartado') || sc.includes('discarded') || sc.includes('encontrado')) return 'card-gray';
+  if (dv === null || dv === undefined) return 'card-gray';
+  if (dv < 0) return 'card-err';
+  if (dv <= 30) return 'card-warn';
+  return 'card-ok';
+}
+
+function _cardDaysLabel(r) {
+  const dv = r.dias_vencer;
+  if (dv === null || dv === undefined) return '<span style="color:var(--tx3)">Sem data</span>';
+  if (dv < 0) return `<span style="color:var(--red)">⚠ Vencido há ${Math.abs(dv)}d</span>`;
+  if (dv === 0) return `<span style="color:var(--red)">🔴 Hoje!</span>`;
+  if (dv <= 30) return `<span style="color:var(--orange)">⏰ ${dv}d restantes</span>`;
+  if (dv <= 90) return `<span style="color:var(--accent)">📅 ${dv}d restantes</span>`;
+  return `<span style="color:var(--green)">✓ ${dv}d restantes</span>`;
+}
+
+function _cardStatusBadge(r) {
+  const u = (r.status || '').toUpperCase();
+  if (u === 'ATIVO' || u === 'ACTIVE')
+    return `<span class="badge b-teal" style="font-size:9px">${t('s_active')}</span>`;
+  return `<span class="badge b-gray" style="font-size:9px">${t('s_inactive')}</span>`;
+}
+
+function renderCardList() {
+  const grid   = document.getElementById('eq-card-grid');
+  const pInfo  = document.getElementById('eq-card-pinfo');
+  const pBtns  = document.getElementById('eq-card-pbtns');
+  if (!grid) return;
+
+  const rows = pag.eq.rows;
+  const total = rows.length;
+  const pages = Math.max(1, Math.ceil(total / CARDS_PER_PAGE));
+  if (_cardPage > pages) _cardPage = pages;
+  const slice = rows.slice((_cardPage - 1) * CARDS_PER_PAGE, _cardPage * CARDS_PER_PAGE);
+
+  // counter
+  const cntEl = document.getElementById('eq-cnt');
+  if (cntEl) cntEl.textContent = total + ' ' + t('kpi_sub_total');
+
+  if (!slice.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:48px 20px;color:var(--tx3)">
+      <div style="font-size:36px;margin-bottom:8px;opacity:.4">📭</div>
+      <div style="font-size:14px;font-weight:600;color:var(--tx2);margin-bottom:4px">Nenhum equipamento encontrado</div>
+      <button class="btn-g" style="margin-top:12px;font-size:11px" onclick="clearF()">✕ Limpar filtros</button>
+    </div>`;
+    if (pInfo) pInfo.textContent = '—';
+    if (pBtns) pBtns.innerHTML = '';
+    return;
+  }
+
+  grid.innerHTML = slice.map(r => {
+    const sc     = _cardStatusClass(r);
+    const desc   = esc(r.descricao || r.id || '—');
+    const id     = esc(r.id || '—');
+    const tipo   = esc(r.tipo || '—');
+    const local  = esc(r.localizacao || '—');
+    const resp   = esc(r.responsavel || '—');
+    const emp    = esc(r.empresa || '—');
+    const fab    = esc(r.fabricante || '');
+    const prox   = r.prox_calib ? fmtDate(r.prox_calib) : '—';
+    const ult    = r.ult_calib  ? fmtDate(r.ult_calib)  : '—';
+    const daysLbl = _cardDaysLabel(r);
+    const stBadge = _cardStatusBadge(r);
+    const hasFile = r.link && r.link_data && r.link_data.startsWith('data:');
+
+    return `<div class="eq-card ${sc}" onclick="openEdit(${r._uid})" title="Clique para editar ${id}">
+      <div class="eq-card-top">
+        <span class="eq-card-id">${id}</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          ${stBadge}
+          ${hasFile ? `<span title="Possui arquivo" style="font-size:11px">📎</span>` : ''}
+          <button onclick="event.stopPropagation();openQrModal(${r._uid})" title="Gerar QR Code / Etiqueta" style="background:var(--surf3);border:1px solid var(--bdr2);border-radius:4px;padding:1px 5px;font-size:11px;cursor:pointer;color:var(--tx2);line-height:1.5;transition:all .12s" onmouseenter="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseleave="this.style.borderColor='var(--bdr2)';this.style.color='var(--tx2)'">▦ QR</button>
+        </div>
+      </div>
+      <div class="eq-card-desc" title="${desc}">${desc}</div>
+      <div class="eq-card-meta">
+        <div class="eq-card-meta-item"><span class="eq-card-meta-icon">🔧</span>${tipo}</div>
+        <div class="eq-card-meta-item"><span class="eq-card-meta-icon">📍</span>${local}</div>
+        ${resp ? `<div class="eq-card-meta-item"><span class="eq-card-meta-icon">👤</span>${resp}</div>` : ''}
+        ${emp  ? `<div class="eq-card-meta-item"><span class="eq-card-meta-icon">🏢</span>${emp}</div>` : ''}
+        ${fab  ? `<div class="eq-card-meta-item"><span class="eq-card-meta-icon">🏭</span>${fab}</div>` : ''}
+      </div>
+      <div class="eq-card-footer">
+        <div class="eq-card-calib">
+          <div>Últ: ${ult}</div>
+          <div>Próx: ${prox}</div>
+        </div>
+        <div class="eq-card-days">${daysLbl}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // paginação cards
+  if (pInfo) {
+    const s = (_cardPage - 1) * CARDS_PER_PAGE + 1;
+    const e = Math.min(_cardPage * CARDS_PER_PAGE, total);
+    pInfo.textContent = total ? `${s}–${e} de ${total}` : '—';
+  }
+  if (pBtns) {
+    let nums = [];
+    if (pages <= 7) { for (let i=1; i<=pages; i++) nums.push(i); }
+    else {
+      nums = [1];
+      if (_cardPage > 3) nums.push('…');
+      for (let i=Math.max(2,_cardPage-1); i<=Math.min(pages-1,_cardPage+1); i++) nums.push(i);
+      if (_cardPage < pages-2) nums.push('…');
+      nums.push(pages);
+    }
+    pBtns.innerHTML = nums.map(n => typeof n==='number'
+      ? `<button class="pag-btn ${n===_cardPage?'on':''}" data-n="${n}">${n}</button>`
+      : `<span style="color:var(--tx3);padding:0 3px">${n}</span>`
+    ).join('');
+    pBtns.querySelectorAll('.pag-btn').forEach(b => b.addEventListener('click', () => {
+      _cardPage = parseInt(b.dataset.n);
+      renderCardList();
+      document.getElementById('eq-card-grid')?.scrollIntoView({behavior:'smooth', block:'start'});
+    }));
+  }
+}
+
+// Sobrescreve applyF para também atualizar os cards
+(function() {
+  const _origApplyF = window.applyF;
+  if (typeof _origApplyF === 'function') {
+    window.applyF = function() {
+      _cardPage = 1;
+      const r = _origApplyF.apply(this, arguments);
+      if (_eqViewMode === 'cards') renderCardList();
+      return r;
+    };
+  }
+})();
+
+// Atualiza cards quando os dados mudam
+(function() {
+  const _origRefreshInPlace = window.refreshInPlace;
+  if (typeof _origRefreshInPlace === 'function') {
+    window.refreshInPlace = function() {
+      const r = _origRefreshInPlace.apply(this, arguments);
+      if (_eqViewMode === 'cards') renderCardList();
+      return r;
+    };
+  }
+})();
+
+// Inicializa view mode ao carregar
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => { _applyEqView(); }, 200);
+});
+
+// ═══════════════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════════════
 function updateAll(){
@@ -4272,6 +4724,10 @@ function updateAll(){
   renderAlerts();
   const luAll=document.getElementById('last-upd');
   if(luAll) luAll.textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
+  // Atualiza view de cards se estiver ativa
+  if(typeof _eqViewMode !== 'undefined' && _eqViewMode === 'cards') {
+    setTimeout(renderCardList, 0);
+  }
 }
 
 
@@ -5601,12 +6057,282 @@ window.openPdfModalBulk = function(tbl) {
   openPdfModal();
 };
 
-// Keyboard nav for view modal
+// ═══════════════════════════════════════════════════════
+// QR CODE — Modal e Impressão de Etiquetas
+// ═══════════════════════════════════════════════════════
+
+function _buildQrPayload(r) {
+  const fmt = v => v ? new Date(v+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  const d = r.dias_vencer;
+  const status = d === null ? 'Sem data' : d < 0 ? `VENCIDO ha ${Math.abs(d)}d` : d <= 30 ? `Vence em ${d}d` : `OK (+${d}d)`;
+  // Formato legível por qualquer scanner — exibe como cartão de informações
+  return [
+    `=== ROCHLING AUTOMOTIVE ===`,
+    `EQUIPAMENTO DE MEDICAO`,
+    ``,
+    `Codigo:    ${r.id || '—'}`,
+    `Descricao: ${(r.descricao || r.tipo || '—').slice(0,40)}`,
+    `Tipo:      ${r.tipo || '—'}`,
+    `Fabricante:${r.fabricante || '—'}`,
+    ``,
+    `Localizacao: ${r.localizacao || '—'}`,
+    `Responsavel: ${r.responsavel || '—'}`,
+    `Empresa:     ${r.empresa || '—'}`,
+    ``,
+    `Ult.Calibracao: ${fmt(r.ult_calib)}`,
+    `Prx.Calibracao: ${fmt(r.prox_calib)}`,
+    `Frequencia:     ${r.freq_dias ? r.freq_dias+'d' : '—'}`,
+    ``,
+    `STATUS: ${status}`,
+    `===========================`,
+  ].join('\n');
+}
+
+let _qrUID = null;
+let _qrInstance = null;
+
+function openQrModal(uid) {
+  _qrUID = uid;
+  const r = DB.find(x => x._uid === uid);
+  if (!r) { alert('Instrumento não encontrado (uid='+uid+')'); return; }
+
+  // Remove stale modal if present then re-inject fresh
+  const old = document.getElementById('qr-modal-ov');
+  if (old) old.remove();
+  document.body.insertAdjacentHTML('beforeend', _qrModalHTML());
+
+  // Fill info
+  document.getElementById('qr-modal-title').textContent = r.id || r.descricao || '—';
+  document.getElementById('qr-modal-sub').textContent = r.descricao || r.tipo || '';
+
+  // Generate QR
+  const qrBox = document.getElementById('qr-canvas-box');
+  qrBox.innerHTML = '';
+  _qrInstance = null;
+  const payload = _buildQrPayload(r);
+  try {
+    _qrInstance = new QRCode(qrBox, {
+      text: payload,
+      width: 220, height: 220,
+      colorDark: '#000000', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } catch(e) {
+    qrBox.innerHTML = '<div style="padding:20px;color:red;font-size:11px">Erro ao gerar QR: '+e.message+'</div>';
+  }
+
+  // Force show — use both class and inline style to guarantee visibility
+  const ov = document.getElementById('qr-modal-ov');
+  ov.classList.add('on');
+  ov.style.opacity = '1';
+  ov.style.pointerEvents = 'all';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeQrModal() {
+  const ov = document.getElementById('qr-modal-ov');
+  if (!ov) return;
+  ov.classList.remove('on');
+  ov.style.opacity = '0';
+  ov.style.pointerEvents = 'none';
+  document.body.style.overflow = '';
+}
+
+function _qrModalHTML() {
+  return `
+<div id="qr-modal-ov" style="position:fixed;inset:0;z-index:800;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .18s" onclick="if(event.target===this)closeQrModal()">
+<style>
+#qr-modal-ov.on{opacity:1;pointer-events:all}
+#qr-modal{background:var(--surf);border:1px solid var(--bdr2);border-radius:14px;width:460px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.5);padding:24px}
+.qr-size-btn{padding:6px 13px;border-radius:6px;border:1px solid var(--bdr2);background:var(--surf2);color:var(--tx2);font-size:11px;font-weight:700;cursor:pointer;transition:all .12s;font-family:var(--font)}
+.qr-size-btn:hover,.qr-size-btn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+.qr-preview-label{font-size:9px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+</style>
+<div id="qr-modal">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+    <div>
+      <div style="font-size:15px;font-weight:800;color:var(--tx)" id="qr-modal-title">—</div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:2px" id="qr-modal-sub"></div>
+    </div>
+    <button onclick="closeQrModal()" style="background:none;border:none;color:var(--tx3);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px">✕</button>
+  </div>
+
+  <!-- QR Preview -->
+  <div style="display:flex;justify-content:center;margin-bottom:18px">
+    <div id="qr-canvas-box" style="background:#fff;padding:12px;border-radius:8px;border:1px solid var(--bdr2);display:inline-block"></div>
+  </div>
+
+  <!-- Tamanho de etiqueta -->
+  <div style="margin-bottom:18px">
+    <div class="qr-preview-label">Tamanho da etiqueta</div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <button class="qr-size-btn active" id="qrsz-mini"   onclick="selectQrSize('mini',this)"   title="12×12mm — instrumentos muito pequenos">Mini<br><span style="font-size:9px;opacity:.7">12×12mm</span></button>
+      <button class="qr-size-btn"        id="qrsz-pequena" onclick="selectQrSize('pequena',this)" title="20×20mm — padrão pequeno">Pequena<br><span style="font-size:9px;opacity:.7">20×20mm</span></button>
+      <button class="qr-size-btn"        id="qrsz-media"  onclick="selectQrSize('media',this)"   title="30×30mm — padrão médio">Média<br><span style="font-size:9px;opacity:.7">30×30mm</span></button>
+      <button class="qr-size-btn"        id="qrsz-grande" onclick="selectQrSize('grande',this)"  title="50×30mm — etiqueta com texto">Grande<br><span style="font-size:9px;opacity:.7">50×30mm</span></button>
+      <button class="qr-size-btn"        id="qrsz-folha"  onclick="selectQrSize('folha',this)"   title="Folha A4 com múltiplas etiquetas">Folha A4<br><span style="font-size:9px;opacity:.7">múltiplas</span></button>
+    </div>
+  </div>
+
+  <!-- Opções -->
+  <div style="margin-bottom:18px;display:flex;gap:16px;flex-wrap:wrap">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);cursor:pointer">
+      <input type="checkbox" id="qr-opt-id" checked style="accent-color:var(--brand)"> Código
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);cursor:pointer">
+      <input type="checkbox" id="qr-opt-desc" checked style="accent-color:var(--brand)"> Descrição
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);cursor:pointer">
+      <input type="checkbox" id="qr-opt-prox" checked style="accent-color:var(--brand)"> Próx. Calib.
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);cursor:pointer">
+      <input type="checkbox" id="qr-opt-local" style="accent-color:var(--brand)"> Localização
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);cursor:pointer">
+      <input type="checkbox" id="qr-opt-status" checked style="accent-color:var(--brand)"> Status
+    </label>
+  </div>
+
+  <!-- Quantidade (folha A4) -->
+  <div id="qr-qty-row" style="display:none;margin-bottom:14px;align-items:center;gap:10px">
+    <label style="font-size:12px;color:var(--tx2)">Etiquetas por folha:</label>
+    <select id="qr-qty" style="font-size:12px;padding:4px 8px;border-radius:5px;border:1px solid var(--bdr2);background:var(--surf2);color:var(--tx)">
+      <option value="1">1 (centralizada)</option>
+      <option value="4">4 (2×2)</option>
+      <option value="9" selected>9 (3×3)</option>
+      <option value="16">16 (4×4)</option>
+      <option value="30">30 (5×6)</option>
+    </select>
+  </div>
+
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button onclick="closeQrModal()" style="padding:8px 18px;border-radius:7px;border:1px solid var(--bdr2);background:var(--surf2);color:var(--tx2);font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>
+    <button onclick="printQrLabel()" style="padding:8px 18px;border-radius:7px;border:none;background:var(--brand);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">🖨️ Imprimir Etiqueta</button>
+  </div>
+</div>
+</div>`;
+}
+
+let _qrSelectedSize = 'mini';
+
+function selectQrSize(size, btn) {
+  _qrSelectedSize = size;
+  document.querySelectorAll('.qr-size-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const qtyRow = document.getElementById('qr-qty-row');
+  if (qtyRow) qtyRow.style.display = size === 'folha' ? 'flex' : 'none';
+}
+
+function printQrLabel() {
+  const r = DB.find(x => x._uid === _qrUID);
+  if (!r) return;
+
+  const showId     = document.getElementById('qr-opt-id')?.checked;
+  const showDesc   = document.getElementById('qr-opt-desc')?.checked;
+  const showProx   = document.getElementById('qr-opt-prox')?.checked;
+  const showLocal  = document.getElementById('qr-opt-local')?.checked;
+  const showStatus = document.getElementById('qr-opt-status')?.checked;
+  const qty        = _qrSelectedSize === 'folha' ? parseInt(document.getElementById('qr-qty')?.value || '9') : 1;
+
+  const fmt = v => v ? new Date(v+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  const d = r.dias_vencer;
+  const statusTxt = d === null ? '—' : d < 0 ? `VENCIDO` : d <= 30 ? `Vence ${fmt(r.prox_calib)}` : `OK`;
+  const statusColor = d === null ? '#888' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : '#16a34a';
+
+  const SIZES = {
+    mini:    { w:'12mm', h:'12mm', qr:80,  font:5,  showText:false },
+    pequena: { w:'20mm', h:'20mm', qr:100, font:6,  showText:true  },
+    media:   { w:'30mm', h:'30mm', qr:130, font:7,  showText:true  },
+    grande:  { w:'50mm', h:'30mm', qr:110, font:7,  showText:true, wide:true },
+    folha:   { w:'50mm', h:'35mm', qr:110, font:7,  showText:true  },
+  };
+  const sz = SIZES[_qrSelectedSize] || SIZES.media;
+
+  const payload = _buildQrPayload(r);
+
+  // Pega a imagem QR do canvas gerado localmente
+  var qrCanvas = document.querySelector('#qr-canvas-box canvas');
+  var qrSrc = qrCanvas ? qrCanvas.toDataURL('image/png') : '';
+  if (!qrSrc) {
+    // Regera QR se necessário
+    var tmpBox = document.createElement('div');
+    try { var tmp = new QRCode(tmpBox,{text:payload,width:220,height:220}); qrSrc = tmp.toDataURL('image/png'); } catch(e) {}
+  }
+
+  function singleLabel() {
+    const lines = [];
+    if (showId)     lines.push(`<div style="font-weight:800;font-size:${sz.font+1}pt;letter-spacing:.3px">${esc(r.id||'—')}</div>`);
+    if (showDesc)   lines.push(`<div style="font-size:${sz.font}pt;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">${esc((r.descricao||r.tipo||'').slice(0,28))}</div>`);
+    if (showLocal)  lines.push(`<div style="font-size:${sz.font-1}pt;color:#555">${esc((r.localizacao||'').slice(0,22))}</div>`);
+    if (showProx)   lines.push(`<div style="font-size:${sz.font}pt;font-weight:700">Prx: ${fmt(r.prox_calib)}</div>`);
+    if (showStatus) lines.push(`<div style="font-size:${sz.font}pt;font-weight:800;color:${statusColor}">${statusTxt}</div>`);
+
+    if (!sz.showText || sz.w === '12mm') {
+      // MINI: apenas QR puro
+      return `<div style="width:${sz.w};height:${sz.h};display:flex;align-items:center;justify-content:center;page-break-inside:avoid">
+        <img src="${qrSrc}" style="width:${sz.qr}%;height:${sz.qr}%;object-fit:contain">
+      </div>`;
+    }
+
+    if (sz.wide) {
+      // GRANDE: QR à esquerda, texto à direita
+      return `<div style="width:${sz.w};height:${sz.h};display:flex;align-items:center;gap:2mm;border:0.3mm solid #ccc;border-radius:1mm;padding:1mm;page-break-inside:avoid;box-sizing:border-box;background:#fff">
+        <img src="${qrSrc}" style="flex-shrink:0;width:${sz.qr-30}%;height:auto;max-height:${sz.h}">
+        <div style="flex:1;overflow:hidden;font-family:Arial,sans-serif;line-height:1.35">${lines.join('')}</div>
+      </div>`;
+    }
+
+    // PEQUENA / MÉDIA / FOLHA: QR em cima, texto embaixo
+    return `<div style="width:${sz.w};height:${sz.h};display:flex;flex-direction:column;align-items:center;justify-content:center;border:0.3mm solid #ccc;border-radius:1mm;padding:.8mm;page-break-inside:avoid;box-sizing:border-box;background:#fff">
+      <img src="${qrSrc}" style="width:${sz.qr-25}%;height:auto;max-height:60%">
+      <div style="font-family:Arial,sans-serif;text-align:center;line-height:1.3;width:100%;overflow:hidden">${lines.join('')}</div>
+    </div>`;
+  }
+
+  // Build full print page
+  let bodyContent = '';
+  if (_qrSelectedSize === 'folha') {
+    const cols = qty <= 4 ? 2 : qty <= 9 ? 3 : qty <= 16 ? 4 : 5;
+    bodyContent = `<div style="display:grid;grid-template-columns:repeat(${cols},${sz.w});gap:3mm;padding:10mm">`;
+    for (let i = 0; i < qty; i++) bodyContent += singleLabel();
+    bodyContent += '</div>';
+  } else {
+    bodyContent = `<div style="padding:10mm;display:inline-block">${singleLabel()}</div>`;
+  }
+
+  const sizeNames = { mini:'Mini (12×12mm)', pequena:'Pequena (20×20mm)', media:'Média (30×30mm)', grande:'Grande (50×30mm)', folha:`Folha A4 — ${qty} etiquetas` };
+  const win = window.open('', '_blank', 'width=700,height=600');
+  if (!win) { alert('Permita popups para imprimir etiquetas.'); return; }
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Etiqueta QR — ${r.id||r.descricao}</title>
+<style>
+@page { size:${_qrSelectedSize==='folha'?'A4':'auto'}; margin:0 }
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#fff;font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.no-print{display:flex;gap:10px;padding:10px 14px;background:#f4f5f9;border-bottom:1px solid #ddd;align-items:center}
+.no-print button{padding:6px 16px;border-radius:5px;border:none;font-size:12px;cursor:pointer;font-family:Arial}
+.print-info{font-size:11px;color:#666}
+@media print{.no-print{display:none}}
+</style></head><body>
+<div class="no-print">
+  <button onclick="window.print()" style="background:#0064b3;color:#fff;font-weight:700">🖨️ Imprimir</button>
+  <button onclick="window.close()" style="background:#eee;color:#333">✕ Fechar</button>
+  <span class="print-info">Etiqueta: <strong>${sizeNames[_qrSelectedSize]}</strong> · ${esc(r.id||'—')} · ${esc((r.descricao||'').slice(0,40))}</span>
+</div>
+${bodyContent}
+</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 600);
+}
+
+
+// Keyboard nav for equip-view modal
 document.addEventListener('keydown', e => {
   if(!document.getElementById('equip-view-ov')?.classList.contains('on')) return;
-  if(e.key === 'Escape')      { closeEquipView(); return; }
-  if(e.key === 'ArrowRight' || e.key === 'ArrowDown')  navEquipView(1);
-  if(e.key === 'ArrowLeft'  || e.key === 'ArrowUp')    navEquipView(-1);
+  if(e.key === 'Escape')                                  { closeEquipView(); return; }
+  if(e.key === 'ArrowRight' || e.key === 'ArrowDown')     navEquipView(1);
+  if(e.key === 'ArrowLeft'  || e.key === 'ArrowUp')       navEquipView(-1);
 });
 </script>
 
