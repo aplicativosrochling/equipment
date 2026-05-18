@@ -95,6 +95,22 @@
   --ring:  0 0 0 2px rgba(0,100,179,.3);
 }
 
+/* ── CARD SELECTION MODE ── */
+.eq-card-chk {
+  position: absolute; top: 8px; left: 8px; z-index: 10;
+  width: 17px; height: 17px; cursor: pointer;
+  accent-color: var(--brand);
+  display: none;
+}
+body.card-select-mode .eq-card-chk { display: block; }
+body.card-select-mode .eq-card { padding-left: 32px; cursor: default; }
+body.card-select-mode .eq-card:hover { transform: none; }
+.eq-card.card-selected {
+  border-color: var(--brand) !important;
+  background: rgba(0,100,179,.06) !important;
+  box-shadow: 0 0 0 2px rgba(0,100,179,.25) !important;
+}
+
 /* ── EQUIPMENT CARD LIST ── */
 .eq-card {
   background: var(--surf);
@@ -1248,9 +1264,20 @@ body.col-resizing * { cursor: col-resize !important }
         <span class="tbl-title">Equipamentos de Medição</span>
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
           <span class="tbl-cnt" id="eq-cnt">—</span>
+          <button class="btn-g" id="btn-card-select-toggle" onclick="toggleCardSelectMode()" title="Selecionar equipamentos para imprimir QR em lote">☑ Selecionar</button>
           <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
           <button class="btn-g" onclick="toggleEqView()" id="btn-toggle-eq-view" title="Alternar para visão de tabela">⊞ Tabela</button>
         </div>
+      </div>
+      <!-- Bulk bar cards -->
+      <div class="bulk-bar" id="bulk-bar-cards" style="border-radius:0 0 var(--r2) var(--r2)">
+        <span>☑</span>
+        <span class="bulk-bar-count" id="bulk-count-cards">0</span>
+        <span>selecionado(s)</span>
+        <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="openQrBulkModal('cards')">▦ Imprimir QR selecionados</button>
+        <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="selectAllCards()">✔ Todos desta página</button>
+        <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="clearCardSelection()">✕ Limpar seleção</button>
+        <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="toggleCardSelectMode()">✕ Sair</button>
       </div>
     </div>
 
@@ -1261,6 +1288,32 @@ body.col-resizing * { cursor: col-resize !important }
 
   <!-- ── TABLE VIEW (alternativo) ── -->
   <div id="eq-table-view" style="display:none">
+    <div class="tbl-card" style="margin-bottom:12px">
+      <div class="filters">
+        <div class="fg"><label>Tipo</label><select id="ft-tipo" onchange="syncTblFilter('f-tipo',this.value)"><option value="">Todos</option></select></div>
+        <div class="fg"><label>Cliente</label><select id="ft-cli" onchange="syncTblFilter('f-cli',this.value)"><option value="">Todos</option></select></div>
+        <div class="fg"><label>Localização</label><select id="ft-local" onchange="syncTblFilter('f-local',this.value)"><option value="">Todas</option></select></div>
+        <div class="fg"><label>Responsável</label><select id="ft-resp" onchange="syncTblFilter('f-resp',this.value)"><option value="">Todos</option></select></div>
+        <div class="fg"><label>Empresa</label><select id="ft-emp" onchange="syncTblFilter('f-emp',this.value)"><option value="">Todas</option></select></div>
+        <div class="fg"><label>Status Op.</label><select id="ft-status" onchange="syncTblFilter('f-status',this.value)"><option value="">Todos</option><option>ATIVO</option><option>INATIVO</option></select></div>
+        <div class="fg"><label>Calibração</label><select id="ft-calib" onchange="syncTblFilter('f-calib',this.value)"><option value="">Todos</option><option value="ok">OK</option><option value="vencido">Vencido</option><option value="necessaria">Necessária</option></select></div>
+        <div class="fg"><label>De</label><input type="date" id="ft-de" onchange="syncTblFilter('f-de',this.value)"></div>
+        <div class="fg"><label>Até</label><input type="date" id="ft-ate" onchange="syncTblFilter('f-ate',this.value)"></div>
+        <div class="fg" style="min-width:150px">
+          <label>Últ. Calib. (mês/ano)</label>
+          <input type="month" id="ft-ult-calib-mes" onchange="syncTblFilter('f-ult-calib-mes',this.value)" style="width:100%">
+        </div>
+        <div class="fg" style="min-width:150px">
+          <label>Próx. Calib. (mês/ano)</label>
+          <input type="month" id="ft-prox-calib-mes" onchange="syncTblFilter('f-prox-calib-mes',this.value)" style="width:100%">
+        </div>
+        <div class="fg" style="min-width:170px"><label>Buscar</label><input id="ft-search" type="text" placeholder="Código, descrição..." oninput="syncTblFilter('f-search',this.value)"></div>
+        <div style="align-self:flex-end;display:flex;gap:5px">
+          <button class="btn-g" onclick="applyFiltersNow()" title="Reaplicar filtros e atualizar gráficos">🔄 Aplicar</button>
+          <button class="btn-g" onclick="clearF()">✕ Limpar</button>
+        </div>
+      </div>
+    </div>
     <div class="tbl-card">
       <div class="tbl-hdr">
         <span class="tbl-title">Equipamentos de Medição</span>
@@ -1293,6 +1346,7 @@ body.col-resizing * { cursor: col-resize !important }
         </div>
         <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="applyBulkEdit('geral')" id="bulk-apply-geral" disabled>✔ Aplicar</button>
         <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="openPdfModalBulk('geral')">🖨️ Imprimir</button>
+        <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="openQrBulkModal('geral')">▦ QR em Lote</button>
         <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="clearSelection('geral')">✕ Cancelar</button>
         <button class="btn-del" style="font-size:11px;padding:4px 10px;margin-left:8px" onclick="bulkDelete('geral')">🗑 Excluir selecionados</button>
       </div>
@@ -3964,6 +4018,49 @@ function populateFilters() {
   fill('f-local', DB.map(r=>r.localizacao), true);
   fill('f-resp',  DB.map(r=>r.responsavel));
   fill('f-emp',   DB.map(r=>r.empresa), true);
+  // Mirror selects to table-view filters
+  fill('ft-tipo',  DB.map(r=>r.tipo));
+  fill('ft-cli',   DB.map(r=>r.cliente));
+  fill('ft-local', DB.map(r=>r.localizacao), true);
+  fill('ft-resp',  DB.map(r=>r.responsavel));
+  fill('ft-emp',   DB.map(r=>r.empresa), true);
+}
+
+// Sync table-view filter → canonical f-* field then re-apply
+function syncTblFilter(targetId, value) {
+  const el = document.getElementById(targetId);
+  if (el) el.value = value;
+  applyF();
+}
+
+// Copy all f-* values into their ft-* mirrors (called when switching to table view)
+function _syncFiltersToTableView() {
+  const pairs = [
+    ['f-tipo','ft-tipo'],['f-cli','ft-cli'],['f-local','ft-local'],
+    ['f-resp','ft-resp'],['f-emp','ft-emp'],['f-status','ft-status'],
+    ['f-calib','ft-calib'],['f-de','ft-de'],['f-ate','ft-ate'],
+    ['f-ult-calib-mes','ft-ult-calib-mes'],['f-prox-calib-mes','ft-prox-calib-mes'],
+    ['f-search','ft-search']
+  ];
+  pairs.forEach(([src,dst])=>{
+    const s=document.getElementById(src), d=document.getElementById(dst);
+    if(s&&d) d.value=s.value;
+  });
+}
+
+// Copy all ft-* values back into f-* (called when switching to card view)
+function _syncFiltersFromTableView() {
+  const pairs = [
+    ['ft-tipo','f-tipo'],['ft-cli','f-cli'],['ft-local','f-local'],
+    ['ft-resp','f-resp'],['ft-emp','f-emp'],['ft-status','f-status'],
+    ['ft-calib','f-calib'],['ft-de','f-de'],['ft-ate','f-ate'],
+    ['ft-ult-calib-mes','f-ult-calib-mes'],['ft-prox-calib-mes','f-prox-calib-mes'],
+    ['ft-search','f-search']
+  ];
+  pairs.forEach(([src,dst])=>{
+    const s=document.getElementById(src), d=document.getElementById(dst);
+    if(s&&d) d.value=s.value;
+  });
 }
 
 const FILTER_IDS = ['f-tipo','f-cli','f-local','f-resp','f-emp','f-status','f-calib','f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search'];
@@ -4062,7 +4159,15 @@ function refreshInPlace() {
   updateKPIs();
   buildAllCharts();
 }
-function clearF(){FILTER_IDS.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});try{localStorage.removeItem('rochling_filters_v1');}catch(e){}applyF();}
+function clearF(){
+  FILTER_IDS.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  // Also clear table-view mirror fields
+  ['ft-tipo','ft-cli','ft-local','ft-resp','ft-emp','ft-status','ft-calib',
+   'ft-de','ft-ate','ft-ult-calib-mes','ft-prox-calib-mes','ft-search']
+    .forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  try{localStorage.removeItem('rochling_filters_v1');}catch(e){}
+  applyF();
+}
 
 // ═══════════════════════════════════════════════════════
 // ALERTS
@@ -4610,10 +4715,12 @@ function _applyEqView() {
   const tableView = document.getElementById('eq-table-view');
   if (!listView || !tableView) return;
   if (_eqViewMode === 'cards') {
+    _syncFiltersFromTableView();
     listView.style.display  = 'block';
     tableView.style.display = 'none';
     renderCardList();
   } else {
+    _syncFiltersToTableView();
     listView.style.display  = 'none';
     tableView.style.display = 'block';
     renderTable('geral');
@@ -4693,7 +4800,8 @@ function renderCardList() {
     const stBadge = _cardStatusBadge(r);
     const hasFile = r.link && r.link_data && r.link_data.startsWith('data:');
 
-    return `<div class="eq-card ${sc}" onclick="openEdit(${r._uid})" title="Clique para editar ${id}">
+    return `<div class="eq-card ${sc}${_cardSelectedUIDs.has(r._uid)?' card-selected':''}" data-uid="${r._uid}" onclick="onCardClick(event,${r._uid})" title="Clique para editar ${id}">
+      <input type="checkbox" class="eq-card-chk" data-uid="${r._uid}" ${_cardSelectedUIDs.has(r._uid)?'checked':''} onclick="event.stopPropagation();toggleCardCheck(${r._uid},this)">
       <div class="eq-card-top">
         <span class="eq-card-id">${id}</span>
         <div style="display:flex;gap:5px;align-items:center">
@@ -5351,6 +5459,346 @@ function _handleQrDeepLink() {
     }
   }
 })();
+// ═══════════════════════════════════════════════════════
+// CARD VIEW — SELEÇÃO MÚLTIPLA PARA QR EM LOTE
+// ═══════════════════════════════════════════════════════
+const _cardSelectedUIDs = new Set();
+let _cardSelectMode = false;
+
+function toggleCardSelectMode() {
+  _cardSelectMode = !_cardSelectMode;
+  document.body.classList.toggle('card-select-mode', _cardSelectMode);
+  const bar = document.getElementById('bulk-bar-cards');
+  if (bar) bar.classList.toggle('on', _cardSelectMode);
+  const btn = document.getElementById('btn-card-select-toggle');
+  if (btn) btn.style.background = _cardSelectMode ? 'rgba(0,100,179,.15)' : '';
+  if (!_cardSelectMode) { _cardSelectedUIDs.clear(); renderCardList(); }
+}
+
+function onCardClick(e, uid) {
+  if (_cardSelectMode) {
+    e.stopPropagation();
+    toggleCardCheck(uid, null);
+  } else {
+    openEdit(uid);
+  }
+}
+
+function toggleCardCheck(uid, chkEl) {
+  if (_cardSelectedUIDs.has(uid)) {
+    _cardSelectedUIDs.delete(uid);
+  } else {
+    _cardSelectedUIDs.add(uid);
+  }
+  // Update card visual without full re-render
+  const card = document.querySelector(`.eq-card[data-uid="${uid}"]`);
+  if (card) {
+    card.classList.toggle('card-selected', _cardSelectedUIDs.has(uid));
+    const chk = card.querySelector('.eq-card-chk');
+    if (chk) chk.checked = _cardSelectedUIDs.has(uid);
+  }
+  const cnt = document.getElementById('bulk-count-cards');
+  if (cnt) cnt.textContent = _cardSelectedUIDs.size;
+}
+
+function selectAllCards() {
+  // Select all currently visible (filtered+paginated) cards
+  document.querySelectorAll('.eq-card[data-uid]').forEach(card => {
+    const uid = parseInt(card.dataset.uid);
+    _cardSelectedUIDs.add(uid);
+    card.classList.add('card-selected');
+    const chk = card.querySelector('.eq-card-chk');
+    if (chk) chk.checked = true;
+  });
+  const cnt = document.getElementById('bulk-count-cards');
+  if (cnt) cnt.textContent = _cardSelectedUIDs.size;
+}
+
+function clearCardSelection() {
+  _cardSelectedUIDs.clear();
+  document.querySelectorAll('.eq-card').forEach(c => {
+    c.classList.remove('card-selected');
+    const chk = c.querySelector('.eq-card-chk');
+    if (chk) chk.checked = false;
+  });
+  const cnt = document.getElementById('bulk-count-cards');
+  if (cnt) cnt.textContent = 0;
+}
+
+// ═══════════════════════════════════════════════════════
+// QR BULK PRINT — Impressão em lote com economia de folha
+// ═══════════════════════════════════════════════════════
+function openQrBulkModal(source) {
+  // source = 'cards' | 'geral' | 'rep' | 'alert'
+  let uids;
+  if (source === 'cards') {
+    uids = _cardSelectedUIDs;
+  } else {
+    uids = _selectedUIDs[source];
+  }
+  if (!uids || uids.size === 0) {
+    alert('Nenhum equipamento selecionado.');
+    return;
+  }
+  const rows = DB.filter(r => uids.has(r._uid));
+
+  // Remove modal antigo se existir
+  document.getElementById('qr-bulk-ov')?.remove();
+
+  const sizes = [
+    { id:'mini',    label:'Mini',    dim:'12×12mm', desc:'Só QR' },
+    { id:'pequena', label:'Pequena', dim:'20×20mm', desc:'QR + código' },
+    { id:'media',   label:'Média',   dim:'30×30mm', desc:'QR + código + desc' },
+    { id:'grande',  label:'Grande',  dim:'50×30mm', desc:'QR + texto completo' },
+  ];
+
+  document.body.insertAdjacentHTML('beforeend', `
+<div id="qr-bulk-ov" style="position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(4px)" onclick="if(event.target===this)document.getElementById('qr-bulk-ov').remove()">
+<div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:14px;width:min(520px,95vw);max-height:90vh;overflow-y:auto;padding:26px;box-shadow:0 24px 80px rgba(0,0,0,.5)">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+    <div>
+      <div style="font-size:15px;font-weight:800;color:var(--tx)">▦ Imprimir QR em Lote</div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:3px;font-family:var(--mono)">${rows.length} equipamento(s) selecionado(s)</div>
+    </div>
+    <button onclick="document.getElementById('qr-bulk-ov').remove()" style="background:none;border:none;color:var(--tx3);font-size:18px;cursor:pointer;padding:2px 6px">✕</button>
+  </div>
+
+  <div style="margin-bottom:18px">
+    <div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Tamanho da etiqueta</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="qrb-sizes">
+      ${sizes.map((s,i) => `
+        <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:2px solid ${i===0?'var(--brand)':'var(--bdr2)'};border-radius:8px;cursor:pointer;transition:all .12s" id="qrb-lbl-${s.id}" onclick="selectQrBulkSize('${s.id}')">
+          <input type="radio" name="qrb-size" value="${s.id}" ${i===0?'checked':''} style="accent-color:var(--brand)">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:var(--tx)">${s.label} <span style="font-family:var(--mono);font-size:10px;color:var(--tx3)">${s.dim}</span></div>
+            <div style="font-size:10px;color:var(--tx3)">${s.desc}</div>
+          </div>
+        </label>`).join('')}
+    </div>
+  </div>
+
+  <div style="margin-bottom:18px">
+    <div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Informações nas etiquetas</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);cursor:pointer"><input type="checkbox" id="qrb-opt-id" checked style="accent-color:var(--brand)"> Código</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);cursor:pointer"><input type="checkbox" id="qrb-opt-desc" checked style="accent-color:var(--brand)"> Descrição</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);cursor:pointer"><input type="checkbox" id="qrb-opt-prox" checked style="accent-color:var(--brand)"> Próx. Calib.</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);cursor:pointer"><input type="checkbox" id="qrb-opt-local" style="accent-color:var(--brand)"> Localização</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);cursor:pointer"><input type="checkbox" id="qrb-opt-status" checked style="accent-color:var(--brand)"> Status</label>
+    </div>
+  </div>
+
+  <div style="background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:12px;margin-bottom:18px;font-size:11px;color:var(--tx2)">
+    <div style="font-weight:700;margin-bottom:6px">📄 Layout automático em folha A4</div>
+    <div id="qrb-layout-info" style="margin-bottom:8px">As etiquetas serão distribuídas automaticamente na folha para máxima economia de papel.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;border-top:1px solid var(--bdr2);padding-top:8px;margin-top:4px">
+      <span style="font-size:10px;font-weight:700;color:var(--tx3)">Cor do código:</span>
+      <span style="display:flex;align-items:center;gap:4px;font-size:10px"><span style="background:#16a34a;color:#fff;border-radius:3px;padding:1px 6px;font-weight:700">ID</span> Calibrado (OK)</span>
+      <span style="display:flex;align-items:center;gap:4px;font-size:10px"><span style="background:#ea580c;color:#fff;border-radius:3px;padding:1px 6px;font-weight:700">ID</span> Vence em breve</span>
+      <span style="display:flex;align-items:center;gap:4px;font-size:10px"><span style="background:#dc2626;color:#fff;border-radius:3px;padding:1px 6px;font-weight:700">ID</span> Vencido</span>
+      <span style="display:flex;align-items:center;gap:4px;font-size:10px"><span style="background:#0064b3;color:#fff;border-radius:3px;padding:1px 6px;font-weight:700">ID</span> Sem data</span>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button onclick="document.getElementById('qr-bulk-ov').remove()" style="padding:8px 18px;border-radius:7px;border:1px solid var(--bdr2);background:var(--surf2);color:var(--tx2);font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>
+    <button onclick="printQrBulk(${JSON.stringify([...uids])})" style="padding:8px 18px;border-radius:7px;border:none;background:var(--brand);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">🖨️ Gerar e Imprimir</button>
+  </div>
+</div>
+</div>`);
+  _qrBulkSize = 'mini';
+  updateQrBulkLayoutInfo(rows.length);
+}
+
+let _qrBulkSize = 'mini';
+function selectQrBulkSize(size) {
+  _qrBulkSize = size;
+  document.querySelectorAll('[id^="qrb-lbl-"]').forEach(el => {
+    el.style.borderColor = el.id === `qrb-lbl-${size}` ? 'var(--brand)' : 'var(--bdr2)';
+  });
+  // Update selected radio
+  const radio = document.querySelector(`input[name="qrb-size"][value="${size}"]`);
+  if (radio) radio.checked = true;
+  const n = parseInt(document.getElementById('qrb-layout-info')?.dataset?.n || 0);
+  updateQrBulkLayoutInfo(n);
+}
+
+function updateQrBulkLayoutInfo(n) {
+  _qrBulkSize = document.querySelector('input[name="qrb-size"]:checked')?.value || 'mini';
+  const configs = {
+    mini:    { cols: 10, rows: 14, mm: '12×12' },
+    pequena: { cols: 8,  rows: 11, mm: '20×20' },
+    media:   { cols: 6,  rows: 8,  mm: '30×30' },
+    grande:  { cols: 3,  rows: 8,  mm: '50×30' },
+  };
+  const cfg = configs[_qrBulkSize] || configs.mini;
+  const perPage = cfg.cols * cfg.rows;
+  const pages = Math.ceil(n / perPage);
+  const info = document.getElementById('qrb-layout-info');
+  if (info) {
+    info.dataset.n = n;
+    info.innerHTML = `Etiqueta ${cfg.mm}mm → <strong>${cfg.cols}×${cfg.rows} = ${perPage} por folha</strong> → <strong>${pages} folha(s) A4</strong> para ${n} equipamento(s).`;
+  }
+}
+
+async function printQrBulk(uids) {
+  // ⚠️ Lê TODOS os valores ANTES de remover o modal do DOM
+  _qrBulkSize = document.querySelector('input[name="qrb-size"]:checked')?.value || 'mini';
+  const showId     = document.getElementById('qrb-opt-id')?.checked ?? true;
+  const showDesc   = document.getElementById('qrb-opt-desc')?.checked ?? true;
+  const showProx   = document.getElementById('qrb-opt-prox')?.checked ?? true;
+  const showLocal  = document.getElementById('qrb-opt-local')?.checked ?? false;
+  const showStatus = document.getElementById('qrb-opt-status')?.checked ?? true;
+  document.getElementById('qr-bulk-ov')?.remove();
+
+  const rows = DB.filter(r => uids.includes(r._uid));
+  if (!rows.length) return;
+
+  // Config por tamanho: [widthMM, heightMM, colsA4, rowsA4, qrPxSize]
+  const cfg = {
+    mini:    { w:12, h:12, cols:10, rows:14, qrPx:120, gap:1 },
+    pequena: { w:20, h:20, cols:8,  rows:11, qrPx:200, gap:2 },
+    media:   { w:30, h:30, cols:6,  rows:8,  qrPx:280, gap:3 },
+    grande:  { w:50, h:30, cols:3,  rows:8,  qrPx:280, gap:3 },
+  }[_qrBulkSize] || { w:12, h:12, cols:10, rows:14, qrPx:120, gap:1 };
+
+  const fmt = v => v ? new Date(v+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+
+  // Gera todos os QR codes como base64 via canvas
+  const tmpArea = document.createElement('div');
+  tmpArea.style.cssText = 'position:fixed;left:-9999px;top:0;visibility:hidden';
+  document.body.appendChild(tmpArea);
+
+  const qrDataList = [];
+  for (const r of rows) {
+    const payload = _buildQrPayload(r);
+    const box = document.createElement('div');
+    tmpArea.appendChild(box);
+    try {
+      new QRCode(box, { text: payload, width: cfg.qrPx, height: cfg.qrPx,
+                        colorDark: '#000000', colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.M });
+      await new Promise(res => setTimeout(res, 0)); // yield to allow canvas render
+      const canvas = box.querySelector('canvas');
+      qrDataList.push({ r, src: canvas ? canvas.toDataURL('image/png') : '' });
+    } catch(e) {
+      qrDataList.push({ r, src: '' });
+    }
+  }
+  document.body.removeChild(tmpArea);
+
+  // Gera HTML de etiqueta para cada item
+  function labelHtml(item) {
+    const { r, src } = item;
+    const id   = showId   ? esc(r.id || '—') : '';
+    const desc = showDesc ? esc((r.descricao || r.tipo || '').slice(0, 32)) : '';
+    const prox = showProx ? `Prx: ${fmt(r.prox_calib)}` : '';
+    const loc  = showLocal ? esc((r.localizacao || '').slice(0, 20)) : '';
+    const d = r.dias_vencer;
+    const stTxt   = !showStatus ? '' : d===null?'—':d<0?'VENCIDO':d<=30?`Vence ${fmt(r.prox_calib)}`:'OK';
+    const stColor = d===null?'#888':d<0?'#dc2626':d<=30?'#ea580c':'#16a34a';
+    // ID badge — cor do status para leitura rápida na etiqueta
+    const idBg   = d===null?'#0064b3':d<0?'#dc2626':d<=30?'#ea580c':'#16a34a';
+    const idBadge = id ? `<div style="background:${idBg};color:#fff;font-family:Arial,sans-serif;font-weight:900;letter-spacing:.4px;text-align:center;border-radius:.8mm;padding:.4mm 1mm;line-height:1.2">${id}</div>` : '';
+    const idBadgeSm = id ? `<div style="background:${idBg};color:#fff;font-family:Arial,sans-serif;font-weight:900;letter-spacing:.3px;text-align:center;border-radius:.5mm;padding:.2mm .6mm;line-height:1.1">${id}</div>` : '';
+
+    if (_qrBulkSize === 'mini') {
+      // Mini: faixa colorida no topo com o código (se showId)
+      return `<div style="width:${cfg.w}mm;height:${cfg.h}mm;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff;page-break-inside:avoid;overflow:hidden">
+        ${id?`<div style="width:100%;background:${idBg};color:#fff;font-family:Arial,sans-serif;font-size:3pt;font-weight:900;text-align:center;letter-spacing:.2px;padding:.3mm 0;line-height:1">${id}</div>`:''}
+        <img src="${src}" style="width:${id?cfg.w-2:cfg.w-1}mm;height:${id?cfg.h-4:cfg.h-1}mm;image-rendering:pixelated;flex-shrink:0">
+      </div>`;
+    }
+    if (_qrBulkSize === 'pequena') {
+      return `<div style="width:${cfg.w}mm;height:${cfg.h}mm;display:flex;flex-direction:column;align-items:center;justify-content:center;border:.3mm solid ${idBg};border-radius:.5mm;padding:.5mm;background:#fff;box-sizing:border-box;page-break-inside:avoid;overflow:hidden">
+        <img src="${src}" style="width:${cfg.w-5}mm;height:${cfg.h-7}mm;image-rendering:pixelated">
+        ${id?`<div style="width:100%;background:${idBg};color:#fff;font-family:Arial,sans-serif;font-size:4.5pt;font-weight:900;text-align:center;line-height:1.3;margin-top:.4mm;border-radius:.3mm;padding:.2mm 0">${id}</div>`:''}
+      </div>`;
+    }
+    if (_qrBulkSize === 'media') {
+      return `<div style="width:${cfg.w}mm;height:${cfg.h}mm;display:flex;flex-direction:column;align-items:center;border:.3mm solid ${idBg};border-radius:.8mm;padding:1mm;background:#fff;box-sizing:border-box;page-break-inside:avoid;overflow:hidden">
+        <img src="${src}" style="width:20mm;height:20mm;image-rendering:pixelated">
+        <div style="font-family:Arial,sans-serif;text-align:center;width:100%;margin-top:.5mm">
+          ${id?`<div style="background:${idBg};color:#fff;font-size:5.5pt;font-weight:900;letter-spacing:.4px;border-radius:.5mm;padding:.3mm 0;margin-bottom:.3mm">${id}</div>`:''}
+          ${desc?`<div style="font-size:4.5pt;color:#333;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:28mm">${desc}</div>`:''}
+          ${prox?`<div style="font-size:4.5pt;font-weight:700;color:#0064b3">${prox}</div>`:''}
+          ${stTxt?`<div style="font-size:5pt;font-weight:800;color:${stColor}">${stTxt}</div>`:''}
+        </div>
+      </div>`;
+    }
+    // grande
+    return `<div style="width:${cfg.w}mm;height:${cfg.h}mm;display:flex;align-items:center;gap:1.5mm;border:.3mm solid ${idBg};border-radius:.8mm;padding:1.5mm;background:#fff;box-sizing:border-box;page-break-inside:avoid;overflow:hidden">
+      <img src="${src}" style="width:24mm;height:24mm;flex-shrink:0;image-rendering:pixelated">
+      <div style="flex:1;font-family:Arial,sans-serif;overflow:hidden;min-width:0">
+        ${id?`<div style="background:${idBg};color:#fff;font-size:7pt;font-weight:900;letter-spacing:.4px;border-radius:.7mm;padding:.5mm 1.5mm;display:inline-block;margin-bottom:1mm">${id}</div>`:''}
+        ${desc?`<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${desc}</div>`:''}
+        ${loc?`<div style="font-size:5pt;color:#555;margin-bottom:.5mm">📍 ${loc}</div>`:''}
+        ${prox?`<div style="font-size:6pt;font-weight:700;color:#0064b3;margin-bottom:.5mm">📅 ${prox}</div>`:''}
+        ${stTxt?`<div style="font-size:6.5pt;font-weight:900;color:${stColor};background:${stColor}18;border:.3mm solid ${stColor};border-radius:.5mm;padding:.5mm 1mm;display:inline-block">${stTxt}</div>`:''}
+        <div style="font-size:4pt;color:#aaa;margin-top:1mm">Röchling Automotive</div>
+      </div>
+    </div>`;
+  }
+
+  const labelsHtml = qrDataList.map(labelHtml).join('');
+  const perPage = cfg.cols * cfg.rows;
+  const pages = Math.ceil(rows.length / perPage);
+
+  const win = window.open('', '_blank', 'width=800,height=700');
+  if (!win) { alert('Permita popups para imprimir etiquetas.'); return; }
+
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>QR em Lote — ${rows.length} etiquetas</title>
+<style>
+  @page { size: A4; margin: 8mm }
+  * { box-sizing: border-box; margin: 0; padding: 0 }
+  body { background: #f0f2f5; font-family: Arial, sans-serif;
+         -webkit-print-color-adjust: exact; print-color-adjust: exact }
+  .toolbar { display: flex; gap: 10px; padding: 10px 16px; background: #1e2130;
+             border-bottom: 2px solid #0064b3; align-items: center; flex-wrap: wrap }
+  .toolbar button { padding: 7px 18px; border-radius: 5px; border: none;
+                    font-size: 12px; font-weight: 700; cursor: pointer }
+  .info { font-size: 11px; color: #8b90a8; margin-left: 4px }
+  .sheet { background: #fff; padding: 8mm; margin: 12px auto; display: inline-block;
+           box-shadow: 0 4px 24px rgba(0,0,0,.15); border-radius: 4px }
+  .grid { display: grid;
+          grid-template-columns: repeat(${cfg.cols}, ${cfg.w}mm);
+          gap: ${cfg.gap}mm }
+  @media print {
+    .toolbar { display: none }
+    body { background: #fff }
+    .sheet { box-shadow: none; padding: 0; margin: 0; border-radius: 0 }
+    .grid { gap: ${cfg.gap}mm }
+    .page-wrap { page-break-after: always }
+    .page-wrap:last-child { page-break-after: auto }
+  }
+</style></head><body>
+<div class="toolbar">
+  <button onclick="window.print()" style="background:#0064b3;color:#fff">🖨️ Imprimir</button>
+  <button onclick="window.close()" style="background:#374151;color:#fff">✕ Fechar</button>
+  <span class="info">
+    <strong style="color:#e2e8f0">${rows.length} etiquetas</strong>
+    &nbsp;·&nbsp; ${cfg.w}×${cfg.h}mm
+    &nbsp;·&nbsp; ${cfg.cols}×${cfg.rows} por folha
+    &nbsp;·&nbsp; ${pages} folha(s)
+  </span>
+</div>
+<div style="padding:16px;display:flex;flex-direction:column;align-items:center;gap:16px">
+${Array.from({length: pages}, (_,pi) => {
+  const slice = qrDataList.slice(pi * perPage, (pi+1) * perPage);
+  return `<div class="page-wrap">
+    <div class="sheet">
+      <div class="grid">${slice.map(labelHtml).join('')}</div>
+    </div>
+  </div>`;
+}).join('')}
+</div>
+</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 1200);
+}
+
 const _selectedUIDs = { geral: new Set(), alert: new Set(), rep: new Set() };
 
 const BULK_FIELDS = {
@@ -6361,9 +6809,9 @@ function printQrLabel() {
   // ── Layout de cada tamanho ──────────────────────────────────────
   function singleLabel() {
     const id   = showId     ? esc(r.id || '—') : '';
-    const desc = showDesc   ? esc((r.descricao || r.tipo || '').slice(0, 32)) : '';
+    const desc = showDesc   ? esc(r.descricao || r.tipo || '') : '';
     const prox = showProx   ? `Prx: ${fmt(r.prox_calib)}` : '';
-    const loc  = showLocal  ? esc((r.localizacao || '').slice(0, 24)) : '';
+    const loc  = showLocal  ? esc(r.localizacao || '') : '';
 
     // ── MINI 12×12mm — só QR, sem texto ──────────────────────────
     if (_qrSelectedSize === 'mini') {
@@ -6395,7 +6843,7 @@ function printQrLabel() {
           <img src="${qrSrc}" style="width:20mm;height:20mm;image-rendering:pixelated">
           <div style="font-family:Arial,sans-serif;text-align:center;width:100%;margin-top:0.5mm">
             ${id   ? `<div style="font-size:5.5pt;font-weight:800;letter-spacing:.3px">${id}</div>` : ''}
-            ${desc ? `<div style="font-size:4.5pt;color:#333;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:28mm">${desc}</div>` : ''}
+            ${desc ? `<div style="font-size:4.5pt;color:#333;overflow:hidden;word-break:break-word;max-width:28mm;line-height:1.3">${desc}</div>` : ''}
             ${prox ? `<div style="font-size:4.5pt;font-weight:700;color:#0064b3">${prox}</div>` : ''}
             ${loc  ? `<div style="font-size:4pt;color:#666">${loc}</div>` : ''}
             ${showStatus ? `<div style="font-size:5pt;font-weight:800;color:${statusColor}">${statusTxt}</div>` : ''}
@@ -6412,7 +6860,7 @@ function printQrLabel() {
           <img src="${qrSrc}" style="width:24mm;height:24mm;flex-shrink:0;image-rendering:pixelated">
           <div style="flex:1;font-family:Arial,sans-serif;overflow:hidden;min-width:0">
             ${id   ? `<div style="font-size:7pt;font-weight:900;letter-spacing:.3px;margin-bottom:1mm">${id}</div>` : ''}
-            ${desc ? `<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${desc}</div>` : ''}
+            ${desc ? `<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;word-break:break-word;line-height:1.3">${desc}</div>` : ''}
             ${loc  ? `<div style="font-size:5pt;color:#555;margin-bottom:.5mm">📍 ${loc}</div>` : ''}
             ${prox ? `<div style="font-size:6pt;font-weight:700;color:#0064b3;margin-bottom:.5mm">📅 ${prox}</div>` : ''}
             ${showStatus ? `<div style="font-size:6.5pt;font-weight:900;color:${statusColor};
@@ -6431,7 +6879,7 @@ function printQrLabel() {
         <img src="${qrSrc}" style="width:28mm;height:28mm;flex-shrink:0;image-rendering:pixelated">
         <div style="flex:1;font-family:Arial,sans-serif;overflow:hidden;min-width:0">
           ${id   ? `<div style="font-size:7pt;font-weight:900;letter-spacing:.3px;margin-bottom:1mm">${id}</div>` : ''}
-          ${desc ? `<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${desc}</div>` : ''}
+          ${desc ? `<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;word-break:break-word;line-height:1.3">${desc}</div>` : ''}
           ${loc  ? `<div style="font-size:5pt;color:#555;margin-bottom:.5mm">📍 ${loc}</div>` : ''}
           ${prox ? `<div style="font-size:6pt;font-weight:700;color:#0064b3;margin-bottom:.5mm">📅 ${prox}</div>` : ''}
           ${showStatus ? `<div style="font-size:6pt;font-weight:900;color:${statusColor};
