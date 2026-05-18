@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-theme="dark">
+<html lang="pt-BR" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -994,8 +994,8 @@ body.col-resizing * { cursor: col-resize !important }
       <button class="lang-btn"    id="df-iso" onclick="setDateFmt('iso')">ISO</button>
     </div>
     <div class="tgl">
-      <button class="tgl-o on" id="th-dk" onclick="setTheme('dark')">🌙</button>
-      <button class="tgl-o"    id="th-lt" onclick="setTheme('light')">☀️</button>
+      <button class="tgl-o"    id="th-dk" onclick="setTheme('dark')">🌙</button>
+      <button class="tgl-o on" id="th-lt" onclick="setTheme('light')">☀️</button>
     </div>
 
     <!-- Divider -->
@@ -2353,8 +2353,14 @@ function setTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
   document.getElementById('th-dk').classList.toggle('on', t==='dark');
   document.getElementById('th-lt').classList.toggle('on', t==='light');
+  try { localStorage.setItem('rochling_theme', t); } catch(e) {}
   buildAllCharts(); buildRelatorios();
 }
+// Restore saved theme on load (default: light)
+(function() {
+  const saved = localStorage.getItem('rochling_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+})();
 const isDark = () => document.documentElement.getAttribute('data-theme')==='dark';
 const tc = () => isDark() ? '#8b949e' : '#57606a';
 const gc = () => isDark() ? 'rgba(33,38,45,.8)' : 'rgba(208,215,222,.6)';
@@ -2775,8 +2781,157 @@ async function initFirebase() {
 }
 
 // ══════════════════════════════════════════════════════
-// BOOT UNIFICADO — Firebase App + Auth + Firestore
+// MODO PÚBLICO — Ficha de equipamento via QR (?view=ID)
 // ══════════════════════════════════════════════════════
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const viewId = params.get('view');
+  if (!viewId) return;
+
+  // Injeta overlay de ficha pública antes do login aparecer
+  function buildPublicView(record) {
+    const r = record;
+    const d = r.dias_vencer;
+    const fmt = v => v ? new Date(v+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+    const statusColor = d === null ? '#6b7280' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : '#16a34a';
+    const statusText  = d === null ? '—' : d < 0 ? `⛔ Vencido há ${Math.abs(d)} dias` : d === 0 ? '🔴 Vence HOJE' : d <= 30 ? `⚠️ Vence em ${d} dias` : `✓ Em dia (+${d} dias)`;
+    const pct = r.freq_dias && d !== null ? Math.max(0, Math.min(100, Math.round(d / r.freq_dias * 100))) : 0;
+    const barColor = d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : d <= 90 ? '#f59e0b' : '#16a34a';
+
+    const ov = document.createElement('div');
+    ov.id = 'public-view-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;padding:16px;font-family:DM Sans,system-ui,sans-serif;overflow-y:auto';
+    ov.innerHTML = `
+      <div style="background:#fff;border-radius:16px;width:min(560px,100%);box-shadow:0 8px 40px rgba(0,0,0,.12);overflow:hidden;border:1px solid #e8eaf0">
+        <!-- Header -->
+        <div style="background:linear-gradient(135deg,#f0f6ff,#fff);border-bottom:1px solid #e8eaf0;padding:20px 24px 16px;border-top:4px solid #0064b3">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+            <div>
+              <svg height="28" viewBox="0 0 260 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;margin-bottom:10px">
+                <text x="0" y="26" font-family="Arial Black,Arial,sans-serif" font-size="26" font-weight="900" fill="#0064b3" letter-spacing="-0.5">Röchling</text>
+                <line x1="0" y1="31" x2="155" y2="31" stroke="#0064b3" stroke-width="1.5" opacity="0.35"/>
+                <text x="1" y="41" font-family="Arial,sans-serif" font-size="8.5" font-weight="600" fill="#0064b3" letter-spacing="3.2">AUTOMOTIVE</text>
+              </svg>
+              <div style="font-size:10px;color:#6b7280;font-family:monospace;letter-spacing:.5px;margin-bottom:4px">${r.id || '—'}</div>
+              <div style="font-size:20px;font-weight:800;color:#1a1a1a;line-height:1.2">${r.descricao || r.tipo || '—'}</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:3px">${[r.tipo,r.fabricante].filter(Boolean).join(' · ') || '—'}</div>
+            </div>
+            <div style="display:inline-flex;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:800;border:1.5px solid ${statusColor};background:${statusColor}14;color:${statusColor};white-space:nowrap;flex-shrink:0">${statusText}</div>
+          </div>
+        </div>
+
+        <!-- Barra de saúde -->
+        <div style="padding:14px 24px 0">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:#6b7280;margin-bottom:4px">
+            <span style="font-weight:700;text-transform:uppercase;letter-spacing:.6px">Validade da Calibração</span>
+            <span style="font-weight:800;color:${barColor}">${pct}%</span>
+          </div>
+          <div style="height:9px;background:#f3f4f6;border-radius:10px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${barColor};border-radius:10px;transition:width .6s"></div>
+          </div>
+        </div>
+
+        <!-- Timeline -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid #e8eaf0;margin-top:14px">
+          ${[
+            ['📅','Últ. Calibração', fmt(r.ult_calib)],
+            ['🔁','Frequência', r.freq_dias ? r.freq_dias+'d' : '—'],
+            ['📆','Próx. Calibração', fmt(r.prox_calib)],
+          ].map((item,i) => `
+            <div style="padding:12px 14px;text-align:center;${i<2?'border-right:1px solid #e8eaf0':''}">
+              <div style="font-size:18px;margin-bottom:3px">${item[0]}</div>
+              <div style="font-size:8.5px;font-weight:700;color:#9ca3bc;text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px">${item[1]}</div>
+              <div style="font-family:monospace;font-size:12px;font-weight:700;color:#1a1a1a">${item[2]}</div>
+            </div>`).join('')}
+        </div>
+
+        <!-- Campos -->
+        <div style="padding:16px 24px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          ${[
+            ['Tipo', r.tipo],
+            ['Fabricante', r.fabricante],
+            ['Localização', r.localizacao],
+            ['Responsável', r.responsavel],
+            ['Status Operacional', r.status],
+            ['Empresa Executante', r.empresa],
+            ['Status Calibração', r.status_calib],
+            ['Cód. Labortec', r.cod_lab],
+          ].map(([lbl,val]) => `
+            <div>
+              <div style="font-size:9px;font-weight:700;color:#9ca3bc;text-transform:uppercase;letter-spacing:.7px;margin-bottom:2px">${lbl}</div>
+              <div style="font-size:12.5px;font-weight:500;color:#1a1a1a">${val || '—'}</div>
+            </div>`).join('')}
+        </div>
+
+        ${(r.observacoes || r.notes) ? `
+        <div style="margin:0 24px 16px;padding:10px 14px;background:#f8f9fc;border:1px solid #e8eaf0;border-radius:8px;font-size:11.5px;color:#374151;line-height:1.6;white-space:pre-wrap">${r.observacoes || r.notes}</div>
+        ` : ''}
+
+        <div style="padding:12px 24px;border-top:1px solid #e8eaf0;text-align:center;font-size:10px;color:#9ca3bc">
+          Röchling Automotive — Controle de Equipamentos de Medição &nbsp;·&nbsp; Acesso via QR Code
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+  }
+
+  // Espera o DB estar pronto, depois renderiza (timeout de 8s como segurança)
+  const _pubStart = Date.now();
+  function waitAndRender() {
+    if (typeof DB === 'undefined' || !DB.length) {
+      if (Date.now() - _pubStart > 8000) {
+        // Timeout: mostra erro em vez de girar para sempre
+        const ov = document.createElement('div');
+        ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:DM Sans,system-ui,sans-serif;flex-direction:column;gap:8px';
+        ov.innerHTML = `<div style="font-size:36px">⏱️</div><div style="font-size:16px;font-weight:700;color:#1a1a1a">Tempo esgotado</div><div style="font-size:12px;color:#6b7280">Não foi possível carregar os dados. Verifique sua conexão.</div>`;
+        document.body.appendChild(ov);
+        return;
+      }
+      setTimeout(waitAndRender, 200);
+      return;
+    }
+    const r = DB.find(x => (x.id || '').toUpperCase() === decodeURIComponent(viewId).toUpperCase())
+           || DB.find(x => String(x._uid) === decodeURIComponent(viewId));
+    if (!r) {
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:DM Sans,system-ui,sans-serif;flex-direction:column;gap:8px';
+      ov.innerHTML = `<div style="font-size:36px">🔍</div><div style="font-size:16px;font-weight:700;color:#1a1a1a">Equipamento não encontrado</div><div style="font-size:12px;color:#6b7280">ID: ${decodeURIComponent(viewId)}</div>`;
+      document.body.appendChild(ov);
+      return;
+    }
+    buildPublicView(r);
+  }
+
+  // Oculta o login, inicializa DB sem auth e renderiza a ficha pública
+  window.addEventListener('DOMContentLoaded', () => {
+    // Esconde o login overlay
+    const lo = document.getElementById('login-overlay');
+    if (lo) lo.style.display = 'none';
+    // Inicializa DB local (sem Firebase/auth)
+    if (typeof initDB === 'function') initDB();
+    // Conecta Firebase anonimamente só para ler os dados
+    // ATENÇÃO: requer regra no Firestore Console:
+    //   match /equipamentos/{doc} { allow read: if true; }
+    // (leitura pública sem autenticação — escrita ainda protegida)
+    (async () => {
+      try {
+        const cfg = FB_CONFIG_DEFAULT;
+        let app;
+        try { app = firebase.app(); } catch(e) { app = firebase.initializeApp(cfg); }
+        const db = firebase.firestore(app);
+        const snap = await db.collection('equipamentos').get();
+        if (!snap.empty) {
+          const { recalcDias } = window;
+          const rows = [];
+          snap.forEach(doc => rows.push({ _uid: rows.length + 1, ...doc.data() }));
+          if (rows.length) {
+            DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
+          }
+        }
+      } catch(e) { /* usa DB local */ }
+      waitAndRender();
+    })();
+  });
+})();
 let _auth = null;
 
 async function initFirebaseAndAuth() {
@@ -2790,7 +2945,10 @@ async function initFirebaseAndAuth() {
   let app;
   try {
     // Elimina app anterior e cria um único app que serve Auth + Firestore
-    try { await firebase.app().delete(); } catch(e){}
+    // (não executa em modo público para não matar o app usado na leitura anônima)
+    if (!new URLSearchParams(window.location.search).has('view')) {
+      try { await firebase.app().delete(); } catch(e){}
+    }
     app = firebase.initializeApp(cfg);
     _auth = firebase.auth(app);
     // Firestore é inicializado DEPOIS do login (em showApp → initFirebase)
@@ -4646,10 +4804,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('df-dmy')?.classList.toggle('on', DATE_FMT==='dmy');
   document.getElementById('df-iso')?.classList.toggle('on', DATE_FMT==='iso');
   applyLang();
-  // Boot: inicializa Firebase App + Auth → ao autenticar → conecta Firestore
-  initFirebaseAndAuth();
-  // ── Deep-link: ?id=EQ-001 (escaneado pelo QR) → abre equipamento automaticamente
-  _handleQrDeepLink();
+  // Modo público (?view=ID) — não inicializa Auth para evitar app.delete() sobrescrever
+  // o app Firebase já criado pelo bloco de modo público acima
+  if (!new URLSearchParams(window.location.search).has('view')) {
+    // Boot: inicializa Firebase App + Auth → ao autenticar → conecta Firestore
+    initFirebaseAndAuth();
+    // ── Deep-link: ?id=EQ-001 (escaneado pelo QR) → abre equipamento automaticamente
+    _handleQrDeepLink();
+  }
 });
 
 // Chamada após o Firebase carregar dados — tenta novamente se DB ainda vazio
@@ -5993,11 +6155,11 @@ window.openPdfModalBulk = function(tbl) {
 // ═══════════════════════════════════════════════════════
 
 function _buildQrPayload(r) {
-  // Payload mínimo: URL curta → QR pequeno, escaneia fácil, e abre online
-  // Formato: https://aplicativosrochling.github.io/equipment/?id=EQ-001
-  // ~55 chars → QR versão 3-4, legível até em etiqueta 12×12mm
+  // Aponta para a mesma página com ?view=ID
+  // Ao carregar com este parâmetro, exibe a ficha pública sem login
   const id = encodeURIComponent(r.id || r._uid || '');
-  return 'https://aplicativosrochling.github.io/equipment/?id=' + id;
+  const base = window.location.href.split('?')[0];
+  return base + '?view=' + id;
 }
 
 let _qrUID = null;
