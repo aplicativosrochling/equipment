@@ -2934,7 +2934,16 @@ async function initFirebase() {
         const snap = await db.collection('equipamentos').get();
         if (!snap.empty) {
           const rows = [];
-          snap.forEach(doc => rows.push({ _uid: rows.length + 1, ...doc.data() }));
+          snap.forEach(doc => {
+            const data = doc.data();
+            // Estrutura padrão: doc 'dados' contém { records: [...] }
+            if (Array.isArray(data.records)) {
+              data.records.forEach(record => rows.push({ _uid: rows.length + 1, ...record }));
+            } else {
+              // Fallback: documento simples sem array interno
+              rows.push({ _uid: rows.length + 1, ...data });
+            }
+          });
           if (rows.length) {
             DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
           }
