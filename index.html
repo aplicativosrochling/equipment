@@ -2273,24 +2273,24 @@ function applyLang() {
 const COL_DEFS = {
   geral: [
     {k:'_chk',        l:'',               def:true, noSort:true, w:30},
-    {k:'_act',        l:'Ações',          def:true, noSort:true, w:115},
-    {k:'id',          l:'Código',         def:true, w:105},
-    {k:'tipo',        l:'Tipo',           def:true, w:120},
-    {k:'cod_lab',     l:'Cód. Labortec',  def:true, w:95},
-    {k:'cliente',     l:'Cliente',        def:true, w:75},
-    {k:'descricao',   l:'Descrição',      def:true, w:190},
-    {k:'fabricante',  l:'Fabricante',     def:true, w:90},
-    {k:'localizacao', l:'Localização',    def:true, w:105},
-    {k:'responsavel', l:'Responsável',    def:true, w:120},
-    {k:'empresa',     l:'Empresa',        def:true, w:90},
-    {k:'ult_calib',   l:'Últ. Calib.',    def:true, w:90},
-    {k:'prox_calib',  l:'Próx. Calib.',   def:true, w:90},
-    {k:'freq_dias',   l:'Freq.(d)',        def:true, w:65},
-    {k:'status_calib',l:'Calib.',         def:true, w:80},
-    {k:'status',      l:'Status',         def:true, w:70},
-    {k:'dias_vencer', l:'Dias',           def:true, w:65},
-    {k:'observacoes', l:'Obs.',           def:true, w:100},
-    {k:'link',        l:'Arquivo',        def:true, w:75},
+    {k:'id',         l:'Código',         def:true, w:105},
+    {k:'tipo',       l:'Tipo',           def:true, w:120},
+    {k:'cod_lab',    l:'Cód. Lab.',      def:true, w:95},
+    {k:'cliente',    l:'Cliente',        def:true, w:75},
+    {k:'descricao',  l:'Descrição',      def:true, w:190},
+    {k:'fabricante', l:'Fabricante',     def:true, w:90},
+    {k:'localizacao',l:'Localização',    def:true, w:105},
+    {k:'responsavel',l:'Responsável',    def:true, w:120},
+    {k:'empresa',    l:'Empresa',        def:true, w:90},
+    {k:'ult_calib',  l:'Últ. Calib.',    def:true, w:90},
+    {k:'prox_calib', l:'Próx. Calib.',   def:true, w:90},
+    {k:'freq_dias',  l:'Freq.(d)',        def:true, w:65},
+    {k:'status_calib',l:'Calib.',        def:true, w:80},
+    {k:'status',     l:'Status',         def:true, w:70},
+    {k:'dias_vencer',l:'Dias',           def:true, w:65},
+    {k:'observacoes',l:'Obs.',           def:true, w:100},
+    {k:'link',       l:'Arquivo',        def:true, w:75},
+    {k:'_act',       l:'Ações',          def:true, noSort:true, w:140},
   ],
   alert: [
     {k:'_chk',        l:'',               def:true, noSort:true, w:36},
@@ -2304,7 +2304,7 @@ const COL_DEFS = {
     {k:'prox_calib', l:'Próx. Calib.',   def:true, w:105},
     {k:'dias_vencer',l:'Dias',           def:true, w:90},
     {k:'status_calib',l:'Calib.',        def:true, w:100},
-    {k:'_act',       l:'',               def:true, noSort:true, w:44},
+    {k:'_act',       l:'',               def:true, noSort:true, w:140},
   ],
   rep: [
     {k:'_chk',        l:'',               def:true, noSort:true, w:30},
@@ -3751,11 +3751,11 @@ function renderCell(r, k, tbl) {
     </td>`;
   }
 
-  if(k==='_act') return `<td ${attr} style="white-space:nowrap">
-    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--brand)" onclick="openEquipView(${r._uid})" title="Visualizar">👁</button>
-    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--tx3)" onclick="openEdit(${r._uid})" title="${LANG==='en'?'Edit':'Editar'}">✏</button>
-    <button onclick="openQrModal(${r._uid})" title="QR Code / Etiqueta" style="padding:2px 6px;font-size:10px;font-weight:700;border:1px solid var(--brand);background:rgba(0,100,179,.12);color:var(--brand);border-radius:4px;cursor:pointer;font-family:var(--font);line-height:1.4">▦ QR</button>
-    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--red);opacity:.5" onclick="deleteInline(${r._uid})" title="${LANG==='en'?'Delete':'Excluir'}">🗑</button>
+  if(k==='_act') return `<td ${attr} style="white-space:nowrap;min-width:135px">
+    <button class="btn-g" style="padding:1px 6px;font-size:11px;border:none;background:transparent;color:var(--brand)" onclick="openEquipView(${r._uid})" title="Visualizar">👁</button>
+    <button class="btn-g" style="padding:1px 6px;font-size:11px;border:none;background:transparent;color:var(--tx3)" onclick="openEdit(${r._uid})" title="${LANG==='en'?'Edit':'Editar'}">✏</button>
+    <button class="btn-g" style="padding:2px 7px;font-size:10px;font-weight:700;border:1px solid var(--brand);background:var(--brand);color:#fff;border-radius:4px" onclick="event.stopPropagation();openQrModal(${r._uid})" title="QR Code / Etiqueta">▦ QR</button>
+    <button class="btn-g" style="padding:1px 6px;font-size:11px;border:none;background:transparent;color:var(--red);opacity:.5" onclick="deleteInline(${r._uid})" title="${LANG==='en'?'Delete':'Excluir'}">🗑</button>
   </td>`;
   if(k==='dias_vencer')  return `<td ${attr}>${diasBadge(r.dias_vencer)}</td>`;
 
@@ -3808,9 +3808,7 @@ function renderTable(tbl) {
       const allSel = p.rows.length > 0 && p.rows.every(r => _selectedUIDs[tbl]?.has(r._uid));
       return `<th class="chk-col"><input type="checkbox" class="row-chk" id="chk-all-${tbl}" title="Selecionar todos" ${allSel?'checked':''} onchange="onSelectAll(this,'${tbl}')"></th>`;
     }
-    if(c.noSort) {
-      return `<th data-col="${c.k}" style="width:${w}px;min-width:${w}px;max-width:${w}px"><div class="th-inner" style="font-size:10px;color:var(--tx3);font-weight:600;letter-spacing:.3px">${c.l||''}</div></th>`;
-    }
+    if(c.noSort) return `<th data-col="${c.k}" style="width:${w}px;min-width:${w}px;max-width:${w}px"><div class="th-inner"></div></th>`;
     const arr = s&&s.k===c.k ? (s.d==='asc'?' ↑':' ↓') : '';
     return `<th data-col="${c.k}" style="width:${w}px;min-width:${w}px;max-width:${w}px">
       <div class="th-inner" onclick="sortTable('${tbl}','${c.k}')"><span>${c.l}${arr}</span></div>
@@ -6062,29 +6060,26 @@ window.openPdfModalBulk = function(tbl) {
 // ═══════════════════════════════════════════════════════
 
 function _buildQrPayload(r) {
+  // Conteúdo do QR = URL absoluta apontando para este sistema com #inst=<ID>.
+  // Ao escanear, o celular oferece "Abrir link" e o sistema abre a ficha automaticamente.
+  const id = encodeURIComponent(r.id || ('uid-' + r._uid));
+  try {
+    if (location && location.protocol && location.protocol.indexOf('http') === 0) {
+      const base = location.origin + location.pathname;
+      return base + '#inst=' + id;
+    }
+  } catch(e) {}
+  // Fallback (arquivo aberto via file://): texto puro, igual versão antiga.
   const fmt = v => v ? new Date(v+'T00:00:00').toLocaleDateString('pt-BR') : '—';
   const d = r.dias_vencer;
-  const status = d === null ? 'Sem data' : d < 0 ? `VENCIDO ha ${Math.abs(d)}d` : d <= 30 ? `Vence em ${d}d` : `OK (+${d}d)`;
-  // Formato legível por qualquer scanner — exibe como cartão de informações
+  const status = d === null ? 'Sem data' : d < 0 ? `VENCIDO há ${Math.abs(d)}d` : d <= 30 ? `Vence em ${d}d` : `OK (+${d}d)`;
   return [
-    `=== ROCHLING AUTOMOTIVE ===`,
-    `EQUIPAMENTO DE MEDICAO`,
-    ``,
-    `Codigo:    ${r.id || '—'}`,
-    `Descricao: ${(r.descricao || r.tipo || '—').slice(0,40)}`,
-    `Tipo:      ${r.tipo || '—'}`,
-    `Fabricante:${r.fabricante || '—'}`,
-    ``,
-    `Localizacao: ${r.localizacao || '—'}`,
-    `Responsavel: ${r.responsavel || '—'}`,
-    `Empresa:     ${r.empresa || '—'}`,
-    ``,
-    `Ult.Calibracao: ${fmt(r.ult_calib)}`,
-    `Prx.Calibracao: ${fmt(r.prox_calib)}`,
-    `Frequencia:     ${r.freq_dias ? r.freq_dias+'d' : '—'}`,
-    ``,
-    `STATUS: ${status}`,
-    `===========================`,
+    `RÖCHLING AUTOMOTIVE`,
+    `Cod: ${r.id || '—'}`,
+    `Desc: ${r.descricao || r.tipo || '—'}`,
+    `Status: ${status}`,
+    `Prx.Cal: ${fmt(r.prox_calib)}`,
+    `(abra este arquivo via servidor http(s) para que o QR abra a ficha ao escanear)`
   ].join('\n');
 }
 
@@ -6130,11 +6125,7 @@ function openQrModal(uid) {
 }
 
 function closeQrModal() {
-  const ov = document.getElementById('qr-modal-ov');
-  if (!ov) return;
-  ov.classList.remove('on');
-  ov.style.opacity = '0';
-  ov.style.pointerEvents = 'none';
+  document.getElementById('qr-modal-ov')?.classList.remove('on');
   document.body.style.overflow = '';
 }
 
@@ -6239,53 +6230,54 @@ function printQrLabel() {
   const statusTxt = d === null ? '—' : d < 0 ? `VENCIDO` : d <= 30 ? `Vence ${fmt(r.prox_calib)}` : `OK`;
   const statusColor = d === null ? '#888' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : '#16a34a';
 
+  // Tamanhos em mm reais; fontes em pt reduzidas para caber bem na etiqueta.
+  // qrMM = lado do QR em mm; fontId é o tamanho do código (maior); font = texto comum.
   const SIZES = {
-    mini:    { w:'12mm', h:'12mm', qr:80,  font:5,  showText:false },
-    pequena: { w:'20mm', h:'20mm', qr:100, font:6,  showText:true  },
-    media:   { w:'30mm', h:'30mm', qr:130, font:7,  showText:true  },
-    grande:  { w:'50mm', h:'30mm', qr:110, font:7,  showText:true, wide:true },
-    folha:   { w:'50mm', h:'35mm', qr:110, font:7,  showText:true  },
+    mini:    { w:'12mm', h:'12mm', qrMM:11,   fontId:3.5, font:3,   showText:false },
+    pequena: { w:'20mm', h:'20mm', qrMM:13,   fontId:4,   font:3.5, showText:true  },
+    media:   { w:'30mm', h:'30mm', qrMM:18,   fontId:5,   font:4,   showText:true  },
+    grande:  { w:'50mm', h:'30mm', qrMM:26,   fontId:6,   font:5,   showText:true, wide:true },
+    folha:   { w:'50mm', h:'35mm', qrMM:22,   fontId:6,   font:4.5, showText:true  },
   };
   const sz = SIZES[_qrSelectedSize] || SIZES.media;
 
   const payload = _buildQrPayload(r);
 
-  // Pega a imagem QR do canvas gerado localmente
+  // Pega a imagem QR do canvas gerado localmente (alta resolução)
   var qrCanvas = document.querySelector('#qr-canvas-box canvas');
   var qrSrc = qrCanvas ? qrCanvas.toDataURL('image/png') : '';
   if (!qrSrc) {
-    // Regera QR se necessário
     var tmpBox = document.createElement('div');
-    try { var tmp = new QRCode(tmpBox,{text:payload,width:220,height:220}); qrSrc = tmp.toDataURL('image/png'); } catch(e) {}
+    try { var tmp = new QRCode(tmpBox,{text:payload,width:300,height:300,correctLevel:QRCode.CorrectLevel.M}); qrSrc = tmp.toDataURL('image/png'); } catch(e) {}
   }
 
   function singleLabel() {
     const lines = [];
-    if (showId)     lines.push(`<div style="font-weight:800;font-size:${sz.font+1}pt;letter-spacing:.3px">${esc(r.id||'—')}</div>`);
-    if (showDesc)   lines.push(`<div style="font-size:${sz.font}pt;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">${esc((r.descricao||r.tipo||'').slice(0,28))}</div>`);
-    if (showLocal)  lines.push(`<div style="font-size:${sz.font-1}pt;color:#555">${esc((r.localizacao||'').slice(0,22))}</div>`);
-    if (showProx)   lines.push(`<div style="font-size:${sz.font}pt;font-weight:700">Prx: ${fmt(r.prox_calib)}</div>`);
-    if (showStatus) lines.push(`<div style="font-size:${sz.font}pt;font-weight:800;color:${statusColor}">${statusTxt}</div>`);
+    if (showId)     lines.push(`<div style="font-weight:800;font-size:${sz.fontId}pt;letter-spacing:.2px;line-height:1.1">${esc(r.id||'—')}</div>`);
+    if (showDesc)   lines.push(`<div style="font-size:${sz.font}pt;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">${esc((r.descricao||r.tipo||'').slice(0,28))}</div>`);
+    if (showLocal)  lines.push(`<div style="font-size:${sz.font-0.5}pt;line-height:1.1;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">${esc((r.localizacao||'').slice(0,22))}</div>`);
+    if (showProx)   lines.push(`<div style="font-size:${sz.font}pt;line-height:1.1;font-weight:700">Prx: ${fmt(r.prox_calib)}</div>`);
+    if (showStatus) lines.push(`<div style="font-size:${sz.font}pt;line-height:1.1;font-weight:800;color:${statusColor}">${statusTxt}</div>`);
 
-    if (!sz.showText || sz.w === '12mm') {
+    if (!sz.showText) {
       // MINI: apenas QR puro
       return `<div style="width:${sz.w};height:${sz.h};display:flex;align-items:center;justify-content:center;page-break-inside:avoid">
-        <img src="${qrSrc}" style="width:${sz.qr}%;height:${sz.qr}%;object-fit:contain">
+        <img src="${qrSrc}" style="width:${sz.qrMM}mm;height:${sz.qrMM}mm;image-rendering:pixelated">
       </div>`;
     }
 
     if (sz.wide) {
       // GRANDE: QR à esquerda, texto à direita
-      return `<div style="width:${sz.w};height:${sz.h};display:flex;align-items:center;gap:2mm;border:0.3mm solid #ccc;border-radius:1mm;padding:1mm;page-break-inside:avoid;box-sizing:border-box;background:#fff">
-        <img src="${qrSrc}" style="flex-shrink:0;width:${sz.qr-30}%;height:auto;max-height:${sz.h}">
-        <div style="flex:1;overflow:hidden;font-family:Arial,sans-serif;line-height:1.35">${lines.join('')}</div>
+      return `<div style="width:${sz.w};height:${sz.h};display:flex;align-items:center;gap:1.5mm;border:0.2mm solid #999;border-radius:1mm;padding:1mm;page-break-inside:avoid;box-sizing:border-box;background:#fff">
+        <img src="${qrSrc}" style="flex-shrink:0;width:${sz.qrMM}mm;height:${sz.qrMM}mm;image-rendering:pixelated">
+        <div style="flex:1;min-width:0;overflow:hidden;font-family:Arial,sans-serif">${lines.join('')}</div>
       </div>`;
     }
 
     // PEQUENA / MÉDIA / FOLHA: QR em cima, texto embaixo
-    return `<div style="width:${sz.w};height:${sz.h};display:flex;flex-direction:column;align-items:center;justify-content:center;border:0.3mm solid #ccc;border-radius:1mm;padding:.8mm;page-break-inside:avoid;box-sizing:border-box;background:#fff">
-      <img src="${qrSrc}" style="width:${sz.qr-25}%;height:auto;max-height:60%">
-      <div style="font-family:Arial,sans-serif;text-align:center;line-height:1.3;width:100%;overflow:hidden">${lines.join('')}</div>
+    return `<div style="width:${sz.w};height:${sz.h};display:flex;flex-direction:column;align-items:center;justify-content:flex-start;border:0.2mm solid #999;border-radius:1mm;padding:.6mm;gap:.4mm;page-break-inside:avoid;box-sizing:border-box;background:#fff">
+      <img src="${qrSrc}" style="width:${sz.qrMM}mm;height:${sz.qrMM}mm;image-rendering:pixelated;flex-shrink:0">
+      <div style="font-family:Arial,sans-serif;text-align:center;width:100%;overflow:hidden">${lines.join('')}</div>
     </div>`;
   }
 
@@ -6338,5 +6330,73 @@ document.addEventListener('keydown', e => {
 
 </div><!-- /#app-wrapper -->
 
+<script>
+// ═══════════════════════════════════════════════════════
+// QR DEEP-LINK — abre a ficha automaticamente quando a URL tem #inst=<ID>
+// ═══════════════════════════════════════════════════════
+(function(){
+  "use strict";
+  function parseHash(){
+    var h = (location.hash || '').replace(/^#/, '');
+    if (!h) return null;
+    var m = h.match(/(?:^|&)inst=([^&]+)/);
+    if (!m) return null;
+    try { return decodeURIComponent(m[1]); } catch(e){ return m[1]; }
+  }
+  function findRecord(idOrUid){
+    if (typeof DB === 'undefined' || !Array.isArray(DB) || !DB.length) return null;
+    var rec = DB.find(function(r){ return r && (String(r.id) === String(idOrUid)); });
+    if (rec) return rec;
+    var muid = String(idOrUid).match(/^uid-(\d+)$/);
+    if (muid) {
+      var u = Number(muid[1]);
+      rec = DB.find(function(r){ return r && r._uid === u; });
+    }
+    return rec || null;
+  }
+  function showNotFound(id){
+    if (document.getElementById('qr-nf-ov')) return;
+    var ov = document.createElement('div');
+    ov.id = 'qr-nf-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)';
+    ov.innerHTML = '<div style="background:var(--surf,#1a1a1a);color:var(--tx,#eee);border:1px solid var(--bdr2,#333);border-radius:12px;padding:24px;max-width:380px;font-family:var(--font,system-ui);text-align:center">'
+      + '<div style="font-size:32px;margin-bottom:8px">📷</div>'
+      + '<div style="font-size:15px;font-weight:700;margin-bottom:8px">Instrumento não encontrado</div>'
+      + '<div style="font-size:12px;color:var(--tx3,#888);margin-bottom:18px">O código <strong>' + (id||'') + '</strong> não está na base deste dispositivo. Importe os dados ou aguarde a sincronização.</div>'
+      + '<button onclick="document.getElementById(\'qr-nf-ov\').remove();history.replaceState(null,\'\',location.pathname+location.search)" style="padding:8px 18px;border-radius:7px;border:none;background:var(--brand,#0064b3);color:#fff;font-size:12px;font-weight:700;cursor:pointer">OK</button>'
+      + '</div>';
+    document.body.appendChild(ov);
+  }
+  var _opened = false;
+  var _attempts = 0;
+  function tryOpen(){
+    var id = parseHash();
+    if (!id) return true; // nada a fazer
+    if (_opened) return true;
+    if (typeof DB === 'undefined' || !Array.isArray(DB) || DB.length === 0) {
+      if (++_attempts > 100) { // ~30s
+        showNotFound(id);
+        return true;
+      }
+      return false;
+    }
+    var rec = findRecord(id);
+    if (!rec) { showNotFound(id); _opened = true; return true; }
+    if (typeof openEquipView !== 'function') return false;
+    try { openEquipView(rec._uid); _opened = true; } catch(e){ console.error('QR open failed', e); }
+    return true;
+  }
+  function boot(){
+    if (tryOpen()) return;
+    var iv = setInterval(function(){ if (tryOpen()) clearInterval(iv); }, 300);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else { boot(); }
+  window.addEventListener('hashchange', function(){
+    _opened = false; _attempts = 0; tryOpen();
+  });
+})();
+</script>
 </body>
 </html>
