@@ -2893,8 +2893,14 @@ async function initFirebase() {
            || DB.find(x => String(x._uid) === decodeURIComponent(viewId));
     if (!r) {
       const ov = document.createElement('div');
-      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:DM Sans,system-ui,sans-serif;flex-direction:column;gap:8px';
-      ov.innerHTML = `<div style="font-size:36px">🔍</div><div style="font-size:16px;font-weight:700;color:#1a1a1a">Equipamento não encontrado</div><div style="font-size:12px;color:#6b7280">ID: ${decodeURIComponent(viewId)}</div>`;
+      const dbCount = (typeof DB !== 'undefined' && DB) ? DB.length : 0;
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:DM Sans,system-ui,sans-serif;flex-direction:column;gap:6px;padding:24px;text-align:center';
+      ov.innerHTML = '<div style="font-size:36px">🔍</div>'
+        + '<div style="font-size:16px;font-weight:700;color:#1a1a1a">Equipamento não encontrado</div>'
+        + '<div style="font-size:12px;color:#6b7280;font-family:monospace">ID buscado: <b>' + decodeURIComponent(viewId) + '</b></div>'
+        + (dbCount === 0
+            ? '<div style="font-size:11px;color:#dc2626;margin-top:6px">⚠️ Base vazia — leitura Firestore bloqueada pelas Security Rules.<br>Habilite Auth Anônima no Firebase Console e verifique as regras.</div>'
+            : '<div style="font-size:11px;color:#6b7280;margin-top:4px">Base carregada com ' + dbCount + ' registro(s). ID não encontrado.</div>');
       document.body.appendChild(ov);
       return;
     }
@@ -2908,26 +2914,36 @@ async function initFirebase() {
     if (lo) lo.style.display = 'none';
     // Inicializa DB local (sem Firebase/auth)
     if (typeof initDB === 'function') initDB();
-    // Conecta Firebase anonimamente só para ler os dados
-    // ATENÇÃO: requer regra no Firestore Console:
-    //   match /equipamentos/{doc} { allow read: if true; }
-    // (leitura pública sem autenticação — escrita ainda protegida)
+    // Conecta Firebase com autenticação anônima, depois lê o Firestore
+    // Auth anônima satisfaz regras "allow read: if request.auth != null"
     (async () => {
       try {
         const cfg = FB_CONFIG_DEFAULT;
         let app;
         try { app = firebase.app(); } catch(e) { app = firebase.initializeApp(cfg); }
+
+        // Auth anônima — satisfaz regras que exigem request.auth sem login do usuário
+        try {
+          const auth = firebase.auth(app);
+          await auth.signInAnonymously();
+        } catch(authErr) {
+          console.warn('[público] auth anônima falhou:', authErr.code);
+        }
+
         const db = firebase.firestore(app);
         const snap = await db.collection('equipamentos').get();
         if (!snap.empty) {
-          const { recalcDias } = window;
           const rows = [];
           snap.forEach(doc => rows.push({ _uid: rows.length + 1, ...doc.data() }));
           if (rows.length) {
             DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
           }
+        } else {
+          console.warn('[público] Firestore retornou 0 docs — verifique as Security Rules.');
         }
-      } catch(e) { /* usa DB local */ }
+      } catch(e) {
+        console.error('[público] erro Firestore:', e.code, e.message);
+      }
       waitAndRender();
     })();
   });
