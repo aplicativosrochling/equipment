@@ -479,6 +479,54 @@ tr:nth-child(even) td { background: rgba(255,255,255,.012) }
 .fg select:focus, .fg input:focus, .search-box:focus { border-color: var(--brand); box-shadow: var(--ring) }
 .search-box { min-width: 170px }
 
+/* ── MULTI-SELECT TIPO ── */
+.multi-tipo-btn {
+  background: var(--surf); border: 1px solid var(--bdr2); color: var(--tx);
+  border-radius: var(--r); padding: 6px 9px; font-size: 11.5px;
+  font-family: var(--font); outline: none; transition: var(--tr); min-width: 110px;
+  cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; user-select: none; white-space: nowrap;
+}
+.multi-tipo-btn:hover { border-color: var(--brand); }
+.multi-tipo-btn.active { border-color: var(--brand); box-shadow: var(--ring); }
+.multi-tipo-arrow { font-size: 9px; color: var(--tx3); flex-shrink: 0; }
+.multi-tipo-dd {
+  position: fixed; z-index: 9999;
+  background: var(--surf); border: 1px solid var(--bdr2);
+  border-radius: var(--r2); box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  min-width: 220px; max-height: 300px; overflow-y: auto;
+  padding: 6px 0;
+}
+.multi-tipo-dd .mtd-search {
+  width: calc(100% - 16px); margin: 6px 8px 4px;
+  background: var(--surf2); border: 1px solid var(--bdr2); color: var(--tx);
+  border-radius: var(--r); padding: 5px 8px; font-size: 11px;
+  font-family: var(--font); outline: none; display: block;
+}
+.multi-tipo-dd .mtd-search:focus { border-color: var(--brand); }
+.multi-tipo-dd .mtd-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; cursor: pointer; font-size: 12px; color: var(--tx);
+  transition: background .1s;
+}
+.multi-tipo-dd .mtd-item:hover { background: var(--surf2); }
+.multi-tipo-dd .mtd-item input[type=checkbox] {
+  accent-color: var(--brand); width: 13px; height: 13px; flex-shrink: 0; cursor: pointer;
+}
+.multi-tipo-dd .mtd-sep { height: 1px; background: var(--bdr); margin: 4px 0; }
+.multi-tipo-dd .mtd-actions {
+  display: flex; gap: 6px; padding: 6px 10px 2px;
+}
+.multi-tipo-dd .mtd-actions button {
+  font-size: 10px; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--bdr2);
+  background: transparent; color: var(--tx2); cursor: pointer; font-family: var(--font);
+}
+.multi-tipo-dd .mtd-actions button:hover { border-color: var(--brand); color: var(--brand); }
+.multi-tipo-badge {
+  background: var(--brand); color: #fff; font-size: 9px; font-weight: 700;
+  border-radius: 99px; padding: 1px 5px; flex-shrink: 0;
+}
+
 /* ── ALERT TIMELINE ── */
 .tl-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 16px }
 .tl-card {
@@ -1237,7 +1285,7 @@ body.col-resizing * { cursor: col-resize !important }
   <div id="eq-list-view">
     <div class="tbl-card" style="margin-bottom:12px">
       <div class="filters">
-        <div class="fg"><label>Tipo</label><select id="f-tipo" onchange="applyF()"><option value="">Todos</option></select></div>
+        <div class="fg" style="position:relative"><label>Tipo</label><div id="f-tipo-btn" class="multi-tipo-btn" onclick="toggleTipoDropdown('f-tipo-dd', event)" title="Selecionar tipos"><span id="f-tipo-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
         <div class="fg"><label>Cliente</label><select id="f-cli" onchange="applyF()"><option value="">Todos</option></select></div>
         <div class="fg"><label>Localização</label><select id="f-local" onchange="applyF()"><option value="">Todas</option></select></div>
         <div class="fg"><label>Responsável</label><select id="f-resp" onchange="applyF()"><option value="">Todos</option></select></div>
@@ -1290,7 +1338,7 @@ body.col-resizing * { cursor: col-resize !important }
   <div id="eq-table-view" style="display:none">
     <div class="tbl-card" style="margin-bottom:12px">
       <div class="filters">
-        <div class="fg"><label>Tipo</label><select id="ft-tipo" onchange="syncTblFilter('f-tipo',this.value)"><option value="">Todos</option></select></div>
+        <div class="fg" style="position:relative"><label>Tipo</label><div id="ft-tipo-btn" class="multi-tipo-btn" onclick="toggleTipoDropdown('ft-tipo-dd', event)" title="Selecionar tipos"><span id="ft-tipo-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
         <div class="fg"><label>Cliente</label><select id="ft-cli" onchange="syncTblFilter('f-cli',this.value)"><option value="">Todos</option></select></div>
         <div class="fg"><label>Localização</label><select id="ft-local" onchange="syncTblFilter('f-local',this.value)"><option value="">Todas</option></select></div>
         <div class="fg"><label>Responsável</label><select id="ft-resp" onchange="syncTblFilter('f-resp',this.value)"><option value="">Todos</option></select></div>
@@ -2660,7 +2708,7 @@ function fbStartListen() {
       saveLS();
       // Preserve active filters when receiving live updates
       updateKPIs(); buildAllCharts(); populateFilters();
-      const hasFilter = ['f-tipo','f-cli','f-local','f-resp','f-emp',
+      const hasFilter = _selectedTipos.size > 0 || ['f-cli','f-local','f-resp','f-emp',
         'f-status','f-calib','f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search']
         .some(id => { const el=document.getElementById(id); return el && el.value; });
       if(hasFilter) applyF(); else refreshInPlace();
@@ -4009,17 +4057,168 @@ function buildPag(p, infoId, btnsId, cb) {
 // ═══════════════════════════════════════════════════════
 // FILTERS
 // ═══════════════════════════════════════════════════════
+// Global state for multi-select tipo
+var _selectedTipos = new Set();
+
+function _buildTipoDropdown(ddId) {
+  let dd = document.getElementById(ddId);
+  if (!dd) {
+    dd = document.createElement('div');
+    dd.id = ddId;
+    dd.className = 'multi-tipo-dd';
+    dd.style.display = 'none';
+    document.body.appendChild(dd);
+  }
+  const tipos = [...new Set(DB.map(r=>r.tipo).filter(Boolean))].sort();
+
+  // Actions row
+  const actDiv = document.createElement('div');
+  actDiv.className = 'mtd-actions';
+  const btnTodos = document.createElement('button');
+  btnTodos.textContent = 'Todos';
+  btnTodos.onclick = _tipoSelectAll;
+  const btnLimpar = document.createElement('button');
+  btnLimpar.textContent = 'Limpar';
+  btnLimpar.onclick = _tipoSelectAll;
+  actDiv.onclick = function(e) { e.stopPropagation(); };
+  actDiv.appendChild(btnTodos);
+  actDiv.appendChild(btnLimpar);
+
+  // Separator
+  const sep = document.createElement('div');
+  sep.className = 'mtd-sep';
+
+  // Search box
+  const srch = document.createElement('input');
+  srch.className = 'mtd-search';
+  srch.placeholder = 'Buscar tipo...';
+  srch.onclick = function(e) { e.stopPropagation(); };
+  srch.oninput = function() { _tipoSearch(this.value, listDiv); };
+
+  // List
+  const listDiv = document.createElement('div');
+  tipos.forEach(t => {
+    const lbl = document.createElement('label');
+    lbl.className = 'mtd-item';
+    lbl.onclick = function(e) { e.stopPropagation(); };
+    const chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.value = t;
+    chk.checked = _selectedTipos.has(t);
+    chk.onchange = function() { _tipoToggle(this); };
+    const span = document.createElement('span');
+    span.textContent = t;
+    lbl.appendChild(chk);
+    lbl.appendChild(span);
+    listDiv.appendChild(lbl);
+  });
+
+  dd.innerHTML = '';
+  dd.appendChild(actDiv);
+  dd.appendChild(sep);
+  dd.appendChild(srch);
+  dd.appendChild(listDiv);
+}
+
+function _tipoUpdateLabel() {
+  const n = _selectedTipos.size;
+  ['f-tipo-label','ft-tipo-label'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (n === 0) { el.innerHTML = 'Todos'; return; }
+    const first = [..._selectedTipos][0];
+    const label = n === 1 ? esc(first) : `${esc(first)} <span class="multi-tipo-badge">+${n-1}</span>`;
+    el.innerHTML = label;
+  });
+  // Highlight btn if active
+  ['f-tipo-btn','ft-tipo-btn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', n > 0);
+  });
+}
+
+function _tipoToggle(chk) {
+  if (chk.checked) _selectedTipos.add(chk.value);
+  else _selectedTipos.delete(chk.value);
+  // Sync checkboxes in the other dropdown
+  ['f-tipo-dd','ft-tipo-dd'].forEach(ddId => {
+    const dd = document.getElementById(ddId);
+    if (!dd) return;
+    dd.querySelectorAll('input[type=checkbox]').forEach(c => {
+      c.checked = _selectedTipos.has(c.value);
+    });
+  });
+  _tipoUpdateLabel();
+  applyF();
+}
+
+function _tipoSelectAll() {
+  _selectedTipos.clear();
+  ['f-tipo-dd','ft-tipo-dd'].forEach(ddId => {
+    const dd = document.getElementById(ddId);
+    if (!dd) return;
+    dd.querySelectorAll('input[type=checkbox]').forEach(c => { c.checked = false; });
+  });
+  _tipoUpdateLabel();
+  applyF();
+}
+
+function _tipoSelectNone() { _tipoSelectAll(); }
+
+function _tipoSearch(q, listDiv) {
+  const lq = q.toLowerCase();
+  listDiv.querySelectorAll('.mtd-item').forEach(item => {
+    const txt = item.querySelector('span')?.textContent?.toLowerCase() || '';
+    item.style.display = txt.includes(lq) ? '' : 'none';
+  });
+}
+
+function toggleTipoDropdown(ddId, event) {
+  if (event) event.stopPropagation();
+  const btnId = ddId.replace('-dd', '-btn');
+  const btn = document.getElementById(btnId);
+
+  // Check if already open BEFORE building (build will create the element if missing)
+  const existing = document.getElementById(ddId);
+  const isOpen = existing && existing.style.display !== 'none';
+
+  // Close all dropdowns
+  document.querySelectorAll('.multi-tipo-dd').forEach(d => d.style.display = 'none');
+
+  if (!isOpen) {
+    // Build (creates dd in body if not yet existing)
+    _buildTipoDropdown(ddId);
+    const dd = document.getElementById(ddId);
+    if (!dd) return;
+    dd.style.display = 'block';
+    // Position using fixed coords from button
+    if (btn) {
+      const r = btn.getBoundingClientRect();
+      dd.style.left = r.left + 'px';
+      dd.style.top  = (r.bottom + 4) + 'px';
+      dd.style.minWidth = Math.max(220, r.width) + 'px';
+    }
+  }
+}
+
+// Close on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.multi-tipo-btn') && !e.target.closest('.multi-tipo-dd')) {
+    document.querySelectorAll('.multi-tipo-dd').forEach(d => d.style.display = 'none');
+  }
+});
+
 function populateFilters() {
   // After filter <select> options are built, restore last user choice
   setTimeout(_restoreFilters, 0);
   const fill=(id,vals,fem)=>{const s=document.getElementById(id);if(!s)return;const cur=s.value;const allTxt=fem?t('f_all_f'):t('f_all');s.innerHTML=`<option value="">${allTxt}</option>`+[...new Set(vals.filter(v=>v))].sort().map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');s.value=cur;};
-  fill('f-tipo',  DB.map(r=>r.tipo));
+  // Tipo dropdowns are built on demand (body-level, position:fixed)
+  _tipoUpdateLabel();
   fill('f-cli',   DB.map(r=>r.cliente));
   fill('f-local', DB.map(r=>r.localizacao), true);
   fill('f-resp',  DB.map(r=>r.responsavel));
   fill('f-emp',   DB.map(r=>r.empresa), true);
   // Mirror selects to table-view filters
-  fill('ft-tipo',  DB.map(r=>r.tipo));
   fill('ft-cli',   DB.map(r=>r.cliente));
   fill('ft-local', DB.map(r=>r.localizacao), true);
   fill('ft-resp',  DB.map(r=>r.responsavel));
@@ -4077,10 +4276,10 @@ function applyF() {
   updateApplyFilterBtn();
   _saveFilters();
   const g=id=>(document.getElementById(id)||{}).value||'';
-  const tipo=g('f-tipo'),cli=g('f-cli'),local=g('f-local'),resp=g('f-resp'),emp=g('f-emp'),stat=g('f-status'),calib=g('f-calib'),de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
+  const cli=g('f-cli'),local=g('f-local'),resp=g('f-resp'),emp=g('f-emp'),stat=g('f-status'),calib=g('f-calib'),de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
   const ultCalibMes=g('f-ult-calib-mes'), proxCalibMes=g('f-prox-calib-mes');
   let rows = DB.slice();
-  if(tipo)  rows=rows.filter(r=>r.tipo===tipo);
+  if(_selectedTipos.size>0) rows=rows.filter(r=>_selectedTipos.has(r.tipo));
   if(cli)   rows=rows.filter(r=>r.cliente===cli);
   if(local) rows=rows.filter(r=>r.localizacao===local);
   if(resp)  rows=rows.filter(r=>r.responsavel===resp);
@@ -4108,12 +4307,12 @@ function applyF() {
 function refreshInPlace() {
   // Re-apply active filters to rebuild pag.eq.rows with updated DB values
   const g = id => (document.getElementById(id)||{}).value||'';
-  const tipo=g('f-tipo'),cli=g('f-cli'),local=g('f-local'),resp=g('f-resp'),
+  const cli=g('f-cli'),local=g('f-local'),resp=g('f-resp'),
         emp=g('f-emp'),stat=g('f-status'),calib=g('f-calib'),
         de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
   const ultCalibMes=g('f-ult-calib-mes'), proxCalibMes=g('f-prox-calib-mes');
   let rows = DB.slice();
-  if(tipo)  rows=rows.filter(r=>r.tipo===tipo);
+  if(_selectedTipos.size>0) rows=rows.filter(r=>_selectedTipos.has(r.tipo));
   if(cli)   rows=rows.filter(r=>r.cliente===cli);
   if(local) rows=rows.filter(r=>r.localizacao===local);
   if(resp)  rows=rows.filter(r=>r.responsavel===resp);
@@ -4162,9 +4361,16 @@ function refreshInPlace() {
 function clearF(){
   FILTER_IDS.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   // Also clear table-view mirror fields
-  ['ft-tipo','ft-cli','ft-local','ft-resp','ft-emp','ft-status','ft-calib',
+  ['ft-cli','ft-local','ft-resp','ft-emp','ft-status','ft-calib',
    'ft-de','ft-ate','ft-ult-calib-mes','ft-prox-calib-mes','ft-search']
     .forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  // Reset multi-select tipo
+  _selectedTipos.clear();
+  _tipoUpdateLabel();
+  ['f-tipo-dd','ft-tipo-dd'].forEach(ddId=>{
+    const dd=document.getElementById(ddId);
+    if(dd) dd.querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=false);
+  });
   try{localStorage.removeItem('rochling_filters_v1');}catch(e){}
   applyF();
 }
@@ -4902,7 +5108,7 @@ function updateAll(){
 
   // On first load (rows empty) do a full reset; otherwise preserve position
   const isFirstLoad = !pag.eq.rows || pag.eq.rows.length === 0;
-  const hasFilter = ['f-tipo','f-cli','f-local','f-resp','f-emp',
+  const hasFilter = _selectedTipos.size > 0 || ['f-cli','f-local','f-resp','f-emp',
     'f-status','f-calib','f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search']
     .some(id => { const el=document.getElementById(id); return el && el.value; });
 
