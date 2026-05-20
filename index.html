@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v8)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v5)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <!-- qrcodejs — biblioteca QR robusta e testada (mesma API: new QRCode(el, opts)) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -2545,12 +2545,13 @@ function recalcDias(records) {
     if(dv===null && r.prox_calib) {
       try { dv = Math.round((new Date(r.prox_calib+'T00:00:00') - new Date(new Date().setHours(0,0,0,0))) / 86400000); } catch(e){}
     }
-    // v8: só reescreve status quando o valor atual É um dos 2 gerenciados.
-    // Status customizados (ex: "Em manutenção", "Aguardando peça") são preservados.
+    // Auto-correct status_calib based on real date (fix stale Excel/localStorage data)
     let sc = r.status_calib || '';
-    const MANAGED = ['Calibração Necessária', 'Instrumento Calibrado e aprovado', ''];
-    if (MANAGED.includes(sc) && dv !== null) {
-      sc = dv < 0 ? 'Calibração Necessária' : 'Instrumento Calibrado e aprovado';
+    const isSpecial = sc.includes('DESCARTADO') || sc.includes('encontrado')
+                   || sc.includes('Discarded')  || sc.includes('Found');
+    if(!isSpecial && dv !== null) {
+      if(dv < 0)  sc = 'Calibração Necessária';
+      else        sc = 'Instrumento Calibrado e aprovado';
     }
     return { ...r, dias_vencer: dv, status_calib: sc,
              link: r.link||'', link_data: r.link_data||'', notes: r.notes||'' };
@@ -2569,20 +2570,6 @@ let   _unsub    = null;   // realtime listener unsubscribe
 let   _pending  = false;
 let   _pushTimer= null;
 let   _fbActive = false;
-let   _lastLocalEdit = 0;   // v8: timestamp da última edição local (anti-race em fbPull)
-let   _pendingSince  = 0;   // v8: quando o flag _pending foi setado
-let   _pushFailCount = 0;   // v8: backoff exponencial em fbPush
-
-// Watchdog: se _pending ficar preso em true sem timer agendado por >15s,
-// libera para destravar o listener (defesa contra falhas silenciosas).
-// v8: agora também notifica o usuário se isso indicar falha de sync.
-setInterval(() => {
-  if (_pending && !_pushTimer) {
-    _pending = false;
-    setSyncInd('⚠ Sync travado — liberado', 'var(--orange)');
-    console.warn('[watchdog] _pending estava preso há >15s sem timer; liberado. Último erro:', window.__lastFbError);
-  }
-}, 15000);
 
 // ── Indicador de sync ─────────────────────────────────────────────
 function setSyncInd(text, color, spin) {
@@ -2640,13 +2627,12 @@ async function fbInit(cfg) {
 async function fbPull() {
   if(!fbActive()) return false;
   setSyncInd(t('sync_loading'), 'var(--accent2)', true);
-  const editTsBefore = _lastLocalEdit; // v8: captura antes do await
   try {
     const snap = await _colRef.doc('dados').get();
     if(snap.exists) {
-      // v8: se o usuário editou durante o await, NÃO sobrescreve — envia o local
-      if(_pending || _lastLocalEdit !== editTsBefore) {
-        console.log('fbPull: edição local detectada durante fetch — enviando local em vez de sobrescrever');
+      if(_pending) {
+        // Há mudanças locais não salvas — envia para o Firebase em vez de sobrescrever
+        console.log('fbPull: mudanças locais pendentes, enviando ao invés de sobrescrever');
         setSyncInd('⬆ Sincronizando mudanças locais…', 'var(--orange)');
         await fbPush(false);
         return true;
@@ -2667,8 +2653,6 @@ async function fbPull() {
 // ESCRITA debounced
 function fbSchedulePush() {
   _pending = true;
-  _pendingSince = Date.now();      // v8
-  _lastLocalEdit = Date.now();     // v8
   saveLS(); // Salva localStorage imediatamente — garante que não perde nada
   const btn = document.getElementById('btn-sync-now');
   if(btn) btn.style.display = 'inline-block';
@@ -2689,38 +2673,25 @@ async function fbPushOrRetry() {
 }
 
 async function fbPush(manual) {
-  if(!fbActive()) { saveLS(); _pending = false; return; }
+  if(!fbActive()) { saveLS(); return; }
   if(_pushTimer) { clearTimeout(_pushTimer); _pushTimer = null; }
   setSyncInd(t('sync_saving'), 'var(--accent2)', true);
-  let ok = false;
   try {
     const payload = DB.map(r=>{const{dias_vencer,...rest}=r;return rest;});
     await _colRef.doc('dados').set({ records: payload, updated: new Date().toISOString() });
     saveLS();
-    ok = true;
+    const btn = document.getElementById('btn-sync-now');
+    if(btn) btn.style.display = 'none';
     setSyncInd(t('sync_saved') + ' ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
-    _pushFailCount = 0; // v8: reset backoff em sucesso
     if(manual) showToast('🔥 Salvo no Firebase!');
   } catch(e) {
-    console.warn('fbPush error:', e);
-    window.__lastFbError = e; // v8: expõe para diagnóstico
-    setSyncInd(t('sync_fail') + ' ('+(e.code||e.message||'erro')+')', 'var(--red)');
-    // v8: backoff exponencial 30s, 1m, 2m, 5m, 10m (max). Para após 6 falhas.
-    _pushFailCount++;
-    if (_pushFailCount <= 6) {
-      const waits = [30000, 60000, 120000, 300000, 600000, 600000];
-      _pushTimer = setTimeout(() => fbPush(false), waits[Math.min(_pushFailCount-1, waits.length-1)]);
-    } else {
-      console.error('fbPush: desistindo após', _pushFailCount, 'falhas consecutivas. Nova edição vai re-tentar.');
-    }
+    setSyncInd(t('sync_fail'), 'var(--red)');
+    _pushTimer = setTimeout(() => fbPush(false), 30000);
     saveLS();
-    if(manual) showToast('Falha Firebase ('+(e.code||'erro')+'). Salvo localmente.', 'err');
+    if(manual) showToast('Falha Firebase. Salvo localmente.', 'err');
   } finally {
-    // SEMPRE libera o flag — mesmo em falha — para não bloquear o listener
-    // após algumas edições (raiz do bug "trava após N atualizações").
+    // Garante que _pending sempre volta a false — mesmo em caso de erro silencioso
     _pending = false;
-    const btn = document.getElementById('btn-sync-now');
-    if(btn) btn.style.display = ok ? 'none' : 'inline-block';
   }
 }
 
@@ -2729,18 +2700,12 @@ function fbStartListen() {
   if(!fbActive()) return;
   if(_unsub) _unsub(); // cancela listener anterior
   _unsub = _colRef.doc('dados').onSnapshot(snap => {
-    // v8: ignora updates remotos apenas durante janela curta de save (3s),
-    // para não bloquear o stream se _pending ficar preso.
-    if(!snap.exists) return;
-    if(_pending && (Date.now() - _pendingSince) < 3000) return;
+    if(!snap.exists || _pending) return; // ignora enquanto está salvando
     const data = snap.data().records || [];
     const newDB = recalcDias(data);
-    // Compara TODOS os campos relevantes (não só _uid + prox_calib),
-    // ignorando o derivado dias_vencer para não entrar em loop.
-    const sig = arr => JSON.stringify(arr.map(r => {
-      const { dias_vencer, ...rest } = r; return rest;
-    }));
-    if (sig(newDB) !== sig(DB)) {
+    // Compara snapshot completo (exceto campo volátil dias_vencer) para detectar qualquer alteração
+    const _stripVolatile = arr => arr.map(r => { const {dias_vencer, ...rest} = r; return rest; });
+    if(JSON.stringify(_stripVolatile(newDB)) !== JSON.stringify(_stripVolatile(DB))) {
       DB = newDB;
       saveLS();
       // Preserve active filters when receiving live updates
@@ -2754,7 +2719,6 @@ function fbStartListen() {
     }
   }, err => {
     console.warn('fbListen error:', err);
-    _pending = false; // libera mesmo se o listener errar
     setSyncInd('⚠️ Listener desconectado', 'var(--orange)');
   });
 }
@@ -3070,19 +3034,25 @@ async function initFirebase() {
           console.warn('[público] auth anônima falhou:', authErr.code);
         }
 
-        // v8: lê só o doc 'dados' (mais barato, menos exposição)
         const db = firebase.firestore(app);
-        const snap = await db.collection('equipamentos').doc('dados').get();
-        if (snap.exists) {
-          const data = snap.data();
-          const rows = Array.isArray(data.records) ? data.records.map((r,i) => ({ _uid: i+1, ...r })) : [];
+        const snap = await db.collection('equipamentos').get();
+        if (!snap.empty) {
+          const rows = [];
+          snap.forEach(doc => {
+            const data = doc.data();
+            // Estrutura padrão: doc 'dados' contém { records: [...] }
+            if (Array.isArray(data.records)) {
+              data.records.forEach(record => rows.push({ _uid: rows.length + 1, ...record }));
+            } else {
+              // Fallback: documento simples sem array interno
+              rows.push({ _uid: rows.length + 1, ...data });
+            }
+          });
           if (rows.length) {
             DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
-          } else {
-            console.warn('[público] Doc dados sem array records.');
           }
         } else {
-          console.warn('[público] Doc /equipamentos/dados não existe — verifique Security Rules / dados.');
+          console.warn('[público] Firestore retornou 0 docs — verifique as Security Rules.');
         }
       } catch(e) {
         console.error('[público] erro Firestore:', e.code, e.message);
@@ -3094,9 +3064,6 @@ async function initFirebase() {
 let _auth = null;
 
 async function initFirebaseAndAuth() {
-  // v8: evita double-init quando o IIFE público já criou o app
-  if (window.__fbAuthBootstrapped) return;
-  window.__fbAuthBootstrapped = true;
   let cfg = FB_CONFIG_DEFAULT;
   try {
     const saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}');
@@ -3789,9 +3756,6 @@ function startInlineEdit(uid, k, td) {
     input = document.createElement('input');
     input.type = 'date';
     input.value = curVal;
-    input.min = '1900-01-01';
-    input.max = '2100-12-31';
-    input.required = true;
     input.style.cssText = `width:100%;font-size:11px;font-family:var(--mono);background:var(--surf2);color:var(--tx);border:1px solid var(--accent);border-radius:3px;padding:2px 4px;outline:none`;
   } else {
     input = document.createElement('input');
@@ -3812,16 +3776,7 @@ function startInlineEdit(uid, k, td) {
     if(e.key === 'Tab')    { e.preventDefault(); commitInlineEdit(false); moveInlineFocus(uid, k, e.shiftKey ? -1 : 1); }
     e.stopPropagation();
   });
-  // Captura ESTE edit específico — o blur só pode comitar a si mesmo,
-  // nunca uma edição posterior (que mataria o input ativo do usuário).
-  const myEdit = _inlineActive;
-  input.addEventListener('blur', () => setTimeout(() => {
-    if (!(_inlineActive && _inlineActive === myEdit)) return;
-    // Para campos de data: se o valor ficou vazio (digitação incompleta),
-    // cancela em vez de gravar — evita apagar a data existente.
-    if (cfg.type === 'date' && !input.value) { cancelInlineEdit(); return; }
-    commitInlineEdit(false);
-  }, 150));
+  input.addEventListener('blur', () => setTimeout(() => { if(_inlineActive) commitInlineEdit(false); }, 150));
   if(cfg.type === 'select') {
     input.addEventListener('change', () => commitInlineEdit(false));
   }
@@ -3829,8 +3784,6 @@ function startInlineEdit(uid, k, td) {
 
 // Recalcula próxima calib, dias_vencer e status_calib de um registro
 function recalcRecord(r) {
-  if(!r) return r;
-  _statsCache = null;
   const today = new Date(); today.setHours(0,0,0,0);
 
   // 1. Se tem Última Calib + Frequência → calcula Próxima automaticamente
@@ -3868,7 +3821,6 @@ function recalcRecord(r) {
       r.status_calib = 'Instrumento Calibrado e aprovado';
     }
   }
-  return r;
 }
 
 function commitInlineEdit(silent) {
@@ -3879,25 +3831,6 @@ function commitInlineEdit(silent) {
 
   const newVal = k === 'freq_dias' ? (parseInt(input.value) || null) : input.value.trim();
   const r = DB.find(x => x._uid === uid);
-
-  // ── Validação de datas: exige formato YYYY-MM-DD com ano entre 1900 e 2100.
-  // Evita que digitação parcial (ex.: "03/03/26" → ano 0026) corrompa o registro
-  // e dê a sensação de "travamento" quando a linha sai do filtro vigente.
-  if (k === 'ult_calib' || k === 'prox_calib') {
-    const v = newVal || '';
-    const ok = /^\d{4}-\d{2}-\d{2}$/.test(v) &&
-               (+v.slice(0,4) >= 1900) && (+v.slice(0,4) <= 2100);
-    if (!ok) {
-      if (typeof showToast === 'function') {
-        showToast(LANG==='en'
-          ? '⚠️ Invalid date — use dd/mm/yyyy with a 4-digit year'
-          : '⚠️ Data inválida — use dd/mm/aaaa com ano de 4 dígitos', 'err');
-      }
-      _inlineActive = null;
-      rerenderRow(uid);
-      return;
-    }
-  }
 
   if(r && (String(r[k]||'') !== String(newVal||''))) {
     pushUndo();
@@ -3912,16 +3845,16 @@ function commitInlineEdit(silent) {
     saveLS();
     if(!silent) {
       fbSchedulePush();
-      showToast(LANG==='en' ? '✅ Saved and updated' : '✅ Salvo e atualizado em tempo real');
+      showToast(LANG==='en' ? '✅ Saved — filters will update when you click Apply' : '✅ Salvo — tabela mantida. Clique em 🔄 para atualizar filtros');
     }
-    // Atualiza filtros, status, dias, KPIs, alertas e gráficos imediatamente,
-    // preservando página/scroll sempre que possível.
-    _pendingFilterRefresh = false;
+    // ── Only re-render the ONE affected row — do NOT re-apply filters ──
+    rerenderRow(uid, 'geral');
+    // Mark that a deferred filter refresh is pending
+    _pendingFilterRefresh = true;
     updateApplyFilterBtn();
-    refreshInPlace();
   } else {
     _inlineActive = null;
-    rerenderRow(uid);
+    rerenderRow(uid, 'geral');
   }
   _inlineActive = null;
 }
@@ -3936,20 +3869,14 @@ function cancelInlineEdit() {
 
 // ── Re-render only ONE row without touching page/scroll/filters ────────────
 function rerenderRow(uid, tbl) {
-  const rows = tbl
-    ? Array.from(document.querySelectorAll(`#${_IDS(tbl).tbody} tr[data-uid="${uid}"]`))
-    : Array.from(document.querySelectorAll(`tr[data-uid="${uid}"]`));
-  if(!rows.length) return; // row not on current page — safe to ignore
+  const tr = document.querySelector(`tr[data-uid="${uid}"]`);
+  if(!tr) return; // row not on current page — safe to ignore
   const r = DB.find(x => x._uid === uid);
   if(!r) return;
-  rows.forEach(tr => {
-    const tblEl = tr.closest('table');
-    const curTbl = tbl || (tblEl?.id === 'alert-tbl' ? 'alert' : tblEl?.id === 'rep-tbl' ? 'rep' : 'geral');
-    const cols = (COL_DEFS[curTbl]||[]).filter(c => c.k==='_act' || c.k==='_chk' || colVis[curTbl]?.[c.k] !== false);
-    tr.innerHTML = cols.map(c => renderCell(r, c.k, curTbl)).join('');
-    // Restore selected highlight if needed
-    if(_selectedUIDs[curTbl]?.has(uid)) tr.classList.add('selected');
-  });
+  const cols = (COL_DEFS[tbl]||[]).filter(c => colVis[tbl]?.[c.k] !== false);
+  tr.innerHTML = cols.map(c => renderCell(r, c.k, tbl)).join('');
+  // Restore selected highlight if needed
+  if(_selectedUIDs[tbl]?.has(uid)) tr.classList.add('selected');
 }
 
 // ── Deferred filter refresh — user controls when filters re-apply ──────────
@@ -4719,13 +4646,6 @@ function saveRecord(){
   const today=new Date();today.setHours(0,0,0,0);
   const prox=document.getElementById('m-prox').value;
   const dv=prox?Math.round((new Date(prox+'T00:00:00')-today)/86400000):null;
-  const ultVal = document.getElementById('m-ult').value;
-  if((ultVal && !isValidISODateInput(ultVal)) || (prox && !isValidISODateInput(prox))) {
-    showToast(LANG==='en'
-      ? '⚠️ Invalid date — use dd/mm/yyyy with a 4-digit year'
-      : '⚠️ Data inválida — use dd/mm/aaaa com ano de 4 dígitos', 'err');
-    return;
-  }
   const upd={
     id:        document.getElementById('m-id').value,
     tipo:      document.getElementById('m-tipo').value,
@@ -4736,7 +4656,7 @@ function saveRecord(){
     responsavel:document.getElementById('m-resp').value,
     empresa:   document.getElementById('m-emp').value,
     cod_lab:   document.getElementById('m-codlab').value,
-    ult_calib: ultVal,
+    ult_calib: document.getElementById('m-ult').value,
     prox_calib:prox,
     freq_dias: parseInt(document.getElementById('m-freq').value)||null,
     status:    document.getElementById('m-status').value,
@@ -4812,12 +4732,8 @@ function deleteRecord_real(){
   showToast(LANG === 'en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
 }
 
-function isValidISODateInput(v) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(v || '') && (+v.slice(0,4) >= 1900) && (+v.slice(0,4) <= 2100);
-}
 function autoCalc(){
   const ult=document.getElementById('m-ult').value,freq=parseInt(document.getElementById('m-freq').value);
-  if(ult && !isValidISODateInput(ult)) { updateValidityBar(); return; }
   if(ult&&freq>0){const d=new Date(ult+'T00:00:00');d.setDate(d.getDate()+freq);document.getElementById('m-prox').value=d.toISOString().slice(0,10);}
   updateValidityBar();
 }
@@ -4833,7 +4749,7 @@ function updateValidityBar(){
   const vText=document.getElementById('v-text'); if(vText) vText.textContent=remaining<0?`${t('d_expired')} ${Math.abs(remaining)}${t('d_days')}`:remaining===0?`${t('d_today')}`:`${remaining}${t('d_days')} ${t('d_remaining')}`;
   if(vText) vText.style.color=color;
   const vBar=document.getElementById('v-bar'); if(vBar) vBar.style.cssText=`width:${pct}%;background:${pct>=100?'var(--red)':pct>=80?'var(--orange)':'var(--green)'}`;
-  const vPct=document.getElementById('v-pct'); if(vPct) vPct.textContent=pct+(LANG==='en'?'% used':'% usado');
+  const vPct=document.getElementById('v-pct'); if(vPct) vPct.textContent=pct+LANG==='en'?'% used':'% usado';
   wrap.style.display='block';
 }
 
@@ -4841,7 +4757,7 @@ function updateValidityBar(){
 // FILES
 // ═══════════════════════════════════════════════════════
 function fmtSize(b){if(!b)return '';if(b<1024)return b+' B';if(b<1048576)return (b/1024).toFixed(1)+' KB';return (b/1048576).toFixed(2)+' MB';}
-// fileIcon: 2ª declaração removida (v8 fix) — usa a função única definida em statusBadge
+function fileIcon(n){const e=((n||'').split('.').pop()||'').toLowerCase();return{pdf:'📕',doc:'📘',docx:'📘',xls:'📗',xlsx:'📗',png:'🖼️',jpg:'🖼️',jpeg:'🖼️'}[e]||'📄';}
 function refreshFileUI(name,dataURL){
   const inp=document.getElementById('m-link');if(inp)inp.value=name||'';
   const info=document.getElementById('file-info');
@@ -4899,30 +4815,7 @@ function startAutoNotif(){buildNotifs();setInterval(()=>{const prev=_lastCrit;bu
 // IMPORT / EXPORT
 // ═══════════════════════════════════════════════════════
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='equipamentos_'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href);}
-function importData(e){
-  const f=e.target.files[0]; if(!f) return;
-  const rd=new FileReader();
-  rd.onload=ev=>{
-    try {
-      const parsed = JSON.parse(ev.target.result);
-      // v8: validação de estrutura mínima
-      if (!Array.isArray(parsed)) throw new Error('Arquivo não contém um array de registros');
-      const sample = parsed.find(r => r && typeof r === 'object');
-      if (parsed.length > 0 && !sample) throw new Error('Registros inválidos');
-      if (sample && (sample.id === undefined && sample._uid === undefined))
-        throw new Error('Registros sem campo "id" ou "_uid"');
-      DB = recalcDias(parsed);
-      updateAll();
-      fbSchedulePush();
-      showToast('✅ Importado: '+DB.length+' registros. Sincronizando…');
-    } catch(err) {
-      console.warn('importData error:', err);
-      showToast('Erro ao importar: '+(err.message||'JSON inválido'), 'err');
-    }
-  };
-  rd.readAsText(f);
-  e.target.value='';
-}
+function importData(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=ev=>{try{DB=JSON.parse(ev.target.result);updateAll();fbSchedulePush();showToast('✅ Importado: '+DB.length+' registros. Sincronizando…');}catch(err){showToast('Erro ao importar','err');}};rd.readAsText(f);e.target.value='';}
 
 // ═══════════════════════════════════════════════════════
 // TOAST
@@ -5251,10 +5144,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('lb-en')?.classList.toggle('on', LANG==='en');
   document.getElementById('df-dmy')?.classList.toggle('on', DATE_FMT==='dmy');
   document.getElementById('df-iso')?.classList.toggle('on', DATE_FMT==='iso');
-  ['m-ult','m-prox'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) { el.min = '1900-01-01'; el.max = '2100-12-31'; }
-  });
   applyLang();
   // Modo público (?view=ID) — não inicializa Auth para evitar app.delete() sobrescrever
   // o app Firebase já criado pelo bloco de modo público acima
@@ -5767,10 +5656,14 @@ function _handleQrDeepLink() {
     if(changed > 0) {
       saveLS();
       if(fbActive()) fbSchedulePush();
-      showToast(`✅ ${changed} célula(s) preenchida(s) em tempo real`);
-      _pendingFilterRefresh = false;
+      showToast(`✅ ${changed} célula(s) preenchida(s) — clique em 🔄 para atualizar filtros`);
+      // Re-render only the affected rows — stay in place
+      previewIdxs.forEach(idx => {
+        const r2 = allRows[idx];
+        if(r2) rerenderRow(r2._uid, 'geral');
+      });
+      _pendingFilterRefresh = true;
       updateApplyFilterBtn();
-      refreshInPlace();
     }
   }
 })();
@@ -6221,19 +6114,22 @@ function applyBulkEdit(tbl) {
     const updated = { ...r, [field]: field==='freq_dias' ? parseInt(newVal)||r.freq_dias : newVal };
     changed++;
     return recalcRecord(updated);
-  }).filter(Boolean);
+  });
 
   // Confirm toast
-  showToast(`✔ ${changed} registro(s) atualizado(s) em tempo real`);
+  showToast(`✔ ${changed} registro(s) atualizado(s) — clique em 🔄 para atualizar filtros`);
 
   // Persist
   saveLS();
   if(fbActive()) fbSchedulePush();
 
+  // Re-render only the changed rows — don't jump page or re-filter
+  uids.forEach(uid => rerenderRow(uid, tbl));
   clearSelection(tbl);
-  _pendingFilterRefresh = false;
+
+  // Mark deferred refresh needed
+  _pendingFilterRefresh = true;
   updateApplyFilterBtn();
-  refreshInPlace();
 }
 
 function bulkDelete(tbl) {
@@ -6264,7 +6160,16 @@ function clearSelection(tbl) {
   renderTable(tbl);
 }
 
-// ── Toast helper: 2ª declaração removida (v8 fix) — usa a única showToast definida acima ──
+// ── Toast helper (reuse existing or create simple one) ──────────────
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  if(el) {
+    el.textContent = msg;
+    el.className = 'toast on ' + (type||'');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('on'), 3200);
+  }
+}
 
 
 (function(){
