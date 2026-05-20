@@ -554,12 +554,12 @@ tr:nth-child(even) td { background: rgba(255,255,255,.012) }
 @media(max-width:700px){.tl-grid{grid-template-columns:1fr 1fr}}
 
 /* ── MODAL ── */
-.modal-ov { display: none; position: fixed; inset: 0; background: var(--surf); z-index: 400; align-items: center; justify-content: center }
+.modal-ov { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 400; align-items: center; justify-content: center; backdrop-filter: blur(6px) }
 .modal-ov.on { display: flex }
 .modal {
-  background: var(--surf); border: none; border-radius: 0;
-  width: 100vw; height: 100vh; max-height: 100vh; overflow-y: auto; padding: 32px 40px;
-  position: relative; box-shadow: none;
+  background: var(--surf); border: 1px solid var(--bdr2); border-radius: 14px;
+  width: min(720px,95vw); max-height: 90vh; overflow-y: auto; padding: 26px;
+  position: relative; box-shadow: 0 32px 80px rgba(0,0,0,.5);
   animation: modalIn .16s cubic-bezier(.34,1.56,.64,1);
 }
 @keyframes modalIn { from { opacity: 0; transform: translateY(16px) scale(.97) } to { opacity: 1; transform: none } }
@@ -747,9 +747,9 @@ body.col-resizing * { cursor: col-resize !important }
 ::-webkit-scrollbar-thumb:hover{background:var(--tx3)}
 
 /* ── DRILL-DOWN MODAL ─────────────────────────────────── */
-.drill-ov{position:fixed;inset:0;background:var(--surf);z-index:380;display:none;align-items:stretch;justify-content:center;padding:0}
+.drill-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);z-index:380;display:none;align-items:center;justify-content:center;padding:24px}
 .drill-ov.on{display:flex;animation:fadeIn .15s}
-.drill-modal{background:var(--surf);border:1px solid var(--bdr2);border-radius:var(--r2);box-shadow:var(--sh);width:100vw;height:100vh;max-height:100vh;display:flex;flex-direction:column;overflow:hidden;border-radius:0}
+.drill-modal{background:var(--surf);border:1px solid var(--bdr2);border-radius:var(--r2);box-shadow:var(--sh);width:min(1300px,98vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
 .drill-head{padding:14px 18px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surf2)}
 .drill-head h3{font-size:14px;font-weight:700;color:var(--tx);margin:0}
 .drill-head .drill-sub{font-size:11px;color:var(--tx2);font-family:var(--mono);margin-top:2px}
@@ -2726,8 +2726,8 @@ function openGsConfig() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}'); } catch(e){}
   const html = `
-  <div style="position:fixed;inset:0;background:var(--surf);z-index:600;display:flex;align-items:flex-start;justify-content:center" id="fb-ov" onclick="if(event.target===this)this.remove()">
-    <div style="background:var(--surf);border:none;border-radius:0;width:100vw;min-height:100vh;padding:40px 48px;box-shadow:none;overflow-y:auto">
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:600;display:flex;align-items:center;justify-content:center" id="fb-ov" onclick="if(event.target===this)this.remove()">
+    <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;width:min(600px,96vw);padding:24px;box-shadow:0 24px 64px rgba(0,0,0,.6);max-height:90vh;overflow-y:auto">
       <div style="font-size:15px;font-weight:800;margin-bottom:4px">🔥 Firebase — Configuração</div>
       <div style="font-size:12px;color:var(--tx3);margin-bottom:16px">Banco de dados em tempo real. Todos os usuários veem as alterações instantaneamente de qualquer lugar.</div>
 
@@ -5759,8 +5759,8 @@ function openQrBulkModal(source) {
   ];
 
   document.body.insertAdjacentHTML('beforeend', `
-<div id="qr-bulk-ov" style="position:fixed;inset:0;z-index:900;display:flex;align-items:flex-start;justify-content:center;background:var(--surf)" onclick="if(event.target===this)document.getElementById('qr-bulk-ov').remove()">
-<div style="background:var(--surf);border:none;border-radius:0;width:100vw;min-height:100vh;overflow-y:auto;padding:40px 48px;box-shadow:none">
+<div id="qr-bulk-ov" style="position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(4px)" onclick="if(event.target===this)document.getElementById('qr-bulk-ov').remove()">
+<div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:14px;width:min(520px,95vw);max-height:90vh;overflow-y:auto;padding:26px;box-shadow:0 24px 80px rgba(0,0,0,.5)">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
     <div>
       <div style="font-size:15px;font-weight:800;color:var(--tx)">▦ Imprimir QR em Lote</div>
@@ -6418,21 +6418,21 @@ function showToast(msg, type) {
 <style>
 #equip-view-ov {
   display:none; position:fixed; inset:0; z-index:1100;
-  background:var(--surf);
-  align-items:flex-start; justify-content:center; padding:0;
+  background:rgba(0,0,0,.72); backdrop-filter:blur(8px);
+  align-items:center; justify-content:center; padding:20px;
 }
 #equip-view-ov.on { display:flex }
 #equip-view-box {
-  background:var(--surf); border:none;
-  border-radius:0; width:100vw; height:100vh; max-height:100vh;
-  overflow-y:auto; box-shadow:none;
+  background:var(--surf); border:1px solid var(--bdr2);
+  border-radius:16px; width:min(760px,100%); max-height:92vh;
+  overflow-y:auto; box-shadow:0 40px 100px rgba(0,0,0,.6);
   animation:modalIn .18s cubic-bezier(.34,1.4,.64,1);
   display:flex; flex-direction:column;
 }
 .ev-header {
   padding:22px 26px 18px; border-bottom:1px solid var(--bdr2);
   background:linear-gradient(135deg,var(--surf2) 0%,var(--surf) 100%);
-  border-radius:0; position:relative;
+  border-radius:16px 16px 0 0; position:relative;
   border-top:4px solid var(--brand);
 }
 .ev-header-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px }
@@ -6893,10 +6893,10 @@ function closeQrModal() {
 
 function _qrModalHTML() {
   return `
-<div id="qr-modal-ov" style="position:fixed;inset:0;z-index:800;display:flex;align-items:flex-start;justify-content:center;background:var(--surf);opacity:0;pointer-events:none;transition:opacity .18s" onclick="if(event.target===this)closeQrModal()">
+<div id="qr-modal-ov" style="position:fixed;inset:0;z-index:800;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .18s" onclick="if(event.target===this)closeQrModal()">
 <style>
 #qr-modal-ov.on{opacity:1;pointer-events:all}
-#qr-modal{background:var(--surf);border:none;border-radius:0;width:100vw;min-height:100vh;overflow-y:auto;box-shadow:none;padding:40px 48px}
+#qr-modal{background:var(--surf);border:1px solid var(--bdr2);border-radius:14px;width:460px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.5);padding:24px}
 .qr-size-btn{padding:6px 13px;border-radius:6px;border:1px solid var(--bdr2);background:var(--surf2);color:var(--tx2);font-size:11px;font-weight:700;cursor:pointer;transition:all .12s;font-family:var(--font)}
 .qr-size-btn:hover,.qr-size-btn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
 .qr-preview-label{font-size:9px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
