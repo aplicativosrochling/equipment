@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v7)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v8)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <!-- qrcodejs — biblioteca QR robusta e testada (mesma API: new QRCode(el, opts)) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -2545,13 +2545,12 @@ function recalcDias(records) {
     if(dv===null && r.prox_calib) {
       try { dv = Math.round((new Date(r.prox_calib+'T00:00:00') - new Date(new Date().setHours(0,0,0,0))) / 86400000); } catch(e){}
     }
-    // Auto-correct status_calib based on real date (fix stale Excel/localStorage data)
+    // v8: só reescreve status quando o valor atual É um dos 2 gerenciados.
+    // Status customizados (ex: "Em manutenção", "Aguardando peça") são preservados.
     let sc = r.status_calib || '';
-    const isSpecial = sc.includes('DESCARTADO') || sc.includes('encontrado')
-                   || sc.includes('Discarded')  || sc.includes('Found');
-    if(!isSpecial && dv !== null) {
-      if(dv < 0)  sc = 'Calibração Necessária';
-      else        sc = 'Instrumento Calibrado e aprovado';
+    const MANAGED = ['Calibração Necessária', 'Instrumento Calibrado e aprovado', ''];
+    if (MANAGED.includes(sc) && dv !== null) {
+      sc = dv < 0 ? 'Calibração Necessária' : 'Instrumento Calibrado e aprovado';
     }
     return { ...r, dias_vencer: dv, status_calib: sc,
              link: r.link||'', link_data: r.link_data||'', notes: r.notes||'' };
@@ -2570,10 +2569,20 @@ let   _unsub    = null;   // realtime listener unsubscribe
 let   _pending  = false;
 let   _pushTimer= null;
 let   _fbActive = false;
+let   _lastLocalEdit = 0;   // v8: timestamp da última edição local (anti-race em fbPull)
+let   _pendingSince  = 0;   // v8: quando o flag _pending foi setado
+let   _pushFailCount = 0;   // v8: backoff exponencial em fbPush
 
 // Watchdog: se _pending ficar preso em true sem timer agendado por >15s,
 // libera para destravar o listener (defesa contra falhas silenciosas).
-setInterval(() => { if (_pending && !_pushTimer) { _pending = false; } }, 15000);
+// v8: agora também notifica o usuário se isso indicar falha de sync.
+setInterval(() => {
+  if (_pending && !_pushTimer) {
+    _pending = false;
+    setSyncInd('⚠ Sync travado — liberado', 'var(--orange)');
+    console.warn('[watchdog] _pending estava preso há >15s sem timer; liberado. Último erro:', window.__lastFbError);
+  }
+}, 15000);
 
 // ── Indicador de sync ─────────────────────────────────────────────
 function setSyncInd(text, color, spin) {
@@ -2631,12 +2640,13 @@ async function fbInit(cfg) {
 async function fbPull() {
   if(!fbActive()) return false;
   setSyncInd(t('sync_loading'), 'var(--accent2)', true);
+  const editTsBefore = _lastLocalEdit; // v8: captura antes do await
   try {
     const snap = await _colRef.doc('dados').get();
     if(snap.exists) {
-      if(_pending) {
-        // Há mudanças locais não salvas — envia para o Firebase em vez de sobrescrever
-        console.log('fbPull: mudanças locais pendentes, enviando ao invés de sobrescrever');
+      // v8: se o usuário editou durante o await, NÃO sobrescreve — envia o local
+      if(_pending || _lastLocalEdit !== editTsBefore) {
+        console.log('fbPull: edição local detectada durante fetch — enviando local em vez de sobrescrever');
         setSyncInd('⬆ Sincronizando mudanças locais…', 'var(--orange)');
         await fbPush(false);
         return true;
@@ -2657,6 +2667,8 @@ async function fbPull() {
 // ESCRITA debounced
 function fbSchedulePush() {
   _pending = true;
+  _pendingSince = Date.now();      // v8
+  _lastLocalEdit = Date.now();     // v8
   saveLS(); // Salva localStorage imediatamente — garante que não perde nada
   const btn = document.getElementById('btn-sync-now');
   if(btn) btn.style.display = 'inline-block';
@@ -2687,13 +2699,22 @@ async function fbPush(manual) {
     saveLS();
     ok = true;
     setSyncInd(t('sync_saved') + ' ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
+    _pushFailCount = 0; // v8: reset backoff em sucesso
     if(manual) showToast('🔥 Salvo no Firebase!');
   } catch(e) {
     console.warn('fbPush error:', e);
-    setSyncInd(t('sync_fail'), 'var(--red)');
-    _pushTimer = setTimeout(() => fbPush(false), 30000);
+    window.__lastFbError = e; // v8: expõe para diagnóstico
+    setSyncInd(t('sync_fail') + ' ('+(e.code||e.message||'erro')+')', 'var(--red)');
+    // v8: backoff exponencial 30s, 1m, 2m, 5m, 10m (max). Para após 6 falhas.
+    _pushFailCount++;
+    if (_pushFailCount <= 6) {
+      const waits = [30000, 60000, 120000, 300000, 600000, 600000];
+      _pushTimer = setTimeout(() => fbPush(false), waits[Math.min(_pushFailCount-1, waits.length-1)]);
+    } else {
+      console.error('fbPush: desistindo após', _pushFailCount, 'falhas consecutivas. Nova edição vai re-tentar.');
+    }
     saveLS();
-    if(manual) showToast('Falha Firebase. Salvo localmente.', 'err');
+    if(manual) showToast('Falha Firebase ('+(e.code||'erro')+'). Salvo localmente.', 'err');
   } finally {
     // SEMPRE libera o flag — mesmo em falha — para não bloquear o listener
     // após algumas edições (raiz do bug "trava após N atualizações").
@@ -2708,7 +2729,10 @@ function fbStartListen() {
   if(!fbActive()) return;
   if(_unsub) _unsub(); // cancela listener anterior
   _unsub = _colRef.doc('dados').onSnapshot(snap => {
-    if(!snap.exists || _pending) return; // ignora enquanto está salvando
+    // v8: ignora updates remotos apenas durante janela curta de save (3s),
+    // para não bloquear o stream se _pending ficar preso.
+    if(!snap.exists) return;
+    if(_pending && (Date.now() - _pendingSince) < 3000) return;
     const data = snap.data().records || [];
     const newDB = recalcDias(data);
     // Compara TODOS os campos relevantes (não só _uid + prox_calib),
@@ -3046,25 +3070,19 @@ async function initFirebase() {
           console.warn('[público] auth anônima falhou:', authErr.code);
         }
 
+        // v8: lê só o doc 'dados' (mais barato, menos exposição)
         const db = firebase.firestore(app);
-        const snap = await db.collection('equipamentos').get();
-        if (!snap.empty) {
-          const rows = [];
-          snap.forEach(doc => {
-            const data = doc.data();
-            // Estrutura padrão: doc 'dados' contém { records: [...] }
-            if (Array.isArray(data.records)) {
-              data.records.forEach(record => rows.push({ _uid: rows.length + 1, ...record }));
-            } else {
-              // Fallback: documento simples sem array interno
-              rows.push({ _uid: rows.length + 1, ...data });
-            }
-          });
+        const snap = await db.collection('equipamentos').doc('dados').get();
+        if (snap.exists) {
+          const data = snap.data();
+          const rows = Array.isArray(data.records) ? data.records.map((r,i) => ({ _uid: i+1, ...r })) : [];
           if (rows.length) {
             DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
+          } else {
+            console.warn('[público] Doc dados sem array records.');
           }
         } else {
-          console.warn('[público] Firestore retornou 0 docs — verifique as Security Rules.');
+          console.warn('[público] Doc /equipamentos/dados não existe — verifique Security Rules / dados.');
         }
       } catch(e) {
         console.error('[público] erro Firestore:', e.code, e.message);
@@ -3076,6 +3094,9 @@ async function initFirebase() {
 let _auth = null;
 
 async function initFirebaseAndAuth() {
+  // v8: evita double-init quando o IIFE público já criou o app
+  if (window.__fbAuthBootstrapped) return;
+  window.__fbAuthBootstrapped = true;
   let cfg = FB_CONFIG_DEFAULT;
   try {
     const saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}');
@@ -4820,7 +4841,7 @@ function updateValidityBar(){
 // FILES
 // ═══════════════════════════════════════════════════════
 function fmtSize(b){if(!b)return '';if(b<1024)return b+' B';if(b<1048576)return (b/1024).toFixed(1)+' KB';return (b/1048576).toFixed(2)+' MB';}
-function fileIcon(n){const e=((n||'').split('.').pop()||'').toLowerCase();return{pdf:'📕',doc:'📘',docx:'📘',xls:'📗',xlsx:'📗',png:'🖼️',jpg:'🖼️',jpeg:'🖼️'}[e]||'📄';}
+// fileIcon: 2ª declaração removida (v8 fix) — usa a função única definida em statusBadge
 function refreshFileUI(name,dataURL){
   const inp=document.getElementById('m-link');if(inp)inp.value=name||'';
   const info=document.getElementById('file-info');
@@ -4878,7 +4899,30 @@ function startAutoNotif(){buildNotifs();setInterval(()=>{const prev=_lastCrit;bu
 // IMPORT / EXPORT
 // ═══════════════════════════════════════════════════════
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='equipamentos_'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href);}
-function importData(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=ev=>{try{DB=JSON.parse(ev.target.result);updateAll();fbSchedulePush();showToast('✅ Importado: '+DB.length+' registros. Sincronizando…');}catch(err){showToast('Erro ao importar','err');}};rd.readAsText(f);e.target.value='';}
+function importData(e){
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=ev=>{
+    try {
+      const parsed = JSON.parse(ev.target.result);
+      // v8: validação de estrutura mínima
+      if (!Array.isArray(parsed)) throw new Error('Arquivo não contém um array de registros');
+      const sample = parsed.find(r => r && typeof r === 'object');
+      if (parsed.length > 0 && !sample) throw new Error('Registros inválidos');
+      if (sample && (sample.id === undefined && sample._uid === undefined))
+        throw new Error('Registros sem campo "id" ou "_uid"');
+      DB = recalcDias(parsed);
+      updateAll();
+      fbSchedulePush();
+      showToast('✅ Importado: '+DB.length+' registros. Sincronizando…');
+    } catch(err) {
+      console.warn('importData error:', err);
+      showToast('Erro ao importar: '+(err.message||'JSON inválido'), 'err');
+    }
+  };
+  rd.readAsText(f);
+  e.target.value='';
+}
 
 // ═══════════════════════════════════════════════════════
 // TOAST
@@ -6220,16 +6264,7 @@ function clearSelection(tbl) {
   renderTable(tbl);
 }
 
-// ── Toast helper (reuse existing or create simple one) ──────────────
-function showToast(msg, type) {
-  const el = document.getElementById('toast');
-  if(el) {
-    el.textContent = msg;
-    el.className = 'toast on ' + (type||'');
-    clearTimeout(el._t);
-    el._t = setTimeout(() => el.classList.remove('on'), 3200);
-  }
-}
+// ── Toast helper: 2ª declaração removida (v8 fix) — usa a única showToast definida acima ──
 
 
 (function(){
