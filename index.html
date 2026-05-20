@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v5)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v7)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <!-- qrcodejs — biblioteca QR robusta e testada (mesma API: new QRCode(el, opts)) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -2571,6 +2571,10 @@ let   _pending  = false;
 let   _pushTimer= null;
 let   _fbActive = false;
 
+// Watchdog: se _pending ficar preso em true sem timer agendado por >15s,
+// libera para destravar o listener (defesa contra falhas silenciosas).
+setInterval(() => { if (_pending && !_pushTimer) { _pending = false; } }, 15000);
+
 // ── Indicador de sync ─────────────────────────────────────────────
 function setSyncInd(text, color, spin) {
   const el = document.getElementById('sync-indicator');
@@ -2673,23 +2677,29 @@ async function fbPushOrRetry() {
 }
 
 async function fbPush(manual) {
-  if(!fbActive()) { saveLS(); return; }
+  if(!fbActive()) { saveLS(); _pending = false; return; }
   if(_pushTimer) { clearTimeout(_pushTimer); _pushTimer = null; }
   setSyncInd(t('sync_saving'), 'var(--accent2)', true);
+  let ok = false;
   try {
     const payload = DB.map(r=>{const{dias_vencer,...rest}=r;return rest;});
     await _colRef.doc('dados').set({ records: payload, updated: new Date().toISOString() });
     saveLS();
-    _pending = false;
-    const btn = document.getElementById('btn-sync-now');
-    if(btn) btn.style.display = 'none';
+    ok = true;
     setSyncInd(t('sync_saved') + ' ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
     if(manual) showToast('🔥 Salvo no Firebase!');
   } catch(e) {
+    console.warn('fbPush error:', e);
     setSyncInd(t('sync_fail'), 'var(--red)');
     _pushTimer = setTimeout(() => fbPush(false), 30000);
     saveLS();
     if(manual) showToast('Falha Firebase. Salvo localmente.', 'err');
+  } finally {
+    // SEMPRE libera o flag — mesmo em falha — para não bloquear o listener
+    // após algumas edições (raiz do bug "trava após N atualizações").
+    _pending = false;
+    const btn = document.getElementById('btn-sync-now');
+    if(btn) btn.style.display = ok ? 'none' : 'inline-block';
   }
 }
 
@@ -2701,9 +2711,12 @@ function fbStartListen() {
     if(!snap.exists || _pending) return; // ignora enquanto está salvando
     const data = snap.data().records || [];
     const newDB = recalcDias(data);
-    // Só atualiza se realmente mudou (evita loop)
-    if(JSON.stringify(newDB.map(r=>r._uid)) !== JSON.stringify(DB.map(r=>r._uid)) ||
-       JSON.stringify(newDB.map(r=>r.prox_calib)) !== JSON.stringify(DB.map(r=>r.prox_calib))) {
+    // Compara TODOS os campos relevantes (não só _uid + prox_calib),
+    // ignorando o derivado dias_vencer para não entrar em loop.
+    const sig = arr => JSON.stringify(arr.map(r => {
+      const { dias_vencer, ...rest } = r; return rest;
+    }));
+    if (sig(newDB) !== sig(DB)) {
       DB = newDB;
       saveLS();
       // Preserve active filters when receiving live updates
@@ -2717,6 +2730,7 @@ function fbStartListen() {
     }
   }, err => {
     console.warn('fbListen error:', err);
+    _pending = false; // libera mesmo se o listener errar
     setSyncInd('⚠️ Listener desconectado', 'var(--orange)');
   });
 }
@@ -3754,6 +3768,9 @@ function startInlineEdit(uid, k, td) {
     input = document.createElement('input');
     input.type = 'date';
     input.value = curVal;
+    input.min = '1900-01-01';
+    input.max = '2100-12-31';
+    input.required = true;
     input.style.cssText = `width:100%;font-size:11px;font-family:var(--mono);background:var(--surf2);color:var(--tx);border:1px solid var(--accent);border-radius:3px;padding:2px 4px;outline:none`;
   } else {
     input = document.createElement('input');
@@ -3774,7 +3791,16 @@ function startInlineEdit(uid, k, td) {
     if(e.key === 'Tab')    { e.preventDefault(); commitInlineEdit(false); moveInlineFocus(uid, k, e.shiftKey ? -1 : 1); }
     e.stopPropagation();
   });
-  input.addEventListener('blur', () => setTimeout(() => { if(_inlineActive) commitInlineEdit(false); }, 150));
+  // Captura ESTE edit específico — o blur só pode comitar a si mesmo,
+  // nunca uma edição posterior (que mataria o input ativo do usuário).
+  const myEdit = _inlineActive;
+  input.addEventListener('blur', () => setTimeout(() => {
+    if (!(_inlineActive && _inlineActive === myEdit)) return;
+    // Para campos de data: se o valor ficou vazio (digitação incompleta),
+    // cancela em vez de gravar — evita apagar a data existente.
+    if (cfg.type === 'date' && !input.value) { cancelInlineEdit(); return; }
+    commitInlineEdit(false);
+  }, 150));
   if(cfg.type === 'select') {
     input.addEventListener('change', () => commitInlineEdit(false));
   }
@@ -3782,6 +3808,8 @@ function startInlineEdit(uid, k, td) {
 
 // Recalcula próxima calib, dias_vencer e status_calib de um registro
 function recalcRecord(r) {
+  if(!r) return r;
+  _statsCache = null;
   const today = new Date(); today.setHours(0,0,0,0);
 
   // 1. Se tem Última Calib + Frequência → calcula Próxima automaticamente
@@ -3819,6 +3847,7 @@ function recalcRecord(r) {
       r.status_calib = 'Instrumento Calibrado e aprovado';
     }
   }
+  return r;
 }
 
 function commitInlineEdit(silent) {
@@ -3829,6 +3858,25 @@ function commitInlineEdit(silent) {
 
   const newVal = k === 'freq_dias' ? (parseInt(input.value) || null) : input.value.trim();
   const r = DB.find(x => x._uid === uid);
+
+  // ── Validação de datas: exige formato YYYY-MM-DD com ano entre 1900 e 2100.
+  // Evita que digitação parcial (ex.: "03/03/26" → ano 0026) corrompa o registro
+  // e dê a sensação de "travamento" quando a linha sai do filtro vigente.
+  if (k === 'ult_calib' || k === 'prox_calib') {
+    const v = newVal || '';
+    const ok = /^\d{4}-\d{2}-\d{2}$/.test(v) &&
+               (+v.slice(0,4) >= 1900) && (+v.slice(0,4) <= 2100);
+    if (!ok) {
+      if (typeof showToast === 'function') {
+        showToast(LANG==='en'
+          ? '⚠️ Invalid date — use dd/mm/yyyy with a 4-digit year'
+          : '⚠️ Data inválida — use dd/mm/aaaa com ano de 4 dígitos', 'err');
+      }
+      _inlineActive = null;
+      rerenderRow(uid);
+      return;
+    }
+  }
 
   if(r && (String(r[k]||'') !== String(newVal||''))) {
     pushUndo();
@@ -3843,16 +3891,16 @@ function commitInlineEdit(silent) {
     saveLS();
     if(!silent) {
       fbSchedulePush();
-      showToast(LANG==='en' ? '✅ Saved — filters will update when you click Apply' : '✅ Salvo — tabela mantida. Clique em 🔄 para atualizar filtros');
+      showToast(LANG==='en' ? '✅ Saved and updated' : '✅ Salvo e atualizado em tempo real');
     }
-    // ── Only re-render the ONE affected row — do NOT re-apply filters ──
-    rerenderRow(uid, 'geral');
-    // Mark that a deferred filter refresh is pending
-    _pendingFilterRefresh = true;
+    // Atualiza filtros, status, dias, KPIs, alertas e gráficos imediatamente,
+    // preservando página/scroll sempre que possível.
+    _pendingFilterRefresh = false;
     updateApplyFilterBtn();
+    refreshInPlace();
   } else {
     _inlineActive = null;
-    rerenderRow(uid, 'geral');
+    rerenderRow(uid);
   }
   _inlineActive = null;
 }
@@ -3867,14 +3915,20 @@ function cancelInlineEdit() {
 
 // ── Re-render only ONE row without touching page/scroll/filters ────────────
 function rerenderRow(uid, tbl) {
-  const tr = document.querySelector(`tr[data-uid="${uid}"]`);
-  if(!tr) return; // row not on current page — safe to ignore
+  const rows = tbl
+    ? Array.from(document.querySelectorAll(`#${_IDS(tbl).tbody} tr[data-uid="${uid}"]`))
+    : Array.from(document.querySelectorAll(`tr[data-uid="${uid}"]`));
+  if(!rows.length) return; // row not on current page — safe to ignore
   const r = DB.find(x => x._uid === uid);
   if(!r) return;
-  const cols = (COL_DEFS[tbl]||[]).filter(c => colVis[tbl]?.[c.k] !== false);
-  tr.innerHTML = cols.map(c => renderCell(r, c.k, tbl)).join('');
-  // Restore selected highlight if needed
-  if(_selectedUIDs[tbl]?.has(uid)) tr.classList.add('selected');
+  rows.forEach(tr => {
+    const tblEl = tr.closest('table');
+    const curTbl = tbl || (tblEl?.id === 'alert-tbl' ? 'alert' : tblEl?.id === 'rep-tbl' ? 'rep' : 'geral');
+    const cols = (COL_DEFS[curTbl]||[]).filter(c => c.k==='_act' || c.k==='_chk' || colVis[curTbl]?.[c.k] !== false);
+    tr.innerHTML = cols.map(c => renderCell(r, c.k, curTbl)).join('');
+    // Restore selected highlight if needed
+    if(_selectedUIDs[curTbl]?.has(uid)) tr.classList.add('selected');
+  });
 }
 
 // ── Deferred filter refresh — user controls when filters re-apply ──────────
@@ -4644,6 +4698,13 @@ function saveRecord(){
   const today=new Date();today.setHours(0,0,0,0);
   const prox=document.getElementById('m-prox').value;
   const dv=prox?Math.round((new Date(prox+'T00:00:00')-today)/86400000):null;
+  const ultVal = document.getElementById('m-ult').value;
+  if((ultVal && !isValidISODateInput(ultVal)) || (prox && !isValidISODateInput(prox))) {
+    showToast(LANG==='en'
+      ? '⚠️ Invalid date — use dd/mm/yyyy with a 4-digit year'
+      : '⚠️ Data inválida — use dd/mm/aaaa com ano de 4 dígitos', 'err');
+    return;
+  }
   const upd={
     id:        document.getElementById('m-id').value,
     tipo:      document.getElementById('m-tipo').value,
@@ -4654,7 +4715,7 @@ function saveRecord(){
     responsavel:document.getElementById('m-resp').value,
     empresa:   document.getElementById('m-emp').value,
     cod_lab:   document.getElementById('m-codlab').value,
-    ult_calib: document.getElementById('m-ult').value,
+    ult_calib: ultVal,
     prox_calib:prox,
     freq_dias: parseInt(document.getElementById('m-freq').value)||null,
     status:    document.getElementById('m-status').value,
@@ -4730,8 +4791,12 @@ function deleteRecord_real(){
   showToast(LANG === 'en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
 }
 
+function isValidISODateInput(v) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(v || '') && (+v.slice(0,4) >= 1900) && (+v.slice(0,4) <= 2100);
+}
 function autoCalc(){
   const ult=document.getElementById('m-ult').value,freq=parseInt(document.getElementById('m-freq').value);
+  if(ult && !isValidISODateInput(ult)) { updateValidityBar(); return; }
   if(ult&&freq>0){const d=new Date(ult+'T00:00:00');d.setDate(d.getDate()+freq);document.getElementById('m-prox').value=d.toISOString().slice(0,10);}
   updateValidityBar();
 }
@@ -4747,7 +4812,7 @@ function updateValidityBar(){
   const vText=document.getElementById('v-text'); if(vText) vText.textContent=remaining<0?`${t('d_expired')} ${Math.abs(remaining)}${t('d_days')}`:remaining===0?`${t('d_today')}`:`${remaining}${t('d_days')} ${t('d_remaining')}`;
   if(vText) vText.style.color=color;
   const vBar=document.getElementById('v-bar'); if(vBar) vBar.style.cssText=`width:${pct}%;background:${pct>=100?'var(--red)':pct>=80?'var(--orange)':'var(--green)'}`;
-  const vPct=document.getElementById('v-pct'); if(vPct) vPct.textContent=pct+LANG==='en'?'% used':'% usado';
+  const vPct=document.getElementById('v-pct'); if(vPct) vPct.textContent=pct+(LANG==='en'?'% used':'% usado');
   wrap.style.display='block';
 }
 
@@ -5142,6 +5207,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('lb-en')?.classList.toggle('on', LANG==='en');
   document.getElementById('df-dmy')?.classList.toggle('on', DATE_FMT==='dmy');
   document.getElementById('df-iso')?.classList.toggle('on', DATE_FMT==='iso');
+  ['m-ult','m-prox'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) { el.min = '1900-01-01'; el.max = '2100-12-31'; }
+  });
   applyLang();
   // Modo público (?view=ID) — não inicializa Auth para evitar app.delete() sobrescrever
   // o app Firebase já criado pelo bloco de modo público acima
@@ -5654,14 +5723,10 @@ function _handleQrDeepLink() {
     if(changed > 0) {
       saveLS();
       if(fbActive()) fbSchedulePush();
-      showToast(`✅ ${changed} célula(s) preenchida(s) — clique em 🔄 para atualizar filtros`);
-      // Re-render only the affected rows — stay in place
-      previewIdxs.forEach(idx => {
-        const r2 = allRows[idx];
-        if(r2) rerenderRow(r2._uid, 'geral');
-      });
-      _pendingFilterRefresh = true;
+      showToast(`✅ ${changed} célula(s) preenchida(s) em tempo real`);
+      _pendingFilterRefresh = false;
       updateApplyFilterBtn();
+      refreshInPlace();
     }
   }
 })();
@@ -6112,22 +6177,19 @@ function applyBulkEdit(tbl) {
     const updated = { ...r, [field]: field==='freq_dias' ? parseInt(newVal)||r.freq_dias : newVal };
     changed++;
     return recalcRecord(updated);
-  });
+  }).filter(Boolean);
 
   // Confirm toast
-  showToast(`✔ ${changed} registro(s) atualizado(s) — clique em 🔄 para atualizar filtros`);
+  showToast(`✔ ${changed} registro(s) atualizado(s) em tempo real`);
 
   // Persist
   saveLS();
   if(fbActive()) fbSchedulePush();
 
-  // Re-render only the changed rows — don't jump page or re-filter
-  uids.forEach(uid => rerenderRow(uid, tbl));
   clearSelection(tbl);
-
-  // Mark deferred refresh needed
-  _pendingFilterRefresh = true;
+  _pendingFilterRefresh = false;
   updateApplyFilterBtn();
+  refreshInPlace();
 }
 
 function bulkDelete(tbl) {
