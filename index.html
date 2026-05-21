@@ -2,8 +2,40 @@
 <html lang="pt-BR" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v8)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0064b3">
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v5)</title>
+
+<!-- ── POLYFILLS: Element.closest, Optional Chaining safety, Object.fromEntries ── -->
+<script>
+// Element.closest polyfill (IE11, old Android)
+if (!Element.prototype.closest) {
+  Element.prototype.closest = function(s) {
+    var el = this;
+    do { if (el.matches(s)) return el; el = el.parentElement || el.parentNode; }
+    while (el !== null && el.nodeType === 1);
+    return null;
+  };
+}
+// Element.matches polyfill
+if (!Element.prototype.matches) {
+  Element.prototype.matches = Element.prototype.msMatchesSelector || Element.prototype.webkitMatchesSelector;
+}
+// Object.fromEntries polyfill
+if (!Object.fromEntries) {
+  Object.fromEntries = function(it) {
+    var o = {};
+    for (var _a of it) { o[_a[0]] = _a[1]; }
+    return o;
+  };
+}
+// requestAnimationFrame polyfill
+window.requestAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || function(cb){ return setTimeout(cb, 16); };
+window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancelAnimationFrame || function(id){ clearTimeout(id); };
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <!-- qrcodejs — biblioteca QR robusta e testada (mesma API: new QRCode(el, opts)) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -35,8 +67,43 @@
 })();
 </script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Bricolage+Grotesque:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
+#font-picker-ov {
+  display: none; position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: 99999;
+  background: rgba(0,0,0,.45); align-items: flex-end; justify-content: center;
+}
+#font-picker-ov.open { display: flex; }
+#font-picker-box {
+  background: var(--surf); border-radius: 18px 18px 0 0;
+  padding: 20px 18px 32px; width: 100%; max-width: 480px;
+  box-shadow: 0 -8px 40px rgba(0,0,0,.25);
+  animation: slideUpFP .22s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes slideUpFP { from { transform: translateY(100%); opacity:0 } to { transform: none; opacity:1 } }
+#font-picker-box h3 { font-size: 14px; font-weight: 700; color: var(--tx); margin-bottom: 4px; }
+#font-picker-box p { font-size: 11px; color: var(--tx3); margin-bottom: 16px; }
+.fp-option {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 14px; border-radius: 10px; border: 2px solid var(--bdr2);
+  margin-bottom: 8px; cursor: pointer; transition: all .14s; background: var(--surf2);
+}
+.fp-option:hover { border-color: var(--brand); background: rgba(0,100,179,.04); }
+.fp-option.fp-active { border-color: var(--brand); background: rgba(0,100,179,.07); }
+.fp-font-name { font-size: 16px; font-weight: 700; color: var(--tx); }
+.fp-font-desc { font-size: 10px; color: var(--tx3); margin-top: 2px; }
+.fp-check { font-size: 18px; opacity: 0; transition: opacity .14s; }
+.fp-option.fp-active .fp-check { opacity: 1; }
+.fp-cancel {
+  width: 100%; margin-top: 10px; padding: 11px; background: transparent;
+  border: 1px solid var(--bdr2); border-radius: 8px; color: var(--tx2);
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font);
+}
+</style>
+<style>
 
 /* ═══════════════════════════════════════════════
    RÖCHLING — Enterprise Design System
@@ -209,7 +276,7 @@ body.card-select-mode .eq-card:hover { transform: none; }
 }
 .eq-card-click-hint {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -221,7 +288,7 @@ body.card-select-mode .eq-card:hover { transform: none; }
   transition: opacity .15s;
   pointer-events: none;
 }
-.eq-card:hover .eq-card-click-hint { opacity: 0; }
+.eq-card:hover .eq-card-click-hint { opacity: 1; }
 
 * { box-sizing: border-box; margin: 0; padding: 0 }
 body {
@@ -423,7 +490,7 @@ th {
   border-right: 1px solid var(--bdr);
   color: var(--tx3); font-weight: 600; font-size: 9.5px;
   text-transform: uppercase; letter-spacing: .5px;
-  white-space: nowrap; user-select: none; position: relative;
+  white-space: nowrap; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; position: relative;
 }
 th .th-inner { display: flex; align-items: center; gap: 4px; cursor: pointer; overflow: hidden }
 th .th-inner span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
@@ -485,7 +552,7 @@ tr:nth-child(even) td { background: rgba(255,255,255,.012) }
   border-radius: var(--r); padding: 6px 9px; font-size: 11.5px;
   font-family: var(--font); outline: none; transition: var(--tr); min-width: 110px;
   cursor: pointer; display: flex; align-items: center; justify-content: space-between;
-  gap: 6px; user-select: none; white-space: nowrap;
+  gap: 6px; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; white-space: nowrap;
 }
 .multi-tipo-btn:hover { border-color: var(--brand); }
 .multi-tipo-btn.active { border-color: var(--brand); box-shadow: var(--ring); }
@@ -554,7 +621,7 @@ tr:nth-child(even) td { background: rgba(255,255,255,.012) }
 @media(max-width:700px){.tl-grid{grid-template-columns:1fr 1fr}}
 
 /* ── MODAL ── */
-.modal-ov { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 400; align-items: center; justify-content: center; backdrop-filter: blur(6px) }
+.modal-ov { display: none; position: fixed; top:0; right:0; bottom:0; left:0; background: rgba(0,0,0,.6); z-index: 400; align-items: center; justify-content: center; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px) }
 .modal-ov.on { display: flex }
 .modal {
   background: var(--surf); border: 1px solid var(--bdr2); border-radius: 14px;
@@ -696,7 +763,7 @@ tr.selected td { background: rgba(0,100,179,.07) !important }
 .toast.err .toast-dot { background: var(--red) }
 
 /* ── MISC ── */
-body.col-resizing { cursor: col-resize !important; user-select: none !important }
+body.col-resizing { cursor: col-resize !important; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none !important }
 body.col-resizing * { cursor: col-resize !important }
 @keyframes bell-ring{0%,100%{transform:rotate(0)}20%{transform:rotate(-15deg)}40%{transform:rotate(15deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(8deg)}}
 @media print{.hdr,.tabs,.filters,.modal-ov,.toast,.notif-panel,.btn-p,.btn-g,.btn-ic,.tgl{display:none!important}.page{display:none!important}#tab-relatorios{display:block!important}.main{margin-left:0!important}}
@@ -704,8 +771,8 @@ body.col-resizing * { cursor: col-resize !important }
 /* ── PRINT PDF OVERLAY ── */
 #pdf-print-frame {
   display: none;
-  position: fixed; inset: 0; z-index: 9999;
-  background: rgba(0,0,0,.65); backdrop-filter: blur(6px);
+  position: fixed; top:0; right:0; bottom:0; left:0; z-index: 9999;
+  background: rgba(0,0,0,.65); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   align-items: center; justify-content: center;
 }
 #pdf-print-frame.on { display: flex }
@@ -734,7 +801,7 @@ body.col-resizing * { cursor: col-resize !important }
   display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px;
   border: 1px solid var(--bdr2); border-radius: 20px; font-size: 10.5px;
   cursor: pointer; background: var(--surf2); color: var(--tx2);
-  transition: var(--tr); user-select: none;
+  transition: var(--tr); -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
 }
 .pdf-col-chip.on { border-color: var(--brand); background: rgba(0,100,179,.1); color: var(--brand); font-weight: 600 }
 .pdf-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--bdr2) }
@@ -747,7 +814,7 @@ body.col-resizing * { cursor: col-resize !important }
 ::-webkit-scrollbar-thumb:hover{background:var(--tx3)}
 
 /* ── DRILL-DOWN MODAL ─────────────────────────────────── */
-.drill-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);z-index:380;display:none;align-items:center;justify-content:center;padding:24px}
+.drill-ov{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);z-index:380;display:none;align-items:center;justify-content:center;padding:24px}
 .drill-ov.on{display:flex;animation:fadeIn .15s}
 .drill-modal{background:var(--surf);border:1px solid var(--bdr2);border-radius:var(--r2);box-shadow:var(--sh);width:min(1300px,98vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
 .drill-head{padding:14px 18px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surf2)}
@@ -769,6 +836,428 @@ body.col-resizing * { cursor: col-resize !important }
 .chart-card canvas{cursor:pointer}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 
+/* ═══════════════════════════════════════════════════
+   BLACK BELT EXCEL FEATURES — v2.0
+   Freeze panes · Conditional bars · Sparklines ·
+   Row density · Column totals · Column pin · Group
+═══════════════════════════════════════════════════ */
+
+/* ── DENSITY CONTROLS ── */
+.tbl-wrap.density-compact  td, .tbl-wrap.density-compact  th { padding: 3px 6px !important; font-size: 10px !important; }
+.tbl-wrap.density-default  td, .tbl-wrap.density-default  th { padding: 6px 8px !important; font-size: 11px !important; }
+.tbl-wrap.density-comfortable td, .tbl-wrap.density-comfortable th { padding: 10px 12px !important; font-size: 12px !important; }
+.density-btn { padding: 3px 9px; font-size: 10px; border: 1px solid var(--bdr2); background: transparent; color: var(--tx3); border-radius: 3px; cursor: pointer; font-family: var(--mono); transition: var(--tr); }
+.density-btn.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.density-group { display: flex; gap: 2px; }
+
+/* ── CONDITIONAL FORMATTING BARS (heat bars) ── */
+.heat-cell { position: relative; }
+.heat-bar {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  opacity: 0.18; border-radius: 0 2px 2px 0;
+  pointer-events: none; transition: opacity .2s;
+  z-index: 0;
+}
+.heat-cell > *:not(.heat-bar) { position: relative; z-index: 1; }
+tr:hover .heat-bar { opacity: 0.28; }
+
+/* ── SPARKLINE MINI CHARTS ── */
+.sparkline-cell { min-width: 80px; }
+.spark-svg { display: block; overflow: visible; }
+
+/* ── COLUMN TOTALS ROW ── */
+.tbl-totals-row td {
+  background: var(--surf2) !important;
+  font-weight: 700;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  border-top: 2px solid var(--brand) !important;
+  color: var(--tx);
+  position: sticky; bottom: 0; z-index: 5;
+}
+.tbl-totals-row td:first-child { color: var(--brand); font-size: 9px; letter-spacing: .5px; text-transform: uppercase; }
+.totals-toggle { font-size: 10px; padding: 3px 9px; border: 1px solid var(--bdr2); background: transparent; color: var(--tx3); border-radius: 3px; cursor: pointer; font-family: var(--mono); transition: var(--tr); white-space: nowrap; }
+.totals-toggle.on { background: rgba(0,100,179,.1); color: var(--brand); border-color: var(--brand); }
+
+/* ── PINNED (FROZEN) COLUMNS ── */
+td.col-pinned, th.col-pinned {
+  position: sticky !important;
+  z-index: 4;
+  background: var(--surf) !important;
+  box-shadow: 2px 0 6px rgba(0,0,0,.12);
+}
+th.col-pinned { z-index: 8; background: var(--surf2) !important; }
+[data-theme=dark] td.col-pinned { background: var(--surf) !important; }
+[data-theme=dark] th.col-pinned { background: var(--surf2) !important; }
+.pin-indicator { position: absolute; right: 0; top: 0; bottom: 0; width: 2px; background: var(--brand); opacity: .4; }
+
+/* ── ROW GROUPING ── */
+.group-header-row td {
+  background: var(--surf2) !important;
+  font-weight: 700; font-size: 10px;
+  color: var(--tx2); text-transform: uppercase;
+  letter-spacing: .5px; padding: 4px 8px !important;
+  border-bottom: 1px solid var(--bdr2) !important;
+  cursor: pointer; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
+}
+.group-header-row td .group-toggle-icon { margin-right: 5px; display: inline-block; transition: transform .15s; }
+.group-header-row.collapsed td .group-toggle-icon { transform: rotate(-90deg); }
+.group-data-row.group-hidden { display: none; }
+.group-count-badge { background: var(--brand); color: #fff; border-radius: 10px; font-size: 9px; padding: 1px 6px; margin-left: 6px; font-family: var(--mono); }
+
+/* ── FREEZE ROW INDICATOR ── */
+thead.frozen-head tr th { box-shadow: 0 3px 0 var(--bdr2), 0 4px 0 rgba(0,100,179,.15) }
+
+/* ── COLUMN HEADER CONTEXT MENU ── */
+.th-ctx-menu {
+  position: fixed; z-index: 99999;
+  background: var(--surf); border: 1px solid var(--bdr2);
+  border-radius: 8px; padding: 4px; min-width: 180px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.35);
+  animation: fadeIn .1s;
+}
+.th-ctx-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; border-radius: 5px; cursor: pointer;
+  font-size: 11.5px; color: var(--tx2); transition: background .1s;
+}
+.th-ctx-item:hover { background: var(--surf2); color: var(--tx); }
+.th-ctx-item .ctx-icon { font-size: 13px; width: 16px; text-align: center; }
+.th-ctx-sep { height: 1px; background: var(--bdr); margin: 3px 0; }
+.th-ctx-item.active { color: var(--brand); }
+
+/* ── EXCEL-STYLE CELL SELECTION ── */
+td.cell-selected {
+  outline: 2px solid var(--brand) !important;
+  outline-offset: -2px;
+  background: rgba(0,100,179,.08) !important;
+}
+td.cell-range-selected {
+  background: rgba(0,100,179,.05) !important;
+}
+
+/* ── COLUMN FILTER INDICATOR ── */
+th.has-filter .th-inner::after {
+  content: '▾';
+  color: var(--brand);
+  font-size: 10px;
+  margin-left: 3px;
+}
+
+/* ── ROW HIGHLIGHT ON HOVER — left accent ── */
+tr:hover td:first-child::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--brand);
+}
+tr:hover td:first-child { position: relative; }
+
+/* ── EXCEL TOOLBAR ── */
+.excel-toolbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; background: var(--surf2);
+  border-bottom: 1px solid var(--bdr2);
+  flex-wrap: wrap; position: sticky; top: 0; z-index: 12;
+}
+.excel-toolbar-sep { width: 1px; height: 18px; background: var(--bdr2); flex-shrink: 0; }
+.excel-toolbar-lbl { font-size: 9.5px; color: var(--tx3); text-transform: uppercase; letter-spacing: .6px; font-weight: 600; white-space: nowrap; }
+
+/* ── ZEBRA STRIPES — enhanced ── */
+.stripe-mode tbody tr:nth-child(even) td {
+  background: rgba(0,100,179,.025) !important;
+}
+[data-theme=dark] .stripe-mode tbody tr:nth-child(even) td {
+  background: rgba(255,255,255,.018) !important;
+}
+
+/* ── COLUMN WIDTH INDICATOR TOOLTIP ── */
+.col-width-tip {
+  position: fixed; z-index: 9999; background: var(--surf);
+  border: 1px solid var(--bdr2); border-radius: 4px;
+  padding: 3px 8px; font-size: 10px; font-family: var(--mono);
+  color: var(--brand); pointer-events: none; display: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
+}
+
+/* ── SUMMARY STATUS BAR (Excel bottom bar) ── */
+.excel-status-bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 4px 16px; background: var(--brand);
+  border-top: 1px solid rgba(0,0,0,.1);
+  font-size: 10px; font-family: var(--mono); color: rgba(255,255,255,.9);
+  flex-wrap: wrap; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
+}
+.excel-status-bar span { white-space: nowrap; }
+.excel-status-bar .st-sep { opacity: .35; }
+
+/* ── HOVER ROW INDEX ── */
+td.row-num-cell {
+  font-family: var(--mono); font-size: 9px;
+  color: var(--tx3); text-align: right;
+  min-width: 28px; max-width: 28px; width: 28px;
+  padding: 6px 4px 6px 2px !important;
+  background: var(--surf2) !important;
+  border-right: 1px solid var(--bdr2) !important;
+  -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none;
+}
+th.row-num-col {
+  min-width: 28px; max-width: 28px; width: 28px;
+  text-align: right; background: var(--surf3) !important;
+  padding: 8px 4px !important;
+}
+
+/* ═══════════════════════════════════════════════════
+   CROSS-BROWSER & MOBILE COMPATIBILITY — v1.0
+   iOS Safari · Android Chrome · Firefox · Samsung
+═══════════════════════════════════════════════════ */
+
+/* ── SAFE AREA (iPhone notch / Dynamic Island) ── */
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left:   env(safe-area-inset-left);
+  padding-right:  env(safe-area-inset-right);
+}
+.hdr {
+  padding-top: env(safe-area-inset-top);
+  padding-left:  max(24px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+
+/* ── FIX: inset shorthand not supported in Safari < 14.1 ── */
+/* All inset:0 converted to explicit top/right/bottom/left */
+.modal-ov, .drill-ov, #pdf-print-frame, #login-overlay,
+#notif-ov, [id$="-ov"][style*="inset"] {
+  top: 0; right: 0; bottom: 0; left: 0;
+}
+
+/* ── FIX: position:sticky on thead in iOS Safari ── */
+/* iOS Safari requires overflow:auto on the SCROLL CONTAINER, not scroll:hidden */
+.tbl-wrap {
+  -webkit-overflow-scrolling: touch;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+thead {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* ── FIX: accent-color fallback for older browsers ── */
+input[type="checkbox"], input[type="radio"] {
+  accent-color: var(--brand);
+}
+
+/* ── FIX: scrollbar-width (Firefox only, graceful degradation) ── */
+.tabs { scrollbar-width: thin; scrollbar-color: var(--bdr3) transparent; }
+
+/* ── MOBILE NAV: sticky tabs with touch scroll ── */
+.tabs {
+  -webkit-overflow-scrolling: touch;
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.tabs::-webkit-scrollbar { display: none; }
+
+/* ── TOUCH TARGETS: minimum 44×44px (WCAG 2.5.8) ── */
+.btn-p, .btn-g, .btn-ic, .tab, .pag-btn, .tgl-o, .lang-btn {
+  min-height: 36px;
+}
+@media (pointer: coarse) {
+  .btn-p, .btn-g, .btn-ic { min-height: 44px; min-width: 44px; padding: 8px 16px; }
+  .tab { padding: 14px 16px !important; }
+  .pag-btn { min-height: 40px; min-width: 36px; }
+  .fg select, .fg input, .search-box { min-height: 42px; font-size: 16px !important; } /* prevents iOS zoom on focus */
+  .fg2 input, .fg2 select, .fg2 textarea { min-height: 42px; font-size: 16px !important; }
+  .row-chk, .eq-card-chk { width: 20px !important; height: 20px !important; }
+}
+
+/* ── FIX: iOS input zoom prevention (font-size < 16px triggers zoom) ── */
+@media screen and (-webkit-min-device-pixel-ratio: 0) and (max-device-width: 480px) {
+  input[type="text"], input[type="email"], input[type="password"],
+  input[type="date"], input[type="number"], select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* ── MOBILE LAYOUT OVERRIDES ── */
+@media (max-width: 600px) {
+  /* Header: collapse to icons only on very small */
+  .hdr { padding: 0 12px; height: 50px; }
+  .hdr h1 { display: none; }
+  .hdr-divider { display: none; }
+  #last-upd { display: none; }
+  
+  /* KPI grid: 2 columns */
+  .kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kpi-val { font-size: 22px; }
+  
+  /* Charts: single column */
+  .cg3, .cg2, .cg4 { grid-template-columns: 1fr !important; }
+  
+  /* Timeline: 2 cols */
+  .tl-grid { grid-template-columns: 1fr 1fr !important; }
+  
+  /* Modal: full screen on mobile */
+  .modal {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    max-height: 100dvh !important;
+    max-height: 100vh !important;
+    border-radius: 16px 16px 0 0 !important;
+    margin: 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    padding: 20px 16px 32px !important;
+  }
+  .modal-ov { align-items: flex-end !important; }
+  
+  /* Drill modal: full screen */
+  .drill-modal {
+    width: 100vw !important;
+    height: 100dvh !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
+    max-height: 100dvh !important;
+  }
+  
+  /* Table: horizontal scroll with momentum */
+  .tbl-card { border-radius: 0; margin: 0 -10px; border-left: none; border-right: none; }
+  .tbl-wrap { max-height: calc(100vh - 260px); }
+  
+  /* Filters: make them stack better */
+  .filters { padding: 8px 10px; gap: 6px; }
+  .fg { flex: 1 1 calc(50% - 6px); min-width: 130px; }
+  .fg select, .fg input, .search-box { width: 100%; min-width: 0; }
+  
+  /* Bulk bar: wrap more tightly */
+  .bulk-bar { padding: 6px 10px; gap: 6px; font-size: 11px; }
+  .bulk-field-row { flex-wrap: wrap; }
+  
+  /* Excel toolbar: scrollable horizontally */
+  .excel-toolbar { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding: 6px 8px; gap: 5px; }
+  .excel-toolbar::-webkit-scrollbar { display: none; }
+  
+  /* Cards: single column */
+  #eq-card-grid { grid-template-columns: 1fr !important; }
+  
+  /* Toast: full width */
+  .toast { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); max-width: none; }
+  
+  /* Notification panel: full width */
+  .notif-panel { left: 8px; right: 8px; width: auto !important; }
+  
+  /* Report KPIs */
+  .rep-kpi-row { gap: 6px; }
+  .rep-kpi { flex: 1 1 calc(50% - 6px); min-width: 0; }
+  
+  /* Pagination: compact */
+  .pag { font-size: 10px; padding: 7px 10px; }
+}
+
+@media (max-width: 400px) {
+  .kpi-grid { grid-template-columns: 1fr; }
+  .tl-grid { grid-template-columns: 1fr !important; }
+  .mgrid { grid-template-columns: 1fr !important; }
+  .mg-full { grid-column: 1 !important; }
+}
+
+/* ── TABLET (601px – 1024px) ── */
+@media (min-width: 601px) and (max-width: 1024px) {
+  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+  .cg4 { grid-template-columns: repeat(2, 1fr); }
+  .modal { width: min(90vw, 680px) !important; }
+}
+
+/* ── FIX: hover states only on pointer: fine (non-touch) ── */
+@media (hover: none) {
+  .eq-card:hover { transform: none; box-shadow: none; border-color: var(--bdr2); }
+  .btn-p:hover   { transform: none; }
+  .kpi:hover     { box-shadow: none; border-color: var(--bdr2); }
+  .editable-cell:hover { background: none !important; outline: none !important; }
+  .editable-cell:hover::after { display: none; }
+  tr:hover td    { background: none !important; box-shadow: none !important; }
+  tr:hover td:first-child::before { display: none; }
+  .kpi:hover .kpi-drill-hint { opacity: 0; }
+  .eq-card:hover .eq-card-click-hint { opacity: 0; }
+}
+
+/* ── ACTIVE STATE for touch feedback ── */
+@media (hover: none) and (pointer: coarse) {
+  .btn-p:active   { opacity: 0.8; transform: scale(0.97); }
+  .btn-g:active   { background: var(--surf3); }
+  .tab:active     { background: var(--surf2); }
+  .eq-card:active { border-color: var(--brand); box-shadow: 0 2px 12px rgba(0,100,179,.2); }
+  .pag-btn:active { background: var(--surf3); }
+}
+
+/* ── FIX: Samsung Internet browser flex gap ── */
+/* Use margin fallback when gap not supported */
+@supports not (gap: 8px) {
+  .hdr-r > * + * { margin-left: 5px; }
+  .kpi-grid > * { margin: 4px; }
+  .cg2 > *, .cg3 > *, .cg4 > * { margin: 6px; }
+  .filters > * { margin: 4px; }
+}
+
+/* ── FIX: -webkit-line-clamp cross-browser ── */
+.eq-card-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* Fallback for browsers without -webkit-line-clamp */
+  max-height: 2.7em;
+}
+
+/* ── FIX: CSS custom properties fallback for IE11 ── */
+/* IE11 doesn't support CSS vars — provide static fallbacks */
+@media all and (-ms-high-contrast: none), (-ms-high-contrast: active) {
+  body { background: #f4f5f9; color: #1a1a1a; font-family: 'DM Sans', sans-serif; }
+  .hdr { background: #ffffff; border-top: 3px solid #0064b3; }
+  .kpi { background: #ffffff; border: 1px solid #dfe1ea; }
+  .badge { font-family: monospace; }
+  table { font-size: 11px; }
+  td, th { padding: 6px 8px; }
+}
+
+/* ── FIX: Scrollbar styling cross-browser ── */
+.tbl-wrap::-webkit-scrollbar { width: 5px; height: 5px; }
+.tbl-wrap::-webkit-scrollbar-track { background: transparent; }
+.tbl-wrap::-webkit-scrollbar-thumb { background: var(--bdr3); border-radius: 10px; }
+.tabs { scrollbar-width: thin; }
+
+/* ── MOBILE FILL HANDLE: hidden on touch devices ── */
+@media (hover: none) {
+  .fill-handle { display: none !important; }
+  .editable-cell:hover .fill-handle { opacity: 0; }
+}
+
+/* ── LANDSCAPE MOBILE ── */
+@media (max-height: 500px) and (orientation: landscape) {
+  .hdr { height: 44px; }
+  .tabs { top: 44px; }
+  .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+  .tbl-wrap { max-height: calc(100vh - 180px); }
+  .modal { max-height: 96vh !important; }
+}
+
+/* ── PRINT MEDIA: ensure tables print correctly ── */
+@media print {
+  .excel-toolbar, .excel-status-bar, .bulk-bar, .filters, .hdr, .tabs, 
+  .btn-p, .btn-g, .btn-ic, .pag { display: none !important; }
+  .tbl-wrap { max-height: none !important; overflow: visible !important; }
+  table { font-size: 9pt; border-collapse: collapse; }
+  td, th { border: 0.5pt solid #ccc; padding: 4pt 5pt; }
+  @page { margin: 1.5cm; }
+}
+
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -779,7 +1268,7 @@ body.col-resizing * { cursor: col-resize !important }
    LOGIN OVERLAY — Röchling Auth Screen
 ══════════════════════════════════════════════ */
 #login-overlay {
-  position: fixed; inset: 0; z-index: 9999;
+  position: fixed; top:0; right:0; bottom:0; left:0; z-index: 9999;
   background: var(--bg);
   display: flex; align-items: center; justify-content: center;
   flex-direction: column;
@@ -909,7 +1398,7 @@ body.col-resizing * { cursor: col-resize !important }
 /* Background grid pattern */
 #login-overlay::before {
   content: '';
-  position: fixed; inset: 0; z-index: -1;
+  position: fixed; top:0; right:0; bottom:0; left:0; z-index: -1;
   background-image:
     linear-gradient(var(--bdr) 1px, transparent 1px),
     linear-gradient(90deg, var(--bdr) 1px, transparent 1px);
@@ -918,7 +1407,7 @@ body.col-resizing * { cursor: col-resize !important }
 }
 #login-overlay::after {
   content: '';
-  position: fixed; inset: 0; z-index: -1;
+  position: fixed; top:0; right:0; bottom:0; left:0; z-index: -1;
   background: radial-gradient(ellipse 60% 60% at 50% 40%, rgba(0,100,179,.07) 0%, transparent 100%);
 }
 
@@ -1042,6 +1531,7 @@ body.col-resizing * { cursor: col-resize !important }
     <!-- Data actions -->
     <button class="btn-g" onclick="document.getElementById('file-import').click()" title="Import JSON">↓ <span data-i18n="btn_import_lbl">Import</span></button>
     <button class="btn-g" onclick="exportData()" title="Export JSON">↑ <span data-i18n="btn_export_lbl">Export</span></button>
+    <button class="btn-g" onclick="openFontPicker()" id="btn-font-picker" title="Trocar fonte" aria-label="Trocar fonte" style="font-size:11px">𝐀 Fonte</button>
     <button class="btn-g" onclick="openGsConfig()" id="btn-gs-cfg" title="Firebase config" aria-label="Configurar Firebase" style="font-size:11px">🔥</button>
     <button class="btn-g" onclick="resetDB()" title="Reset to original data" aria-label="Resetar para dados originais" style="font-size:11px">↺</button>
 
@@ -1244,7 +1734,7 @@ body.col-resizing * { cursor: col-resize !important }
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
         <span class="tbl-cnt" id="alert-cnt">—</span>
         <input class="search-box" placeholder="🔍 Buscar..." oninput="alertSearch=this.value;renderAlerts()">
-        <div class="col-panel"><button class="btn-g" id="btn-cols-alert" onclick="showColMenu('alert',this)">⚙ <span data-i18n="btn_cols_lbl">Colunas</span></button></div>
+        <div class="col-panel"><button class="btn-g" id="btn-cols-alert" onclick="showColMenu('alert',this,event)">⚙ <span data-i18n="btn_cols_lbl">Colunas</span></button></div>
         <button class="btn-g" onclick="exportCSV('alert')">↓ CSV</button>
       </div>
     </div>
@@ -1286,12 +1776,12 @@ body.col-resizing * { cursor: col-resize !important }
     <div class="tbl-card" style="margin-bottom:12px">
       <div class="filters">
         <div class="fg" style="position:relative"><label>Tipo</label><div id="f-tipo-btn" class="multi-tipo-btn" onclick="toggleTipoDropdown('f-tipo-dd', event)" title="Selecionar tipos"><span id="f-tipo-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg"><label>Cliente</label><select id="f-cli" onchange="applyF()"><option value="">Todos</option></select></div>
-        <div class="fg"><label>Localização</label><select id="f-local" onchange="applyF()"><option value="">Todas</option></select></div>
-        <div class="fg"><label>Responsável</label><select id="f-resp" onchange="applyF()"><option value="">Todos</option></select></div>
-        <div class="fg"><label>Empresa</label><select id="f-emp" onchange="applyF()"><option value="">Todas</option></select></div>
-        <div class="fg"><label>Status Op.</label><select id="f-status" onchange="applyF()"><option value="">Todos</option><option>ATIVO</option><option>INATIVO</option></select></div>
-        <div class="fg"><label>Calibração</label><select id="f-calib" onchange="applyF()"><option value="">Todos</option><option value="ok">OK</option><option value="vencido">Vencido</option><option value="necessaria">Necessária</option></select></div>
+        <div class="fg" style="position:relative"><label>Cliente</label><div id="f-cli-btn" class="multi-tipo-btn" onclick="toggleMultiDD('f-cli-dd','f-cli-btn',event)" title="Selecionar clientes"><span id="f-cli-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
+        <div class="fg" style="position:relative"><label>Localização</label><div id="f-local-btn" class="multi-tipo-btn" onclick="toggleMultiDD('f-local-dd','f-local-btn',event)" title="Selecionar localizações"><span id="f-local-label">Todas</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
+        <div class="fg" style="position:relative"><label>Responsável</label><div id="f-resp-btn" class="multi-tipo-btn" onclick="toggleMultiDD('f-resp-dd','f-resp-btn',event)" title="Selecionar responsáveis"><span id="f-resp-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
+        <div class="fg" style="position:relative"><label>Empresa</label><div id="f-emp-btn" class="multi-tipo-btn" onclick="toggleMultiDD('f-emp-dd','f-emp-btn',event)" title="Selecionar empresas"><span id="f-emp-label">Todas</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
+        <div class="fg" style="position:relative"><label>Status Op.</label><div id="f-status-btn" class="multi-tipo-btn" onclick="toggleMultiDD('f-status-dd','f-status-btn',event)" title="Selecionar status"><span id="f-status-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
+        <div class="fg" style="position:relative"><label>Calibração</label><div id="f-calib-btn" class="multi-tipo-btn" onclick="toggleMultiDD('f-calib-dd','f-calib-btn',event)" title="Selecionar calibração"><span id="f-calib-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
         <div class="fg"><label>De</label><input type="date" id="f-de" onchange="applyF()"></div>
         <div class="fg"><label>Até</label><input type="date" id="f-ate" onchange="applyF()"></div>
         <div class="fg" style="min-width:150px">
@@ -1339,12 +1829,12 @@ body.col-resizing * { cursor: col-resize !important }
     <div class="tbl-card" style="margin-bottom:12px">
       <div class="filters">
         <div class="fg" style="position:relative"><label>Tipo</label><div id="ft-tipo-btn" class="multi-tipo-btn" onclick="toggleTipoDropdown('ft-tipo-dd', event)" title="Selecionar tipos"><span id="ft-tipo-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg"><label>Cliente</label><select id="ft-cli" onchange="syncTblFilter('f-cli',this.value)"><option value="">Todos</option></select></div>
-        <div class="fg"><label>Localização</label><select id="ft-local" onchange="syncTblFilter('f-local',this.value)"><option value="">Todas</option></select></div>
-        <div class="fg"><label>Responsável</label><select id="ft-resp" onchange="syncTblFilter('f-resp',this.value)"><option value="">Todos</option></select></div>
-        <div class="fg"><label>Empresa</label><select id="ft-emp" onchange="syncTblFilter('f-emp',this.value)"><option value="">Todas</option></select></div>
-        <div class="fg"><label>Status Op.</label><select id="ft-status" onchange="syncTblFilter('f-status',this.value)"><option value="">Todos</option><option>ATIVO</option><option>INATIVO</option></select></div>
-        <div class="fg"><label>Calibração</label><select id="ft-calib" onchange="syncTblFilter('f-calib',this.value)"><option value="">Todos</option><option value="ok">OK</option><option value="vencido">Vencido</option><option value="necessaria">Necessária</option></select></div>
+        <div class="fg" style="position:relative"><label>Cliente</label><div id="ft-cli-btn" class="multi-tipo-btn" onclick="toggleMultiDD('ft-cli-dd','ft-cli-btn',event)" title="Selecionar clientes"><span id="ft-cli-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
+        <div class="fg" style="position:relative"><label>Localização</label><div id="ft-local-btn" class="multi-tipo-btn" onclick="toggleMultiDD('ft-local-dd','ft-local-btn',event)" title="Selecionar localizações"><span id="ft-local-label">Todas</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
+        <div class="fg" style="position:relative"><label>Responsável</label><div id="ft-resp-btn" class="multi-tipo-btn" onclick="toggleMultiDD('ft-resp-dd','ft-resp-btn',event)" title="Selecionar responsáveis"><span id="ft-resp-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
+        <div class="fg" style="position:relative"><label>Empresa</label><div id="ft-emp-btn" class="multi-tipo-btn" onclick="toggleMultiDD('ft-emp-dd','ft-emp-btn',event)" title="Selecionar empresas"><span id="ft-emp-label">Todas</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
+        <div class="fg" style="position:relative"><label>Status Op.</label><div id="ft-status-btn" class="multi-tipo-btn" onclick="toggleMultiDD('ft-status-dd','ft-status-btn',event)" title="Selecionar status"><span id="ft-status-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
+        <div class="fg" style="position:relative"><label>Calibração</label><div id="ft-calib-btn" class="multi-tipo-btn" onclick="toggleMultiDD('ft-calib-dd','ft-calib-btn',event)" title="Selecionar calibração"><span id="ft-calib-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
         <div class="fg"><label>De</label><input type="date" id="ft-de" onchange="syncTblFilter('f-de',this.value)"></div>
         <div class="fg"><label>Até</label><input type="date" id="ft-ate" onchange="syncTblFilter('f-ate',this.value)"></div>
         <div class="fg" style="min-width:150px">
@@ -1367,7 +1857,7 @@ body.col-resizing * { cursor: col-resize !important }
         <span class="tbl-title">Equipamentos de Medição</span>
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
           <span class="tbl-cnt" id="eq-cnt-tbl">—</span>
-          <div class="col-panel"><button class="btn-g" id="btn-cols-eq" onclick="showColMenu('geral',this)">⚙ <span data-i18n="btn_cols_lbl">Colunas</span></button></div>
+          <div class="col-panel"><button class="btn-g" id="btn-cols-eq" onclick="showColMenu('geral',this,event)">⚙ <span data-i18n="btn_cols_lbl">Colunas</span></button></div>
           <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
           <button class="btn-g" onclick="toggleEqView()" title="Voltar para lista de cards">☰ Lista</button>
         </div>
@@ -1398,7 +1888,48 @@ body.col-resizing * { cursor: col-resize !important }
         <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="clearSelection('geral')">✕ Cancelar</button>
         <button class="btn-del" style="font-size:11px;padding:4px 10px;margin-left:8px" onclick="bulkDelete('geral')">🗑 Excluir selecionados</button>
       </div>
-      <div class="tbl-wrap" id="eq-wrap"><table id="eq-tbl"><thead id="eq-thead"></thead><tbody id="eq-tbody"></tbody></table></div>
+      <!-- ── BLACK BELT EXCEL TOOLBAR ── -->
+      <div class="excel-toolbar" id="excel-toolbar-geral">
+        <span class="excel-toolbar-lbl">Visualização</span>
+        <div class="density-group" id="density-geral">
+          <button class="density-btn" data-d="compact" onclick="setDensity('geral','compact',this)" title="Compacto (Excel-style)">▤ S</button>
+          <button class="density-btn on" data-d="default" onclick="setDensity('geral','default',this)" title="Padrão">▤ M</button>
+          <button class="density-btn" data-d="comfortable" onclick="setDensity('geral','comfortable',this)" title="Espaçado">▤ L</button>
+        </div>
+        <div class="excel-toolbar-sep"></div>
+        <span class="excel-toolbar-lbl">Linha #</span>
+        <button class="density-btn" id="btn-rownum-geral" onclick="toggleRowNumbers('geral',this)" title="Mostrar/ocultar numeração de linhas (como Excel)">123</button>
+        <div class="excel-toolbar-sep"></div>
+        <span class="excel-toolbar-lbl">Zebra</span>
+        <button class="density-btn on" id="btn-stripe-geral" onclick="toggleStripe('geral',this)" title="Linhas alternadas">≡</button>
+        <div class="excel-toolbar-sep"></div>
+        <span class="excel-toolbar-lbl">Barras</span>
+        <button class="density-btn on" id="btn-heatbar-geral" onclick="toggleHeatBars('geral',this)" title="Barras condicionais (dias a vencer)">▐ Heat</button>
+        <div class="excel-toolbar-sep"></div>
+        <span class="excel-toolbar-lbl">Totais</span>
+        <button class="totals-toggle" id="btn-totals-geral" onclick="toggleTotalsRow('geral',this)" title="Linha de totais/sumário">∑ Rodapé</button>
+        <div class="excel-toolbar-sep"></div>
+        <span class="excel-toolbar-lbl">Agrupar por</span>
+        <select id="group-by-geral" onchange="setGroupBy('geral',this.value)" style="font-size:10px;padding:2px 6px;border:1px solid var(--bdr2);border-radius:3px;background:var(--surf);color:var(--tx);font-family:var(--font);cursor:pointer">
+          <option value="">— Nenhum —</option>
+          <option value="localizacao">📍 Localização</option>
+          <option value="tipo">🔧 Tipo</option>
+          <option value="empresa">🏭 Empresa</option>
+          <option value="responsavel">👤 Responsável</option>
+          <option value="status_calib">🔬 Status Calib.</option>
+        </select>
+      </div>
+      <div class="tbl-wrap density-default stripe-mode" id="eq-wrap"><table id="eq-tbl"><thead id="eq-thead"></thead><tbody id="eq-tbody"></tbody></table></div>
+      <!-- Excel Status Bar -->
+      <div class="excel-status-bar" id="excel-status-geral" style="display:none">
+        <span id="est-count-geral">—</span>
+        <span class="st-sep">|</span>
+        <span id="est-venc-geral">—</span>
+        <span class="st-sep">|</span>
+        <span id="est-ok-geral">—</span>
+        <span class="st-sep">|</span>
+        <span id="est-selected-geral" style="display:none">—</span>
+      </div>
       <div class="pag"><span id="eq-pinfo">—</span><div class="pag-btns" id="eq-pbtns"></div></div>
     </div>
   </div>
@@ -1456,7 +1987,7 @@ body.col-resizing * { cursor: col-resize !important }
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
         <span class="tbl-cnt" id="rep-cnt">—</span>
         <input class="search-box" placeholder="🔍 Buscar..." oninput="document.getElementById('rep-f-search').value=this.value;applyRepF()">
-        <div class="col-panel"><button class="btn-g" id="btn-cols-rep" onclick="showColMenu('rep',this)">⚙ Colunas</button></div>
+        <div class="col-panel"><button class="btn-g" id="btn-cols-rep" onclick="showColMenu('rep',this,event)">⚙ Colunas</button></div>
         <button class="btn-g" onclick="exportCSV('rep')">↓ CSV</button>
         <button class="btn-g" onclick="exportRepCSV()">↓ CSV (legado)</button>
       </div>
@@ -1513,7 +2044,7 @@ body.col-resizing * { cursor: col-resize !important }
     <button class="btn-g" style="width:100%;font-size:11px" onclick="toggleNotif();showTab('alertas',document.querySelectorAll('.tab')[1])">Ver todos os alertas →</button>
   </div>
 </div>
-<div id="notif-ov" onclick="toggleNotif()" style="display:none;position:fixed;inset:0;z-index:499"></div>
+<div id="notif-ov" onclick="toggleNotif()" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:499"></div>
 
 
 <!-- PDF PRINT OVERLAY -->
@@ -2128,24 +2659,14 @@ function applyLang() {
     if(entry) lbl.textContent = t(entry[0]);
   });
 
-  // Filter select options
-  const fStatus = document.getElementById('f-status');
-  if(fStatus) {
-    const opts = fStatus.options;
-    if(opts[0]) opts[0].text = t('f_all');
-    if(opts[1]) { opts[1].value='ATIVO';   opts[1].text=t('s_active'); }
-    if(opts[2]) { opts[2].value='INATIVO'; opts[2].text=t('s_inactive'); }
-  }
-  const fCalib = document.getElementById('f-calib');
-  if(fCalib) {
-    const opts = fCalib.options;
-    if(opts[0]) opts[0].text = t('f_all');
-    if(opts[1]) opts[1].text = t('f_calib_ok');
-    if(opts[2]) opts[2].text = t('f_calib_exp');
-    if(opts[3]) opts[3].text = t('f_calib_need');
-  }
-  document.querySelectorAll('#f-tipo, #f-cli, #f-local, #f-resp, #f-emp').forEach(sel => {
-    if(sel.options[0]) sel.options[0].text = sel.id==='f-local'||sel.id==='f-emp' ? t('f_all_f') : t('f_all');
+  // Filter select options — only f-status and f-calib are now multi-dropdowns (static options)
+  // Update _MULTI_STATIC labels when language switches
+  _MULTI_STATIC['f-status'] = [t('s_active'), t('s_inactive')];
+  // (f-calib static labels are always PT for now)
+  _multiUpdateAllLabels();
+  // Legacy: update any remaining select in reports tab
+  document.querySelectorAll('#rep-f-cli, #rep-f-local, #rep-f-resp, #rep-f-emp').forEach(sel => {
+    if(sel && sel.options[0]) sel.options[0].text = sel.id.includes('local')||sel.id.includes('emp') ? t('f_all_f') : t('f_all');
   });
 
   // Search placeholder
@@ -2359,9 +2880,10 @@ document.addEventListener('DOMContentLoaded', () => document.body.appendChild(_c
 
 let _colMenuTbl = null;
 
-function showColMenu(tbl, btn) {
+function showColMenu(tbl, btn, evt) {
   // Stop click from bubbling to document (which would immediately close the menu)
-  if(event) event.stopPropagation();
+  if(evt) evt.stopPropagation();
+  else if(window.event) window.event.stopPropagation();
   // If already open for same table, close
   if(_colMenu.style.display !== 'none' && _colMenuTbl === tbl) {
     _colMenu.style.display = 'none';
@@ -2405,19 +2927,28 @@ document.addEventListener('DOMContentLoaded', () => {
 let _resizing = null;
 
 function attachResizers(tbl) {
-  const tblEl = document.getElementById(tbl==='geral'?'eq-tbl':'alert-tbl');
+  const tblEl = document.getElementById(tbl==='geral'?'eq-tbl':tbl==='rep'?'rep-tbl':'alert-tbl');
   if(!tblEl) return;
   tblEl.querySelectorAll('th').forEach(th => {
     const colKey = th.dataset.col;
     if(!colKey || colKey==='_act') return;
     let r = th.querySelector('.resizer');
     if(!r) { r=document.createElement('div'); r.className='resizer'; th.appendChild(r); }
+    // Mouse support
     r.onmousedown = (e) => {
       e.preventDefault(); e.stopPropagation();
       _resizing = { tbl, colKey, startX: e.clientX, startW: colWidths[tbl][colKey] || th.offsetWidth };
       document.body.classList.add('col-resizing');
       r.classList.add('resizing');
     };
+    // Touch support for column resize
+    r.addEventListener('touchstart', function(e) {
+      e.stopPropagation();
+      var touch = e.touches[0];
+      _resizing = { tbl, colKey, startX: touch.clientX, startW: colWidths[tbl][colKey] || th.offsetWidth };
+      document.body.classList.add('col-resizing');
+      r.classList.add('resizing');
+    }, { passive: true });
   });
 }
 
@@ -2436,6 +2967,22 @@ document.addEventListener('mousemove', e => {
     });
   }
 });
+// Touch move for column resize
+document.addEventListener('touchmove', function(e) {
+  if(!_resizing) return;
+  var touch = e.touches[0];
+  var { tbl, colKey, startX, startW } = _resizing;
+  var newW = Math.max(40, startW + (touch.clientX - startX));
+  colWidths[tbl][colKey] = newW;
+  var tblEl = document.getElementById(tbl==='geral'?'eq-tbl':'alert-tbl');
+  if(tblEl) {
+    tblEl.querySelectorAll('[data-col="'+colKey+'"]').forEach(function(el) {
+      el.style.width = newW+'px';
+      el.style.minWidth = newW+'px';
+      el.style.maxWidth = newW+'px';
+    });
+  }
+}, { passive: true });
 
 document.addEventListener('mouseup', () => {
   if(!_resizing) return;
@@ -2443,6 +2990,13 @@ document.addEventListener('mouseup', () => {
   document.querySelectorAll('.resizer.resizing').forEach(r=>r.classList.remove('resizing'));
   _resizing = null;
 });
+// Touch end for column resize
+document.addEventListener('touchend', function() {
+  if(!_resizing) return;
+  document.body.classList.remove('col-resizing');
+  document.querySelectorAll('.resizer.resizing').forEach(function(r){ r.classList.remove('resizing'); });
+  _resizing = null;
+}, { passive: true });
 
 // ═══════════════════════════════════════════════════════
 // THEME
@@ -2545,12 +3099,13 @@ function recalcDias(records) {
     if(dv===null && r.prox_calib) {
       try { dv = Math.round((new Date(r.prox_calib+'T00:00:00') - new Date(new Date().setHours(0,0,0,0))) / 86400000); } catch(e){}
     }
-    // v8: só reescreve status quando o valor atual É um dos 2 gerenciados.
-    // Status customizados (ex: "Em manutenção", "Aguardando peça") são preservados.
+    // Auto-correct status_calib based on real date (fix stale Excel/localStorage data)
     let sc = r.status_calib || '';
-    const MANAGED = ['Calibração Necessária', 'Instrumento Calibrado e aprovado', ''];
-    if (MANAGED.includes(sc) && dv !== null) {
-      sc = dv < 0 ? 'Calibração Necessária' : 'Instrumento Calibrado e aprovado';
+    const isSpecial = sc.includes('DESCARTADO') || sc.includes('encontrado')
+                   || sc.includes('Discarded')  || sc.includes('Found');
+    if(!isSpecial && dv !== null) {
+      if(dv < 0)  sc = 'Calibração Necessária';
+      else        sc = 'Instrumento Calibrado e aprovado';
     }
     return { ...r, dias_vencer: dv, status_calib: sc,
              link: r.link||'', link_data: r.link_data||'', notes: r.notes||'' };
@@ -2569,20 +3124,6 @@ let   _unsub    = null;   // realtime listener unsubscribe
 let   _pending  = false;
 let   _pushTimer= null;
 let   _fbActive = false;
-let   _lastLocalEdit = 0;   // v8: timestamp da última edição local (anti-race em fbPull)
-let   _pendingSince  = 0;   // v8: quando o flag _pending foi setado
-let   _pushFailCount = 0;   // v8: backoff exponencial em fbPush
-
-// Watchdog: se _pending ficar preso em true sem timer agendado por >15s,
-// libera para destravar o listener (defesa contra falhas silenciosas).
-// v8: agora também notifica o usuário se isso indicar falha de sync.
-setInterval(() => {
-  if (_pending && !_pushTimer) {
-    _pending = false;
-    setSyncInd('⚠ Sync travado — liberado', 'var(--orange)');
-    console.warn('[watchdog] _pending estava preso há >15s sem timer; liberado. Último erro:', window.__lastFbError);
-  }
-}, 15000);
 
 // ── Indicador de sync ─────────────────────────────────────────────
 function setSyncInd(text, color, spin) {
@@ -2640,13 +3181,12 @@ async function fbInit(cfg) {
 async function fbPull() {
   if(!fbActive()) return false;
   setSyncInd(t('sync_loading'), 'var(--accent2)', true);
-  const editTsBefore = _lastLocalEdit; // v8: captura antes do await
   try {
     const snap = await _colRef.doc('dados').get();
     if(snap.exists) {
-      // v8: se o usuário editou durante o await, NÃO sobrescreve — envia o local
-      if(_pending || _lastLocalEdit !== editTsBefore) {
-        console.log('fbPull: edição local detectada durante fetch — enviando local em vez de sobrescrever');
+      if(_pending) {
+        // Há mudanças locais não salvas — envia para o Firebase em vez de sobrescrever
+        console.log('fbPull: mudanças locais pendentes, enviando ao invés de sobrescrever');
         setSyncInd('⬆ Sincronizando mudanças locais…', 'var(--orange)');
         await fbPush(false);
         return true;
@@ -2667,8 +3207,6 @@ async function fbPull() {
 // ESCRITA debounced
 function fbSchedulePush() {
   _pending = true;
-  _pendingSince = Date.now();      // v8
-  _lastLocalEdit = Date.now();     // v8
   saveLS(); // Salva localStorage imediatamente — garante que não perde nada
   const btn = document.getElementById('btn-sync-now');
   if(btn) btn.style.display = 'inline-block';
@@ -2689,38 +3227,27 @@ async function fbPushOrRetry() {
 }
 
 async function fbPush(manual) {
-  if(!fbActive()) { saveLS(); _pending = false; return; }
+  if(!fbActive()) { saveLS(); return; }
   if(_pushTimer) { clearTimeout(_pushTimer); _pushTimer = null; }
   setSyncInd(t('sync_saving'), 'var(--accent2)', true);
-  let ok = false;
   try {
     const payload = DB.map(r=>{const{dias_vencer,...rest}=r;return rest;});
     await _colRef.doc('dados').set({ records: payload, updated: new Date().toISOString() });
     saveLS();
-    ok = true;
-    setSyncInd(t('sync_saved') + ' ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
-    _pushFailCount = 0; // v8: reset backoff em sucesso
-    if(manual) showToast('🔥 Salvo no Firebase!');
-  } catch(e) {
-    console.warn('fbPush error:', e);
-    window.__lastFbError = e; // v8: expõe para diagnóstico
-    setSyncInd(t('sync_fail') + ' ('+(e.code||e.message||'erro')+')', 'var(--red)');
-    // v8: backoff exponencial 30s, 1m, 2m, 5m, 10m (max). Para após 6 falhas.
-    _pushFailCount++;
-    if (_pushFailCount <= 6) {
-      const waits = [30000, 60000, 120000, 300000, 600000, 600000];
-      _pushTimer = setTimeout(() => fbPush(false), waits[Math.min(_pushFailCount-1, waits.length-1)]);
-    } else {
-      console.error('fbPush: desistindo após', _pushFailCount, 'falhas consecutivas. Nova edição vai re-tentar.');
-    }
-    saveLS();
-    if(manual) showToast('Falha Firebase ('+(e.code||'erro')+'). Salvo localmente.', 'err');
-  } finally {
-    // SEMPRE libera o flag — mesmo em falha — para não bloquear o listener
-    // após algumas edições (raiz do bug "trava após N atualizações").
     _pending = false;
     const btn = document.getElementById('btn-sync-now');
-    if(btn) btn.style.display = ok ? 'none' : 'inline-block';
+    if(btn) btn.style.display = 'none';
+    setSyncInd(t('sync_saved') + ' ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
+    if(manual) showToast('🔥 Salvo no Firebase!');
+  } catch(e) {
+    setSyncInd(t('sync_fail'), 'var(--red)');
+    _pushTimer = setTimeout(() => fbPush(false), 30000);
+    saveLS();
+    if(manual) showToast('Falha Firebase. Salvo localmente.', 'err');
+  } finally {
+    // Garante que _pending nunca fique travado em true indefinidamente
+    // Se ainda há timer agendado, mantém pending; caso contrário libera
+    if(!_pushTimer) _pending = false;
   }
 }
 
@@ -2729,24 +3256,19 @@ function fbStartListen() {
   if(!fbActive()) return;
   if(_unsub) _unsub(); // cancela listener anterior
   _unsub = _colRef.doc('dados').onSnapshot(snap => {
-    // v8: ignora updates remotos apenas durante janela curta de save (3s),
-    // para não bloquear o stream se _pending ficar preso.
-    if(!snap.exists) return;
-    if(_pending && (Date.now() - _pendingSince) < 3000) return;
+    if(!snap.exists || _pending) return; // ignora enquanto está salvando
     const data = snap.data().records || [];
     const newDB = recalcDias(data);
-    // Compara TODOS os campos relevantes (não só _uid + prox_calib),
-    // ignorando o derivado dias_vencer para não entrar em loop.
-    const sig = arr => JSON.stringify(arr.map(r => {
-      const { dias_vencer, ...rest } = r; return rest;
-    }));
-    if (sig(newDB) !== sig(DB)) {
+    // Compara o DB completo para detectar qualquer alteração de campo (fix: não bloquear após 4 edições)
+    const stripDias = arr => arr.map(r => { const {dias_vencer, ...rest} = r; return rest; });
+    if(JSON.stringify(stripDias(newDB)) !== JSON.stringify(stripDias(DB))) {
       DB = newDB;
       saveLS();
       // Preserve active filters when receiving live updates
       updateKPIs(); buildAllCharts(); populateFilters();
-      const hasFilter = _selectedTipos.size > 0 || ['f-cli','f-local','f-resp','f-emp',
-        'f-status','f-calib','f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search']
+      const hasFilter = _selectedTipos.size > 0 ||
+        Object.values(_multiSel).some(function(s){return s.size>0;}) ||
+        ['f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search']
         .some(id => { const el=document.getElementById(id); return el && el.value; });
       if(hasFilter) applyF(); else refreshInPlace();
       renderAlerts();
@@ -2754,7 +3276,6 @@ function fbStartListen() {
     }
   }, err => {
     console.warn('fbListen error:', err);
-    _pending = false; // libera mesmo se o listener errar
     setSyncInd('⚠️ Listener desconectado', 'var(--orange)');
   });
 }
@@ -2764,7 +3285,7 @@ function openGsConfig() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}'); } catch(e){}
   const html = `
-  <div style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:600;display:flex;align-items:center;justify-content:center" id="fb-ov" onclick="if(event.target===this)this.remove()">
+  <div style="position:fixed;top:0;right:0;bottom:0;left:0;inset:0;background:rgba(0,0,0,.75);z-index:600;display:flex;align-items:center;justify-content:center" id="fb-ov" onclick="if(event.target===this)this.remove()">
     <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;width:min(600px,96vw);padding:24px;box-shadow:0 24px 64px rgba(0,0,0,.6);max-height:90vh;overflow-y:auto">
       <div style="font-size:15px;font-weight:800;margin-bottom:4px">🔥 Firebase — Configuração</div>
       <div style="font-size:12px;color:var(--tx3);margin-bottom:16px">Banco de dados em tempo real. Todos os usuários veem as alterações instantaneamente de qualquer lugar.</div>
@@ -2940,7 +3461,7 @@ async function initFirebase() {
 
     const ov = document.createElement('div');
     ov.id = 'public-view-ov';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;padding:16px;font-family:DM Sans,system-ui,sans-serif;overflow-y:auto';
+    ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;padding:16px;font-family:DM Sans,system-ui,sans-serif;overflow-y:auto';
     ov.innerHTML = `
       <div style="background:#fff;border-radius:16px;width:min(560px,100%);box-shadow:0 8px 40px rgba(0,0,0,.12);overflow:hidden;border:1px solid #e8eaf0">
         <!-- Header -->
@@ -3021,7 +3542,7 @@ async function initFirebase() {
       if (Date.now() - _pubStart > 8000) {
         // Timeout: mostra erro em vez de girar para sempre
         const ov = document.createElement('div');
-        ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:DM Sans,system-ui,sans-serif;flex-direction:column;gap:8px';
+        ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:DM Sans,system-ui,sans-serif;flex-direction:column;gap:8px';
         ov.innerHTML = `<div style="font-size:36px">⏱️</div><div style="font-size:16px;font-weight:700;color:#1a1a1a">Tempo esgotado</div><div style="font-size:12px;color:#6b7280">Não foi possível carregar os dados. Verifique sua conexão.</div>`;
         document.body.appendChild(ov);
         return;
@@ -3034,7 +3555,7 @@ async function initFirebase() {
     if (!r) {
       const ov = document.createElement('div');
       const dbCount = (typeof DB !== 'undefined' && DB) ? DB.length : 0;
-      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:DM Sans,system-ui,sans-serif;flex-direction:column;gap:6px;padding:24px;text-align:center';
+      ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:DM Sans,system-ui,sans-serif;flex-direction:column;gap:6px;padding:24px;text-align:center';
       ov.innerHTML = '<div style="font-size:36px">🔍</div>'
         + '<div style="font-size:16px;font-weight:700;color:#1a1a1a">Equipamento não encontrado</div>'
         + '<div style="font-size:12px;color:#6b7280;font-family:monospace">ID buscado: <b>' + decodeURIComponent(viewId) + '</b></div>'
@@ -3070,19 +3591,25 @@ async function initFirebase() {
           console.warn('[público] auth anônima falhou:', authErr.code);
         }
 
-        // v8: lê só o doc 'dados' (mais barato, menos exposição)
         const db = firebase.firestore(app);
-        const snap = await db.collection('equipamentos').doc('dados').get();
-        if (snap.exists) {
-          const data = snap.data();
-          const rows = Array.isArray(data.records) ? data.records.map((r,i) => ({ _uid: i+1, ...r })) : [];
+        const snap = await db.collection('equipamentos').get();
+        if (!snap.empty) {
+          const rows = [];
+          snap.forEach(doc => {
+            const data = doc.data();
+            // Estrutura padrão: doc 'dados' contém { records: [...] }
+            if (Array.isArray(data.records)) {
+              data.records.forEach(record => rows.push({ _uid: rows.length + 1, ...record }));
+            } else {
+              // Fallback: documento simples sem array interno
+              rows.push({ _uid: rows.length + 1, ...data });
+            }
+          });
           if (rows.length) {
             DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
-          } else {
-            console.warn('[público] Doc dados sem array records.');
           }
         } else {
-          console.warn('[público] Doc /equipamentos/dados não existe — verifique Security Rules / dados.');
+          console.warn('[público] Firestore retornou 0 docs — verifique as Security Rules.');
         }
       } catch(e) {
         console.error('[público] erro Firestore:', e.code, e.message);
@@ -3094,9 +3621,6 @@ async function initFirebase() {
 let _auth = null;
 
 async function initFirebaseAndAuth() {
-  // v8: evita double-init quando o IIFE público já criou o app
-  if (window.__fbAuthBootstrapped) return;
-  window.__fbAuthBootstrapped = true;
   let cfg = FB_CONFIG_DEFAULT;
   try {
     const saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}');
@@ -3789,9 +4313,6 @@ function startInlineEdit(uid, k, td) {
     input = document.createElement('input');
     input.type = 'date';
     input.value = curVal;
-    input.min = '1900-01-01';
-    input.max = '2100-12-31';
-    input.required = true;
     input.style.cssText = `width:100%;font-size:11px;font-family:var(--mono);background:var(--surf2);color:var(--tx);border:1px solid var(--accent);border-radius:3px;padding:2px 4px;outline:none`;
   } else {
     input = document.createElement('input');
@@ -3812,16 +4333,7 @@ function startInlineEdit(uid, k, td) {
     if(e.key === 'Tab')    { e.preventDefault(); commitInlineEdit(false); moveInlineFocus(uid, k, e.shiftKey ? -1 : 1); }
     e.stopPropagation();
   });
-  // Captura ESTE edit específico — o blur só pode comitar a si mesmo,
-  // nunca uma edição posterior (que mataria o input ativo do usuário).
-  const myEdit = _inlineActive;
-  input.addEventListener('blur', () => setTimeout(() => {
-    if (!(_inlineActive && _inlineActive === myEdit)) return;
-    // Para campos de data: se o valor ficou vazio (digitação incompleta),
-    // cancela em vez de gravar — evita apagar a data existente.
-    if (cfg.type === 'date' && !input.value) { cancelInlineEdit(); return; }
-    commitInlineEdit(false);
-  }, 150));
+  input.addEventListener('blur', () => setTimeout(() => { if(_inlineActive) commitInlineEdit(false); }, 150));
   if(cfg.type === 'select') {
     input.addEventListener('change', () => commitInlineEdit(false));
   }
@@ -3829,7 +4341,6 @@ function startInlineEdit(uid, k, td) {
 
 // Recalcula próxima calib, dias_vencer e status_calib de um registro
 function recalcRecord(r) {
-  if(!r) return r;
   _statsCache = null;
   const today = new Date(); today.setHours(0,0,0,0);
 
@@ -3868,7 +4379,6 @@ function recalcRecord(r) {
       r.status_calib = 'Instrumento Calibrado e aprovado';
     }
   }
-  return r;
 }
 
 function commitInlineEdit(silent) {
@@ -3880,28 +4390,10 @@ function commitInlineEdit(silent) {
   const newVal = k === 'freq_dias' ? (parseInt(input.value) || null) : input.value.trim();
   const r = DB.find(x => x._uid === uid);
 
-  // ── Validação de datas: exige formato YYYY-MM-DD com ano entre 1900 e 2100.
-  // Evita que digitação parcial (ex.: "03/03/26" → ano 0026) corrompa o registro
-  // e dê a sensação de "travamento" quando a linha sai do filtro vigente.
-  if (k === 'ult_calib' || k === 'prox_calib') {
-    const v = newVal || '';
-    const ok = /^\d{4}-\d{2}-\d{2}$/.test(v) &&
-               (+v.slice(0,4) >= 1900) && (+v.slice(0,4) <= 2100);
-    if (!ok) {
-      if (typeof showToast === 'function') {
-        showToast(LANG==='en'
-          ? '⚠️ Invalid date — use dd/mm/yyyy with a 4-digit year'
-          : '⚠️ Data inválida — use dd/mm/aaaa com ano de 4 dígitos', 'err');
-      }
-      _inlineActive = null;
-      rerenderRow(uid);
-      return;
-    }
-  }
-
   if(r && (String(r[k]||'') !== String(newVal||''))) {
     pushUndo();
     r[k] = newVal;
+    _statsCache = null; // invalida cache de KPIs
 
     // Recalcula campos derivados quando muda data ou frequência
     if(k === 'ult_calib' || k === 'prox_calib' || k === 'freq_dias') {
@@ -3912,16 +4404,16 @@ function commitInlineEdit(silent) {
     saveLS();
     if(!silent) {
       fbSchedulePush();
-      showToast(LANG==='en' ? '✅ Saved and updated' : '✅ Salvo e atualizado em tempo real');
+      showToast(LANG==='en' ? '✅ Saved — filters will update when you click Apply' : '✅ Salvo — tabela mantida. Clique em 🔄 para atualizar filtros');
     }
-    // Atualiza filtros, status, dias, KPIs, alertas e gráficos imediatamente,
-    // preservando página/scroll sempre que possível.
-    _pendingFilterRefresh = false;
+    // ── Only re-render the ONE affected row — do NOT re-apply filters ──
+    rerenderRow(uid, 'geral');
+    // Mark that a deferred filter refresh is pending
+    _pendingFilterRefresh = true;
     updateApplyFilterBtn();
-    refreshInPlace();
   } else {
     _inlineActive = null;
-    rerenderRow(uid);
+    rerenderRow(uid, 'geral');
   }
   _inlineActive = null;
 }
@@ -3936,20 +4428,14 @@ function cancelInlineEdit() {
 
 // ── Re-render only ONE row without touching page/scroll/filters ────────────
 function rerenderRow(uid, tbl) {
-  const rows = tbl
-    ? Array.from(document.querySelectorAll(`#${_IDS(tbl).tbody} tr[data-uid="${uid}"]`))
-    : Array.from(document.querySelectorAll(`tr[data-uid="${uid}"]`));
-  if(!rows.length) return; // row not on current page — safe to ignore
+  const tr = document.querySelector(`tr[data-uid="${uid}"]`);
+  if(!tr) return; // row not on current page — safe to ignore
   const r = DB.find(x => x._uid === uid);
   if(!r) return;
-  rows.forEach(tr => {
-    const tblEl = tr.closest('table');
-    const curTbl = tbl || (tblEl?.id === 'alert-tbl' ? 'alert' : tblEl?.id === 'rep-tbl' ? 'rep' : 'geral');
-    const cols = (COL_DEFS[curTbl]||[]).filter(c => c.k==='_act' || c.k==='_chk' || colVis[curTbl]?.[c.k] !== false);
-    tr.innerHTML = cols.map(c => renderCell(r, c.k, curTbl)).join('');
-    // Restore selected highlight if needed
-    if(_selectedUIDs[curTbl]?.has(uid)) tr.classList.add('selected');
-  });
+  const cols = (COL_DEFS[tbl]||[]).filter(c => colVis[tbl]?.[c.k] !== false);
+  tr.innerHTML = cols.map(c => renderCell(r, c.k, tbl)).join('');
+  // Restore selected highlight if needed
+  if(_selectedUIDs[tbl]?.has(uid)) tr.classList.add('selected');
 }
 
 // ── Deferred filter refresh — user controls when filters re-apply ──────────
@@ -4023,8 +4509,8 @@ function renderCell(r, k, tbl) {
   if(k==='dias_vencer')  return `<td ${attr}>${diasBadge(r.dias_vencer)}</td>`;
 
   // Editable badge cells — click opens inline select
-  if(k==='status_calib') return `<td ${attr} ${editAttr}>${calibBadge(r.status_calib, r.dias_vencer)}<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')"></span></td>`;
-  if(k==='status')       return `<td ${attr} ${editAttr}>${statusBadge(r.status)}<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')"></span></td>`;
+  if(k==='status_calib') return `<td ${attr} ${editAttr}>${calibBadge(r.status_calib, r.dias_vencer)}<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')" ontouchstart="startFillDrag(event,${r._uid},'${k}')"></span></td>`;
+  if(k==='status')       return `<td ${attr} ${editAttr}>${statusBadge(r.status)}<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')" ontouchstart="startFillDrag(event,${r._uid},'${k}')"></span></td>`;
 
   if(k==='link'){
     if(r.link){const fn=(r.link.split(/[\/\\]/).pop()||r.link);const has=!!(r.link_data&&r.link_data.startsWith('data:'));return `<td ${attr}><span onclick="openFileForRow(${r._uid})" style="cursor:pointer;font-size:10px" title="${esc(fn)}">${fileIcon(fn)} ${esc(fn.slice(0,14))} <span style="color:${has?'var(--green)':'var(--orange)'}">●</span></span></td>`;}
@@ -4032,14 +4518,14 @@ function renderCell(r, k, tbl) {
   }
 
   if(k==='ult_calib'||k==='prox_calib') {
-    return `<td ${attr} ${editAttr} style="width:${w||105}px;min-width:${w||105}px;max-width:${w||105}px;font-family:var(--mono);font-size:10px">${fmtDate(r[k])}<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')"></span></td>`;
+    return `<td ${attr} ${editAttr} style="width:${w||105}px;min-width:${w||105}px;max-width:${w||105}px;font-family:var(--mono);font-size:10px">${fmtDate(r[k])}<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')" ontouchstart="startFillDrag(event,${r._uid},'${k}')"></span></td>`;
   }
 
   const v = r[k];
   const translatableFields = ['tipo','status','status_calib','localizacao',
     'cliente','observacoes','descricao','empresa'];
   const vt = translatableFields.includes(k) ? translateVal(k, v) : v;
-  const fillH = editable ? `<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')"></span>` : '';
+  const fillH = editable ? `<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')" ontouchstart="startFillDrag(event,${r._uid},'${k}')"></span>` : '';
   return `<td ${attr} ${editAttr} title="${esc(vt||'')}">${esc(vt||'—')}${fillH}</td>`;
 }
 
@@ -4134,6 +4620,182 @@ function buildPag(p, infoId, btnsId, cb) {
 // ═══════════════════════════════════════════════════════
 // Global state for multi-select tipo
 var _selectedTipos = new Set();
+
+// ═══════════════════════════════════════════════════════
+// GENERIC MULTI-SELECT FILTERS
+// ═══════════════════════════════════════════════════════
+var _multiSel = {
+  'f-cli': new Set(), 'f-local': new Set(), 'f-resp': new Set(),
+  'f-emp': new Set(), 'f-status': new Set(), 'f-calib': new Set()
+};
+var _MULTI_STATIC = {
+  'f-status': ['ATIVO','INATIVO'],
+  'f-calib':  ['OK','Vencido','Necessária']
+};
+var _CALIB_VAL_MAP = { 'OK':'ok', 'Vencido':'vencido', 'Necessária':'necessaria' };
+var _CALIB_DISPLAY_MAP = { 'ok':'OK', 'vencido':'Vencido', 'necessaria':'Necessária' };
+
+function _multiCanonical(id) {
+  return id && id.startsWith('ft-') ? id.replace('ft-', 'f-') : id;
+}
+
+function _buildMultiDd(ddId, canonicalId, values) {
+  var dd = document.getElementById(ddId);
+  if (!dd) {
+    dd = document.createElement('div');
+    dd.id = ddId;
+    dd.className = 'multi-tipo-dd';
+    dd.style.display = 'none';
+    document.body.appendChild(dd);
+  }
+  var sel = _multiSel[canonicalId] || new Set();
+  var sorted = Array.from(new Set(values.filter(Boolean))).sort();
+
+  var actDiv = document.createElement('div');
+  actDiv.className = 'mtd-actions';
+  actDiv.onclick = function(e){ e.stopPropagation(); };
+  var btnTodos = document.createElement('button');
+  btnTodos.textContent = 'Todos';
+  btnTodos.onclick = function(){ _multiClearOne(canonicalId); };
+  var btnLimpar = document.createElement('button');
+  btnLimpar.textContent = 'Limpar';
+  btnLimpar.onclick = function(){ _multiClearOne(canonicalId); };
+  actDiv.appendChild(btnTodos);
+  actDiv.appendChild(btnLimpar);
+
+  var sep = document.createElement('div');
+  sep.className = 'mtd-sep';
+
+  var srch = document.createElement('input');
+  srch.className = 'mtd-search';
+  srch.placeholder = 'Buscar...';
+  srch.onclick = function(e){ e.stopPropagation(); };
+
+  var listDiv = document.createElement('div');
+  sorted.forEach(function(val) {
+    var lbl = document.createElement('label');
+    lbl.className = 'mtd-item';
+    lbl.onclick = function(e){ e.stopPropagation(); };
+    var chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.value = val;
+    var storedVal = (canonicalId === 'f-calib') ? (_CALIB_VAL_MAP[val] || val.toLowerCase()) : val;
+    chk.checked = sel.has(storedVal);
+    chk.onchange = function(){ _multiToggle(canonicalId, val, this.checked); };
+    var span = document.createElement('span');
+    span.textContent = val;
+    lbl.appendChild(chk);
+    lbl.appendChild(span);
+    listDiv.appendChild(lbl);
+  });
+
+  srch.oninput = function(){
+    var q = this.value.toLowerCase();
+    listDiv.querySelectorAll('.mtd-item').forEach(function(item){
+      var txt = (item.querySelector('span')||{}).textContent||'';
+      item.style.display = txt.toLowerCase().includes(q) ? '' : 'none';
+    });
+  };
+
+  dd.innerHTML = '';
+  dd.appendChild(actDiv);
+  dd.appendChild(sep);
+  dd.appendChild(srch);
+  dd.appendChild(listDiv);
+}
+
+function _multiToggle(canonicalId, displayVal, checked) {
+  var storedVal = (canonicalId === 'f-calib') ? (_CALIB_VAL_MAP[displayVal] || displayVal.toLowerCase()) : displayVal;
+  if (!_multiSel[canonicalId]) _multiSel[canonicalId] = new Set();
+  if (checked) _multiSel[canonicalId].add(storedVal);
+  else         _multiSel[canonicalId].delete(storedVal);
+  var mirrorId = canonicalId.replace('f-','ft-');
+  [canonicalId+'-dd', mirrorId+'-dd'].forEach(function(did){
+    var dd2 = document.getElementById(did);
+    if (!dd2) return;
+    dd2.querySelectorAll('input[type=checkbox]').forEach(function(c){
+      var sv = (canonicalId==='f-calib') ? (_CALIB_VAL_MAP[c.value]||c.value.toLowerCase()) : c.value;
+      if (sv === storedVal) c.checked = checked;
+    });
+  });
+  _multiUpdateLabel(canonicalId);
+  applyF();
+}
+
+function _multiClearOne(canonicalId) {
+  if (!_multiSel[canonicalId]) return;
+  _multiSel[canonicalId].clear();
+  var mirrorId = canonicalId.replace('f-','ft-');
+  [canonicalId+'-dd', mirrorId+'-dd'].forEach(function(did){
+    var dd2 = document.getElementById(did);
+    if (dd2) dd2.querySelectorAll('input[type=checkbox]').forEach(function(c){ c.checked=false; });
+  });
+  _multiUpdateLabel(canonicalId);
+  applyF();
+}
+
+function _multiUpdateLabel(canonicalId) {
+  var sel = _multiSel[canonicalId];
+  var n = sel ? sel.size : 0;
+  var mirrorId = canonicalId.replace('f-','ft-');
+  [canonicalId, mirrorId].forEach(function(id){
+    var el = document.getElementById(id+'-label');
+    if (!el) return;
+    if (n === 0) { el.innerHTML = (id.includes('local')||id.includes('emp')) ? 'Todas' : 'Todos'; return; }
+    var vals = Array.from(sel);
+    if (canonicalId === 'f-calib') vals = vals.map(function(v){ return _CALIB_DISPLAY_MAP[v]||v; });
+    var first = esc(vals[0]);
+    el.innerHTML = n===1 ? first : first+' <span class="multi-tipo-badge">+'+(n-1)+'</span>';
+  });
+  [canonicalId, mirrorId].forEach(function(id){
+    var btn = document.getElementById(id+'-btn');
+    if (btn) btn.classList.toggle('active', n > 0);
+  });
+}
+
+function _multiUpdateAllLabels() {
+  Object.keys(_multiSel).forEach(function(id){ _multiUpdateLabel(id); });
+}
+
+function toggleMultiDD(ddId, btnId, event) {
+  if (event) event.stopPropagation();
+  var btn = document.getElementById(btnId);
+  var existing = document.getElementById(ddId);
+  var isOpen = existing && existing.style.display !== 'none';
+
+  document.querySelectorAll('.multi-tipo-dd').forEach(function(d){ d.style.display='none'; });
+
+  if (!isOpen) {
+    var rawId = ddId.replace('-dd','');
+    var canonicalId = _multiCanonical(rawId);
+
+    var values;
+    if (_MULTI_STATIC[canonicalId]) {
+      values = _MULTI_STATIC[canonicalId];
+    } else {
+      var fieldMap = {'f-cli':'cliente','f-local':'localizacao','f-resp':'responsavel','f-emp':'empresa'};
+      var field = fieldMap[canonicalId];
+      values = field ? Array.from(new Set(DB.map(function(r){ return r[field]; }).filter(Boolean))).sort() : [];
+    }
+
+    _buildMultiDd(ddId, canonicalId, values);
+    var dd2 = document.getElementById(ddId);
+    if (!dd2) return;
+    dd2.style.display = 'block';
+    if (btn) {
+      var rect2 = btn.getBoundingClientRect();
+      dd2.style.left = rect2.left + 'px';
+      dd2.style.top  = (rect2.bottom + 4) + 'px';
+      dd2.style.minWidth = Math.max(220, rect2.width) + 'px';
+      setTimeout(function(){
+        var r3 = dd2.getBoundingClientRect();
+        if (r3.bottom > window.innerHeight - 8) {
+          dd2.style.top = Math.max(8, rect2.top - r3.height - 4) + 'px';
+        }
+      }, 0);
+    }
+  }
+}
 
 function _buildTipoDropdown(ddId) {
   let dd = document.getElementById(ddId);
@@ -4284,20 +4946,19 @@ document.addEventListener('click', function(e) {
 });
 
 function populateFilters() {
-  // After filter <select> options are built, restore last user choice
+  // After filter options are built, restore last user choice
   setTimeout(_restoreFilters, 0);
-  const fill=(id,vals,fem)=>{const s=document.getElementById(id);if(!s)return;const cur=s.value;const allTxt=fem?t('f_all_f'):t('f_all');s.innerHTML=`<option value="">${allTxt}</option>`+[...new Set(vals.filter(v=>v))].sort().map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');s.value=cur;};
-  // Tipo dropdowns are built on demand (body-level, position:fixed)
+  // Tipo multi-select — built on demand
   _tipoUpdateLabel();
-  fill('f-cli',   DB.map(r=>r.cliente));
-  fill('f-local', DB.map(r=>r.localizacao), true);
-  fill('f-resp',  DB.map(r=>r.responsavel));
-  fill('f-emp',   DB.map(r=>r.empresa), true);
-  // Mirror selects to table-view filters
-  fill('ft-cli',   DB.map(r=>r.cliente));
-  fill('ft-local', DB.map(r=>r.localizacao), true);
-  fill('ft-resp',  DB.map(r=>r.responsavel));
-  fill('ft-emp',   DB.map(r=>r.empresa), true);
+  // All other filters are now multi-select dropdowns built on demand in toggleMultiDD.
+  // Just update labels to reflect current state.
+  _multiUpdateAllLabels();
+  // Keep legacy fill for any remaining <select> elements (reports tab)
+  var fill=function(id,vals,fem){var s=document.getElementById(id);if(!s||s.tagName!=='SELECT')return;var cur=s.value;var allTxt=fem?t('f_all_f'):t('f_all');s.innerHTML='<option value="">'+allTxt+'</option>'+Array.from(new Set(vals.filter(function(v){return v;}))).sort().map(function(v){return '<option value="'+esc(v)+'">'+esc(v)+'</option>';}).join('');s.value=cur;};
+  fill('rep-f-cli',   DB.map(function(r){return r.cliente;}));
+  fill('rep-f-local', DB.map(function(r){return r.localizacao;}), true);
+  fill('rep-f-resp',  DB.map(function(r){return r.responsavel;}));
+  fill('rep-f-emp',   DB.map(function(r){return r.empresa;}), true);
 }
 
 // Sync table-view filter → canonical f-* field then re-apply
@@ -4307,99 +4968,128 @@ function syncTblFilter(targetId, value) {
   applyF();
 }
 
-// Copy all f-* values into their ft-* mirrors (called when switching to table view)
+// Copy f-* date/search values into ft-* mirrors (called when switching to table view)
 function _syncFiltersToTableView() {
-  const pairs = [
-    ['f-tipo','ft-tipo'],['f-cli','ft-cli'],['f-local','ft-local'],
-    ['f-resp','ft-resp'],['f-emp','ft-emp'],['f-status','ft-status'],
-    ['f-calib','ft-calib'],['f-de','ft-de'],['f-ate','ft-ate'],
+  var pairs = [
+    ['f-de','ft-de'],['f-ate','ft-ate'],
     ['f-ult-calib-mes','ft-ult-calib-mes'],['f-prox-calib-mes','ft-prox-calib-mes'],
     ['f-search','ft-search']
   ];
-  pairs.forEach(([src,dst])=>{
-    const s=document.getElementById(src), d=document.getElementById(dst);
+  pairs.forEach(function(p){
+    var s=document.getElementById(p[0]), d=document.getElementById(p[1]);
     if(s&&d) d.value=s.value;
   });
+  // Multi-select labels — just refresh since they share the same Sets
+  _tipoUpdateLabel();
+  _multiUpdateAllLabels();
 }
 
-// Copy all ft-* values back into f-* (called when switching to card view)
+// Copy ft-* date/search values back into f-* (called when switching to card view)
 function _syncFiltersFromTableView() {
-  const pairs = [
-    ['ft-tipo','f-tipo'],['ft-cli','f-cli'],['ft-local','f-local'],
-    ['ft-resp','f-resp'],['ft-emp','f-emp'],['ft-status','f-status'],
-    ['ft-calib','f-calib'],['ft-de','f-de'],['ft-ate','f-ate'],
+  var pairs = [
+    ['ft-de','f-de'],['ft-ate','f-ate'],
     ['ft-ult-calib-mes','f-ult-calib-mes'],['ft-prox-calib-mes','f-prox-calib-mes'],
     ['ft-search','f-search']
   ];
-  pairs.forEach(([src,dst])=>{
-    const s=document.getElementById(src), d=document.getElementById(dst);
+  pairs.forEach(function(p){
+    var s=document.getElementById(p[0]), d=document.getElementById(p[1]);
     if(s&&d) d.value=s.value;
   });
 }
 
-const FILTER_IDS = ['f-tipo','f-cli','f-local','f-resp','f-emp','f-status','f-calib','f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search'];
+const FILTER_IDS = ['f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search'];
 function _saveFilters(){ try{
-  const o={}; FILTER_IDS.forEach(id=>{const e=document.getElementById(id); if(e&&e.value) o[id]=e.value;});
+  var o={};
+  FILTER_IDS.forEach(function(id){var e=document.getElementById(id); if(e&&e.value) o[id]=e.value;});
+  // Save multi-select sets
+  var multiData={};
+  Object.keys(_multiSel).forEach(function(k){ if(_multiSel[k].size>0) multiData[k]=Array.from(_multiSel[k]); });
+  o['_multi'] = multiData;
+  // Save tipos
+  if(_selectedTipos.size>0) o['_tipos']=Array.from(_selectedTipos);
   localStorage.setItem('rochling_filters_v1', JSON.stringify(o));
 }catch(e){} }
 function _restoreFilters(){ try{
-  const o = JSON.parse(localStorage.getItem('rochling_filters_v1')||'{}');
-  Object.entries(o).forEach(([id,v])=>{const e=document.getElementById(id); if(e) e.value=v;});
+  var o = JSON.parse(localStorage.getItem('rochling_filters_v1')||'{}');
+  FILTER_IDS.forEach(function(id){var e=document.getElementById(id); if(e&&o[id]) e.value=o[id];});
+  // Restore multi-select sets
+  if(o['_multi']){
+    Object.keys(o['_multi']).forEach(function(k){
+      if(_multiSel[k]) _multiSel[k]=new Set(o['_multi'][k]);
+    });
+    _multiUpdateAllLabels();
+  }
+  // Restore tipos
+  if(o['_tipos']){
+    o['_tipos'].forEach(function(v){ _selectedTipos.add(v); });
+    _tipoUpdateLabel();
+  }
 }catch(e){} }
 function applyF() {
   _pendingFilterRefresh = false;
   updateApplyFilterBtn();
   _saveFilters();
-  const g=id=>(document.getElementById(id)||{}).value||'';
-  const cli=g('f-cli'),local=g('f-local'),resp=g('f-resp'),emp=g('f-emp'),stat=g('f-status'),calib=g('f-calib'),de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
-  const ultCalibMes=g('f-ult-calib-mes'), proxCalibMes=g('f-prox-calib-mes');
-  let rows = DB.slice();
-  if(_selectedTipos.size>0) rows=rows.filter(r=>_selectedTipos.has(r.tipo));
-  if(cli)   rows=rows.filter(r=>r.cliente===cli);
-  if(local) rows=rows.filter(r=>r.localizacao===local);
-  if(resp)  rows=rows.filter(r=>r.responsavel===resp);
-  if(emp)   rows=rows.filter(r=>r.empresa===emp);
-  if(stat)  rows=rows.filter(r=>(r.status||'').toUpperCase()===stat.toUpperCase());
-  // Filter by dias_vencer (source of truth), not status_calib text
-  if(calib==='ok')
-    rows=rows.filter(r=>r.dias_vencer===null||(r.dias_vencer!==null&&r.dias_vencer>=0));
-  else if(calib==='vencido')
-    rows=rows.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0);
-  else if(calib==='necessaria')
-    rows=rows.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0);
-  if(de)  rows=rows.filter(r=>r.prox_calib&&r.prox_calib>=de);
-  if(ate) rows=rows.filter(r=>r.prox_calib&&r.prox_calib<=ate);
-  // Filtro Últ. Calib. por mês/ano (ex: "2025-10" filtra todos de outubro/2025)
-  if(ultCalibMes) rows=rows.filter(r=>r.ult_calib&&r.ult_calib.slice(0,7)===ultCalibMes);
-  // Filtro Próx. Calib. por mês/ano (ex: "2027-05" filtra todos de maio/2027)
-  if(proxCalibMes) rows=rows.filter(r=>r.prox_calib&&r.prox_calib.slice(0,7)===proxCalibMes);
-  if(q)   rows=rows.filter(r=>Object.values(r).join(' ').toLowerCase().includes(q));
+  var g=function(id){return (document.getElementById(id)||{}).value||'';};
+  var de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
+  var ultCalibMes=g('f-ult-calib-mes'), proxCalibMes=g('f-prox-calib-mes');
+  var rows = DB.slice();
+  if(_selectedTipos.size>0) rows=rows.filter(function(r){return _selectedTipos.has(r.tipo);});
+  var mCli   = _multiSel['f-cli']    || new Set();
+  var mLocal = _multiSel['f-local']  || new Set();
+  var mResp  = _multiSel['f-resp']   || new Set();
+  var mEmp   = _multiSel['f-emp']    || new Set();
+  var mStat  = _multiSel['f-status'] || new Set();
+  var mCalib = _multiSel['f-calib']  || new Set();
+  if(mCli.size>0)   rows=rows.filter(function(r){return mCli.has(r.cliente);});
+  if(mLocal.size>0) rows=rows.filter(function(r){return mLocal.has(r.localizacao);});
+  if(mResp.size>0)  rows=rows.filter(function(r){return mResp.has(r.responsavel);});
+  if(mEmp.size>0)   rows=rows.filter(function(r){return mEmp.has((r.empresa||'').trim());});
+  if(mStat.size>0)  rows=rows.filter(function(r){return mStat.has((r.status||'').toUpperCase());});
+  if(mCalib.size>0){
+    rows=rows.filter(function(r){
+      if(mCalib.has('ok') && (r.dias_vencer===null||(r.dias_vencer!==null&&r.dias_vencer>=0))) return true;
+      if((mCalib.has('vencido')||mCalib.has('necessaria')) && r.dias_vencer!==null&&r.dias_vencer<0) return true;
+      return false;
+    });
+  }
+  if(de)  rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib>=de;});
+  if(ate) rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib<=ate;});
+  if(ultCalibMes) rows=rows.filter(function(r){return r.ult_calib&&r.ult_calib.slice(0,7)===ultCalibMes;});
+  if(proxCalibMes) rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib.slice(0,7)===proxCalibMes;});
+  if(q)   rows=rows.filter(function(r){return Object.values(r).join(' ').toLowerCase().includes(q);});
   pag.eq.rows=rows; pag.eq.p=1; renderTable('geral');
 }
 
 // ── refreshInPlace: re-render table WITHOUT resetting page/scroll/sort ──────
-// Use this after any in-place edit so the user stays exactly where they are.
 function refreshInPlace() {
-  // Re-apply active filters to rebuild pag.eq.rows with updated DB values
-  const g = id => (document.getElementById(id)||{}).value||'';
-  const cli=g('f-cli'),local=g('f-local'),resp=g('f-resp'),
-        emp=g('f-emp'),stat=g('f-status'),calib=g('f-calib'),
-        de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
-  const ultCalibMes=g('f-ult-calib-mes'), proxCalibMes=g('f-prox-calib-mes');
-  let rows = DB.slice();
-  if(_selectedTipos.size>0) rows=rows.filter(r=>_selectedTipos.has(r.tipo));
-  if(cli)   rows=rows.filter(r=>r.cliente===cli);
-  if(local) rows=rows.filter(r=>r.localizacao===local);
-  if(resp)  rows=rows.filter(r=>r.responsavel===resp);
-  if(emp)   rows=rows.filter(r=>r.empresa===emp);
-  if(stat)  rows=rows.filter(r=>(r.status||'').toUpperCase()===stat.toUpperCase());
-  if(calib==='ok')        rows=rows.filter(r=>r.dias_vencer===null||(r.dias_vencer!==null&&r.dias_vencer>=0));
-  else if(calib==='vencido'||calib==='necessaria') rows=rows.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0);
-  if(de)  rows=rows.filter(r=>r.prox_calib&&r.prox_calib>=de);
-  if(ate) rows=rows.filter(r=>r.prox_calib&&r.prox_calib<=ate);
-  if(ultCalibMes)  rows=rows.filter(r=>r.ult_calib&&r.ult_calib.slice(0,7)===ultCalibMes);
-  if(proxCalibMes) rows=rows.filter(r=>r.prox_calib&&r.prox_calib.slice(0,7)===proxCalibMes);
-  if(q)   rows=rows.filter(r=>Object.values(r).join(' ').toLowerCase().includes(q));
+  var g = function(id){ return (document.getElementById(id)||{}).value||''; };
+  var de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
+  var ultCalibMes=g('f-ult-calib-mes'), proxCalibMes=g('f-prox-calib-mes');
+  var rows = DB.slice();
+  if(_selectedTipos.size>0) rows=rows.filter(function(r){return _selectedTipos.has(r.tipo);});
+  var mCli   = _multiSel['f-cli']    || new Set();
+  var mLocal = _multiSel['f-local']  || new Set();
+  var mResp  = _multiSel['f-resp']   || new Set();
+  var mEmp   = _multiSel['f-emp']    || new Set();
+  var mStat  = _multiSel['f-status'] || new Set();
+  var mCalib = _multiSel['f-calib']  || new Set();
+  if(mCli.size>0)   rows=rows.filter(function(r){return mCli.has(r.cliente);});
+  if(mLocal.size>0) rows=rows.filter(function(r){return mLocal.has(r.localizacao);});
+  if(mResp.size>0)  rows=rows.filter(function(r){return mResp.has(r.responsavel);});
+  if(mEmp.size>0)   rows=rows.filter(function(r){return mEmp.has((r.empresa||'').trim());});
+  if(mStat.size>0)  rows=rows.filter(function(r){return mStat.has((r.status||'').toUpperCase());});
+  if(mCalib.size>0){
+    rows=rows.filter(function(r){
+      if(mCalib.has('ok') && (r.dias_vencer===null||(r.dias_vencer!==null&&r.dias_vencer>=0))) return true;
+      if((mCalib.has('vencido')||mCalib.has('necessaria')) && r.dias_vencer!==null&&r.dias_vencer<0) return true;
+      return false;
+    });
+  }
+  if(de)  rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib>=de;});
+  if(ate) rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib<=ate;});
+  if(ultCalibMes)  rows=rows.filter(function(r){return r.ult_calib&&r.ult_calib.slice(0,7)===ultCalibMes;});
+  if(proxCalibMes) rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib.slice(0,7)===proxCalibMes;});
+  if(q)   rows=rows.filter(function(r){return Object.values(r).join(' ').toLowerCase().includes(q);});
 
   // Re-apply current sort WITHOUT changing it
   const s = sortState['geral'];
@@ -4434,17 +5124,26 @@ function refreshInPlace() {
   buildAllCharts();
 }
 function clearF(){
-  FILTER_IDS.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  // Also clear table-view mirror fields
-  ['ft-cli','ft-local','ft-resp','ft-emp','ft-status','ft-calib',
-   'ft-de','ft-ate','ft-ult-calib-mes','ft-prox-calib-mes','ft-search']
-    .forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  FILTER_IDS.forEach(function(id){var el=document.getElementById(id);if(el&&el.tagName==='INPUT')el.value='';});
+  // Also clear table-view date/search mirror fields
+  ['ft-de','ft-ate','ft-ult-calib-mes','ft-prox-calib-mes','ft-search']
+    .forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   // Reset multi-select tipo
   _selectedTipos.clear();
   _tipoUpdateLabel();
-  ['f-tipo-dd','ft-tipo-dd'].forEach(ddId=>{
-    const dd=document.getElementById(ddId);
-    if(dd) dd.querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=false);
+  ['f-tipo-dd','ft-tipo-dd'].forEach(function(ddId){
+    var dd=document.getElementById(ddId);
+    if(dd) dd.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=false;});
+  });
+  // Reset all generic multi-selects
+  Object.keys(_multiSel).forEach(function(canonicalId){
+    _multiSel[canonicalId].clear();
+    var mirrorId = canonicalId.replace('f-','ft-');
+    [canonicalId+'-dd', mirrorId+'-dd'].forEach(function(did){
+      var dd2=document.getElementById(did);
+      if(dd2) dd2.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=false;});
+    });
+    _multiUpdateLabel(canonicalId);
   });
   try{localStorage.removeItem('rochling_filters_v1');}catch(e){}
   applyF();
@@ -4500,8 +5199,9 @@ function buildRelatorios() {
   const venc=DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0).length;
   const d30=DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0&&r.dias_vencer<=30).length;
   const d90=DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>30&&r.dias_vencer<=90).length;
-  const ok=DB.filter(r=>r.dias_vencer===null||r.dias_vencer>90).length;
-  const saude=DB.length?Math.round(ok/DB.length*100):0;
+  const ok=DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>90).length;
+  const comData=DB.filter(r=>r.dias_vencer!==null).length;
+  const saude=comData?Math.round(ok/comData*100):0;
   const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   sv('rk-venc',venc);sv('rk-30d',d30);sv('rk-90d',d90);sv('rk-ok',ok);sv('rk-saude',saude+'%');
 
@@ -4621,10 +5321,10 @@ function _populateRepFilters(){
 function _repFilterRows(){
   const today=new Date();today.setHours(0,0,0,0);
   const deI=document.getElementById('rep-de'),ateI=document.getElementById('rep-ate');
-  if(deI&&!deI.value) deI.value=today.toISOString().slice(0,10);
-  if(ateI&&!ateI.value){const a=new Date(today);a.setDate(a.getDate()+90);ateI.value=a.toISOString().slice(0,10);}
-  const de=deI&&deI.value?new Date(deI.value+'T00:00:00'):null;
-  const ate=ateI&&ateI.value?new Date(ateI.value+'T00:00:00'):null;
+  const deVal=deI&&deI.value?deI.value:today.toISOString().slice(0,10);
+  const ateVal=ateI&&ateI.value?ateI.value:(()=>{const a=new Date(today);a.setDate(a.getDate()+90);return a.toISOString().slice(0,10);})();
+  const de=new Date(deVal+'T00:00:00');
+  const ate=new Date(ateVal+'T00:00:00');
   const g=id=>(document.getElementById(id)||{}).value||'';
   const tipo=g('rep-f-tipo'),cli=g('rep-f-cli'),local=g('rep-f-local'),resp=g('rep-f-resp'),
         emp=g('rep-f-emp'),stat=g('rep-f-status'),calib=g('rep-f-calib'),
@@ -4632,8 +5332,8 @@ function _repFilterRows(){
   let rows=DB.filter(r=>{
     if(!r.prox_calib) return false;
     const d=new Date(r.prox_calib+'T00:00:00');
-    if(de&&d<de) return false;
-    if(ate&&d>ate) return false;
+    if(d<de) return false;
+    if(d>ate) return false;
     return true;
   });
   if(tipo)  rows=rows.filter(r=>r.tipo===tipo);
@@ -4716,16 +5416,9 @@ function openAdd(){
 function closeModal(){ document.getElementById('edit-modal').classList.remove('on'); }
 
 function saveRecord(){
-  const today=new Date();today.setHours(0,0,0,0);
+  const today=new Date();today.setUTCHours(0,0,0,0);
   const prox=document.getElementById('m-prox').value;
-  const dv=prox?Math.round((new Date(prox+'T00:00:00')-today)/86400000):null;
-  const ultVal = document.getElementById('m-ult').value;
-  if((ultVal && !isValidISODateInput(ultVal)) || (prox && !isValidISODateInput(prox))) {
-    showToast(LANG==='en'
-      ? '⚠️ Invalid date — use dd/mm/yyyy with a 4-digit year'
-      : '⚠️ Data inválida — use dd/mm/aaaa com ano de 4 dígitos', 'err');
-    return;
-  }
+  const dv=prox?Math.round((new Date(prox+'T00:00:00Z')-today)/86400000):null;
   const upd={
     id:        document.getElementById('m-id').value,
     tipo:      document.getElementById('m-tipo').value,
@@ -4736,7 +5429,7 @@ function saveRecord(){
     responsavel:document.getElementById('m-resp').value,
     empresa:   document.getElementById('m-emp').value,
     cod_lab:   document.getElementById('m-codlab').value,
-    ult_calib: ultVal,
+    ult_calib: document.getElementById('m-ult').value,
     prox_calib:prox,
     freq_dias: parseInt(document.getElementById('m-freq').value)||null,
     status:    document.getElementById('m-status').value,
@@ -4794,30 +5487,13 @@ function deleteInline(uid){
   fbSchedulePush();
   showToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
 }
-  
-function deleteRecord_real(){
-  if(editUID === null) return;
-  const r = DB.find(x => x._uid === editUID);
-  if(!r) return;
-  const name = r.id || r.descricao || 'este registro';
-  const msg  = LANG === 'en'
-    ? `Delete "${name}"?\nThis action cannot be undone.`
-    : `Excluir "${name}"?\nEsta ação não pode ser desfeita.`;
-  if(!confirm(msg)) return;
-  pushUndo();
-  DB = DB.filter(x => x._uid !== editUID);
-  closeModal();
-  refreshInPlace();
-  fbSchedulePush();
-  showToast(LANG === 'en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
-}
 
-function isValidISODateInput(v) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(v || '') && (+v.slice(0,4) >= 1900) && (+v.slice(0,4) <= 2100);
-}
+// deleteRecord_real é alias de deleteRecord (mantido para compatibilidade de hooks)
+const deleteRecord_real = deleteRecord;
+
+
 function autoCalc(){
   const ult=document.getElementById('m-ult').value,freq=parseInt(document.getElementById('m-freq').value);
-  if(ult && !isValidISODateInput(ult)) { updateValidityBar(); return; }
   if(ult&&freq>0){const d=new Date(ult+'T00:00:00');d.setDate(d.getDate()+freq);document.getElementById('m-prox').value=d.toISOString().slice(0,10);}
   updateValidityBar();
 }
@@ -4841,7 +5517,7 @@ function updateValidityBar(){
 // FILES
 // ═══════════════════════════════════════════════════════
 function fmtSize(b){if(!b)return '';if(b<1024)return b+' B';if(b<1048576)return (b/1024).toFixed(1)+' KB';return (b/1048576).toFixed(2)+' MB';}
-// fileIcon: 2ª declaração removida (v8 fix) — usa a função única definida em statusBadge
+function fileIcon(n){const e=((n||'').split('.').pop()||'').toLowerCase();return{pdf:'📕',doc:'📘',docx:'📘',xls:'📗',xlsx:'📗',png:'🖼️',jpg:'🖼️',jpeg:'🖼️'}[e]||'📄';}
 function refreshFileUI(name,dataURL){
   const inp=document.getElementById('m-link');if(inp)inp.value=name||'';
   const info=document.getElementById('file-info');
@@ -4899,30 +5575,7 @@ function startAutoNotif(){buildNotifs();setInterval(()=>{const prev=_lastCrit;bu
 // IMPORT / EXPORT
 // ═══════════════════════════════════════════════════════
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='equipamentos_'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href);}
-function importData(e){
-  const f=e.target.files[0]; if(!f) return;
-  const rd=new FileReader();
-  rd.onload=ev=>{
-    try {
-      const parsed = JSON.parse(ev.target.result);
-      // v8: validação de estrutura mínima
-      if (!Array.isArray(parsed)) throw new Error('Arquivo não contém um array de registros');
-      const sample = parsed.find(r => r && typeof r === 'object');
-      if (parsed.length > 0 && !sample) throw new Error('Registros inválidos');
-      if (sample && (sample.id === undefined && sample._uid === undefined))
-        throw new Error('Registros sem campo "id" ou "_uid"');
-      DB = recalcDias(parsed);
-      updateAll();
-      fbSchedulePush();
-      showToast('✅ Importado: '+DB.length+' registros. Sincronizando…');
-    } catch(err) {
-      console.warn('importData error:', err);
-      showToast('Erro ao importar: '+(err.message||'JSON inválido'), 'err');
-    }
-  };
-  rd.readAsText(f);
-  e.target.value='';
-}
+function importData(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=ev=>{try{const imported=JSON.parse(ev.target.result);DB=recalcDias(imported);updateAll();fbSchedulePush();showToast('✅ Importado: '+DB.length+' registros. Sincronizando…');}catch(err){showToast('Erro ao importar','err');}};rd.readAsText(f);e.target.value='';}
 
 // ═══════════════════════════════════════════════════════
 // TOAST
@@ -5217,8 +5870,9 @@ function updateAll(){
 
   // On first load (rows empty) do a full reset; otherwise preserve position
   const isFirstLoad = !pag.eq.rows || pag.eq.rows.length === 0;
-  const hasFilter = _selectedTipos.size > 0 || ['f-cli','f-local','f-resp','f-emp',
-    'f-status','f-calib','f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search']
+  const hasFilter = _selectedTipos.size > 0 ||
+    Object.values(_multiSel).some(function(s){ return s.size>0; }) ||
+    ['f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search']
     .some(id => { const el=document.getElementById(id); return el && el.value; });
 
   if(isFirstLoad) {
@@ -5251,10 +5905,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('lb-en')?.classList.toggle('on', LANG==='en');
   document.getElementById('df-dmy')?.classList.toggle('on', DATE_FMT==='dmy');
   document.getElementById('df-iso')?.classList.toggle('on', DATE_FMT==='iso');
-  ['m-ult','m-prox'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) { el.min = '1900-01-01'; el.max = '2100-12-31'; }
-  });
   applyLang();
   // Modo público (?view=ID) — não inicializa Auth para evitar app.delete() sobrescrever
   // o app Firebase já criado pelo bloco de modo público acima
@@ -5650,6 +6300,8 @@ function _handleQrDeepLink() {
   document.body.appendChild(ghost);
 
   window.startFillDrag = function(e, uid, k) {
+    // Touch events: fill handle hidden on mobile — skip touch start (handled by long-press)
+    if (e.type === 'touchstart') { return; }
     e.preventDefault();
     e.stopPropagation();
     if(_inlineActive) cancelInlineEdit();
@@ -5767,10 +6419,14 @@ function _handleQrDeepLink() {
     if(changed > 0) {
       saveLS();
       if(fbActive()) fbSchedulePush();
-      showToast(`✅ ${changed} célula(s) preenchida(s) em tempo real`);
-      _pendingFilterRefresh = false;
+      showToast(`✅ ${changed} célula(s) preenchida(s) — clique em 🔄 para atualizar filtros`);
+      // Re-render only the affected rows — stay in place
+      previewIdxs.forEach(idx => {
+        const r2 = allRows[idx];
+        if(r2) rerenderRow(r2._uid, 'geral');
+      });
+      _pendingFilterRefresh = true;
       updateApplyFilterBtn();
-      refreshInPlace();
     }
   }
 })();
@@ -5868,7 +6524,7 @@ function openQrBulkModal(source) {
   ];
 
   document.body.insertAdjacentHTML('beforeend', `
-<div id="qr-bulk-ov" style="position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(4px)" onclick="if(event.target===this)document.getElementById('qr-bulk-ov').remove()">
+<div id="qr-bulk-ov" style="position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)" onclick="if(event.target===this)document.getElementById('qr-bulk-ov').remove()">
 <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:14px;width:min(520px,95vw);max-height:90vh;overflow-y:auto;padding:26px;box-shadow:0 24px 80px rgba(0,0,0,.5)">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
     <div>
@@ -6021,18 +6677,18 @@ async function printQrBulk(uids) {
       // Mini: faixa colorida no topo com o código (se showId)
       return `<div style="width:${cfg.w}mm;height:${cfg.h}mm;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff;page-break-inside:avoid;overflow:hidden">
         ${id?`<div style="width:100%;background:${idBg};color:#fff;font-family:Arial,sans-serif;font-size:3pt;font-weight:900;text-align:center;letter-spacing:.2px;padding:.3mm 0;line-height:1">${id}</div>`:''}
-        <img src="${src}" style="width:${id?cfg.w-2:cfg.w-1}mm;height:${id?cfg.h-4:cfg.h-1}mm;image-rendering:pixelated;flex-shrink:0">
+        <img src="${src}" style="width:${id?cfg.w-2:cfg.w-1}mm;height:${id?cfg.h-4:cfg.h-1}mm;image-rendering:crisp-edges;image-rendering:pixelated;flex-shrink:0">
       </div>`;
     }
     if (_qrBulkSize === 'pequena') {
       return `<div style="width:${cfg.w}mm;height:${cfg.h}mm;display:flex;flex-direction:column;align-items:center;justify-content:center;border:.3mm solid ${idBg};border-radius:.5mm;padding:.5mm;background:#fff;box-sizing:border-box;page-break-inside:avoid;overflow:hidden">
-        <img src="${src}" style="width:${cfg.w-5}mm;height:${cfg.h-7}mm;image-rendering:pixelated">
+        <img src="${src}" style="width:${cfg.w-5}mm;height:${cfg.h-7}mm;image-rendering:crisp-edges;image-rendering:pixelated">
         ${id?`<div style="width:100%;background:${idBg};color:#fff;font-family:Arial,sans-serif;font-size:4.5pt;font-weight:900;text-align:center;line-height:1.3;margin-top:.4mm;border-radius:.3mm;padding:.2mm 0">${id}</div>`:''}
       </div>`;
     }
     if (_qrBulkSize === 'media') {
       return `<div style="width:${cfg.w}mm;height:${cfg.h}mm;display:flex;flex-direction:column;align-items:center;border:.3mm solid ${idBg};border-radius:.8mm;padding:1mm;background:#fff;box-sizing:border-box;page-break-inside:avoid;overflow:hidden">
-        <img src="${src}" style="width:20mm;height:20mm;image-rendering:pixelated">
+        <img src="${src}" style="width:20mm;height:20mm;image-rendering:crisp-edges;image-rendering:pixelated">
         <div style="font-family:Arial,sans-serif;text-align:center;width:100%;margin-top:.5mm">
           ${id?`<div style="background:${idBg};color:#fff;font-size:5.5pt;font-weight:900;letter-spacing:.4px;border-radius:.5mm;padding:.3mm 0;margin-bottom:.3mm">${id}</div>`:''}
           ${desc?`<div style="font-size:4.5pt;color:#333;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:28mm">${desc}</div>`:''}
@@ -6043,7 +6699,7 @@ async function printQrBulk(uids) {
     }
     // grande
     return `<div style="width:${cfg.w}mm;height:${cfg.h}mm;display:flex;align-items:center;gap:1.5mm;border:.3mm solid ${idBg};border-radius:.8mm;padding:1.5mm;background:#fff;box-sizing:border-box;page-break-inside:avoid;overflow:hidden">
-      <img src="${src}" style="width:24mm;height:24mm;flex-shrink:0;image-rendering:pixelated">
+      <img src="${src}" style="width:24mm;height:24mm;flex-shrink:0;image-rendering:crisp-edges;image-rendering:pixelated">
       <div style="flex:1;font-family:Arial,sans-serif;overflow:hidden;min-width:0">
         ${id?`<div style="background:${idBg};color:#fff;font-size:7pt;font-weight:900;letter-spacing:.4px;border-radius:.7mm;padding:.5mm 1.5mm;display:inline-block;margin-bottom:1mm">${id}</div>`:''}
         ${desc?`<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${desc}</div>`:''}
@@ -6215,25 +6871,29 @@ function applyBulkEdit(tbl) {
 
   const uids = _selectedUIDs[tbl];
   let changed = 0;
+  _statsCache = null; // invalida cache de KPIs antes do bulk edit
 
   DB = DB.map(r => {
     if(!uids.has(r._uid)) return r;
     const updated = { ...r, [field]: field==='freq_dias' ? parseInt(newVal)||r.freq_dias : newVal };
     changed++;
     return recalcRecord(updated);
-  }).filter(Boolean);
+  });
 
   // Confirm toast
-  showToast(`✔ ${changed} registro(s) atualizado(s) em tempo real`);
+  showToast(`✔ ${changed} registro(s) atualizado(s) — clique em 🔄 para atualizar filtros`);
 
   // Persist
   saveLS();
   if(fbActive()) fbSchedulePush();
 
+  // Re-render only the changed rows — don't jump page or re-filter
+  uids.forEach(uid => rerenderRow(uid, tbl));
   clearSelection(tbl);
-  _pendingFilterRefresh = false;
+
+  // Mark deferred refresh needed
+  _pendingFilterRefresh = true;
   updateApplyFilterBtn();
-  refreshInPlace();
 }
 
 function bulkDelete(tbl) {
@@ -6264,7 +6924,16 @@ function clearSelection(tbl) {
   renderTable(tbl);
 }
 
-// ── Toast helper: 2ª declaração removida (v8 fix) — usa a única showToast definida acima ──
+// ── Toast helper (reuse existing or create simple one) ──────────────
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  if(el) {
+    el.textContent = msg;
+    el.className = 'toast on ' + (type||'');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('on'), 3200);
+  }
+}
 
 
 (function(){
@@ -6514,8 +7183,8 @@ function clearSelection(tbl) {
 <!-- EQUIPMENT DETAIL VIEW MODAL -->
 <style>
 #equip-view-ov {
-  display:none; position:fixed; inset:0; z-index:1100;
-  background:rgba(0,0,0,.72); backdrop-filter:blur(8px);
+  display:none; position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:1100;
+  background:rgba(0,0,0,.72); -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
   align-items:center; justify-content:center; padding:20px;
 }
 #equip-view-ov.on { display:flex }
@@ -6990,7 +7659,7 @@ function closeQrModal() {
 
 function _qrModalHTML() {
   return `
-<div id="qr-modal-ov" style="position:fixed;inset:0;z-index:800;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .18s" onclick="if(event.target===this)closeQrModal()">
+<div id="qr-modal-ov" style="position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:800;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .18s" onclick="if(event.target===this)closeQrModal()">
 <style>
 #qr-modal-ov.on{opacity:1;pointer-events:all}
 #qr-modal{background:var(--surf);border:1px solid var(--bdr2);border-radius:14px;width:460px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.5);padding:24px}
@@ -7089,25 +7758,25 @@ function printQrLabel() {
   const statusTxt   = d === null ? '—' : d < 0 ? 'VENCIDO' : d <= 30 ? `Vence ${fmt(r.prox_calib)}` : 'OK';
   const statusColor = d === null ? '#888' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : '#16a34a';
 
-  // Gera QR em alta resolução para impressão
+  // Gera QR em alta resolução para impressão com delay para garantir canvas preenchido
   const payload = _buildQrPayload(r);
-  const tmpBox  = document.createElement('div');
-  let qrSrc     = '';
+  const _qrGenBox = document.createElement('div');
+  _qrGenBox.style.cssText = 'position:absolute;left:-9999px;top:-9999px';
+  document.body.appendChild(_qrGenBox);
   try {
-    // Usa canvas existente se disponível, senão regera em 400px para qualidade de impressão
-    const existCanvas = document.querySelector('#qr-canvas-box canvas');
-    if (existCanvas) {
-      // Regera em 400px para impressão de qualidade
-      const hqBox = document.createElement('div');
-      new QRCode(hqBox, { text: payload, width: 400, height: 400 });
-      const hqCanvas = hqBox.querySelector('canvas');
-      qrSrc = hqCanvas ? hqCanvas.toDataURL('image/png') : existCanvas.toDataURL('image/png');
-    } else {
-      new QRCode(tmpBox, { text: payload, width: 400, height: 400 });
-      const c = tmpBox.querySelector('canvas');
-      if (c) qrSrc = c.toDataURL('image/png');
-    }
-  } catch(e) { console.error('QR regen error:', e); }
+    new QRCode(_qrGenBox, { text: payload, width: 400, height: 400,
+                            correctLevel: QRCode.CorrectLevel.M });
+  } catch(e) { console.error('QR gen error:', e); }
+
+  // Usa setTimeout para garantir que o QRCode.js terminou de preencher o canvas
+  setTimeout(function() {
+    const _qrCanvas = _qrGenBox.querySelector('canvas');
+    const qrSrc = _qrCanvas ? _qrCanvas.toDataURL('image/png') : '';
+    document.body.removeChild(_qrGenBox);
+    _doPrint(qrSrc);
+  }, 80);
+
+  function _doPrint(qrSrc) {
 
   // ── Layout de cada tamanho ──────────────────────────────────────
   function singleLabel() {
@@ -7121,7 +7790,7 @@ function printQrLabel() {
       return `
         <div style="width:12mm;height:12mm;display:flex;align-items:center;justify-content:center;
                     page-break-inside:avoid;background:#fff">
-          <img src="${qrSrc}" style="width:11mm;height:11mm;image-rendering:pixelated">
+          <img src="${qrSrc}" style="width:11mm;height:11mm;image-rendering:crisp-edges;image-rendering:pixelated">
         </div>`;
     }
 
@@ -7131,7 +7800,7 @@ function printQrLabel() {
         <div style="width:20mm;height:20mm;display:flex;flex-direction:column;align-items:center;
                     justify-content:center;border:0.3mm solid #bbb;border-radius:0.5mm;padding:0.5mm;
                     page-break-inside:avoid;box-sizing:border-box;background:#fff">
-          <img src="${qrSrc}" style="width:15mm;height:15mm;image-rendering:pixelated">
+          <img src="${qrSrc}" style="width:15mm;height:15mm;image-rendering:crisp-edges;image-rendering:pixelated">
           ${id ? `<div style="font-family:Arial,sans-serif;font-size:4.5pt;font-weight:700;
                                text-align:center;margin-top:0.3mm;letter-spacing:.2px;line-height:1">${id}</div>` : ''}
         </div>`;
@@ -7143,7 +7812,7 @@ function printQrLabel() {
         <div style="width:30mm;height:30mm;display:flex;flex-direction:column;align-items:center;
                     justify-content:flex-start;border:0.3mm solid #bbb;border-radius:0.8mm;padding:1mm;
                     page-break-inside:avoid;box-sizing:border-box;background:#fff">
-          <img src="${qrSrc}" style="width:20mm;height:20mm;image-rendering:pixelated">
+          <img src="${qrSrc}" style="width:20mm;height:20mm;image-rendering:crisp-edges;image-rendering:pixelated">
           <div style="font-family:Arial,sans-serif;text-align:center;width:100%;margin-top:0.5mm">
             ${id   ? `<div style="font-size:5.5pt;font-weight:800;letter-spacing:.3px">${id}</div>` : ''}
             ${desc ? `<div style="font-size:4.5pt;color:#333;overflow:hidden;word-break:break-word;max-width:28mm;line-height:1.3">${desc}</div>` : ''}
@@ -7160,7 +7829,7 @@ function printQrLabel() {
         <div style="width:50mm;height:30mm;display:flex;align-items:center;gap:1.5mm;
                     border:0.3mm solid #bbb;border-radius:0.8mm;padding:1.5mm;
                     page-break-inside:avoid;box-sizing:border-box;background:#fff">
-          <img src="${qrSrc}" style="width:24mm;height:24mm;flex-shrink:0;image-rendering:pixelated">
+          <img src="${qrSrc}" style="width:24mm;height:24mm;flex-shrink:0;image-rendering:crisp-edges;image-rendering:pixelated">
           <div style="flex:1;font-family:Arial,sans-serif;overflow:hidden;min-width:0">
             ${id   ? `<div style="font-size:7pt;font-weight:900;letter-spacing:.3px;margin-bottom:1mm">${id}</div>` : ''}
             ${desc ? `<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;word-break:break-word;line-height:1.3">${desc}</div>` : ''}
@@ -7179,7 +7848,7 @@ function printQrLabel() {
       <div style="width:50mm;height:35mm;display:flex;align-items:center;gap:1.5mm;
                   border:0.3mm solid #bbb;border-radius:0.8mm;padding:1.5mm;
                   page-break-inside:avoid;box-sizing:border-box;background:#fff">
-        <img src="${qrSrc}" style="width:28mm;height:28mm;flex-shrink:0;image-rendering:pixelated">
+        <img src="${qrSrc}" style="width:28mm;height:28mm;flex-shrink:0;image-rendering:crisp-edges;image-rendering:pixelated">
         <div style="flex:1;font-family:Arial,sans-serif;overflow:hidden;min-width:0">
           ${id   ? `<div style="font-size:7pt;font-weight:900;letter-spacing:.3px;margin-bottom:1mm">${id}</div>` : ''}
           ${desc ? `<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;word-break:break-word;line-height:1.3">${desc}</div>` : ''}
@@ -7249,6 +7918,7 @@ function printQrLabel() {
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 800);
+  } // end _doPrint
 }
 
 
@@ -7261,7 +7931,850 @@ document.addEventListener('keydown', e => {
 });
 </script>
 
-</div><!-- /#app-wrapper -->
+<!-- ══════════════════════════════════════════════════════════════
+     BLACK BELT EXCEL FEATURES — v2.0
+     Density · Heat Bars · Totals Row · Grouping · Column Pin ·
+     Row Numbers · Sparklines · Status Bar · Context Menu
+══════════════════════════════════════════════════════════════ -->
+<script>
+(function() {
+'use strict';
 
-</body>
-</html>
+// ── STATE ──────────────────────────────────────────────────────
+const BB = {
+  density:   { geral: 'default', alert: 'default', rep: 'default' },
+  rowNums:   { geral: false, alert: false, rep: false },
+  heatBars:  { geral: true,  alert: true,  rep: false },
+  totals:    { geral: false, alert: false, rep: false },
+  groupBy:   { geral: '', alert: '', rep: '' },
+  stripe:    { geral: true,  alert: true,  rep: true  },
+  pinnedCols:{ geral: ['id'], alert: ['id'], rep: ['id'] },
+};
+
+// ── DENSITY ────────────────────────────────────────────────────
+window.setDensity = function(tbl, d, btn) {
+  BB.density[tbl] = d;
+  const wrap = document.getElementById(tbl === 'geral' ? 'eq-wrap' : tbl === 'alert' ? 'alert-wrap' : 'rep-wrap');
+  if (!wrap) return;
+  wrap.classList.remove('density-compact','density-default','density-comfortable');
+  wrap.classList.add('density-' + d);
+  // Update buttons
+  const group = document.getElementById('density-' + tbl);
+  if (group) group.querySelectorAll('.density-btn').forEach(b => b.classList.toggle('on', b.dataset.d === d));
+};
+
+// ── ROW NUMBERS ────────────────────────────────────────────────
+window.toggleRowNumbers = function(tbl, btn) {
+  BB.rowNums[tbl] = !BB.rowNums[tbl];
+  if (btn) btn.classList.toggle('on', BB.rowNums[tbl]);
+  _rerenderBBTable(tbl);
+};
+
+// ── ZEBRA STRIPES ──────────────────────────────────────────────
+window.toggleStripe = function(tbl, btn) {
+  BB.stripe[tbl] = !BB.stripe[tbl];
+  if (btn) btn.classList.toggle('on', BB.stripe[tbl]);
+  const wrap = document.getElementById(tbl === 'geral' ? 'eq-wrap' : 'alert-wrap');
+  if (wrap) wrap.classList.toggle('stripe-mode', BB.stripe[tbl]);
+};
+
+// ── HEAT BARS ──────────────────────────────────────────────────
+window.toggleHeatBars = function(tbl, btn) {
+  BB.heatBars[tbl] = !BB.heatBars[tbl];
+  if (btn) btn.classList.toggle('on', BB.heatBars[tbl]);
+  _rerenderBBTable(tbl);
+};
+
+// ── TOTALS ROW ─────────────────────────────────────────────────
+window.toggleTotalsRow = function(tbl, btn) {
+  BB.totals[tbl] = !BB.totals[tbl];
+  if (btn) btn.classList.toggle('on', BB.totals[tbl]);
+  _rerenderBBTable(tbl);
+};
+
+// ── GROUP BY ───────────────────────────────────────────────────
+window.setGroupBy = function(tbl, field) {
+  BB.groupBy[tbl] = field;
+  _rerenderBBTable(tbl);
+};
+
+// ── HEAT BAR INJECTION ─────────────────────────────────────────
+// Injects heat bars into dias_vencer cells after table render
+function _injectHeatBars(tbody) {
+  if (!tbody) return;
+  tbody.querySelectorAll('td[data-col="dias_vencer"]').forEach(td => {
+    const existing = td.querySelector('.heat-bar');
+    if (existing) existing.remove();
+    td.classList.add('heat-cell');
+    const badge = td.querySelector('.badge');
+    if (!badge) return;
+    const text = badge.textContent || '';
+    let days = null;
+    const m = text.match(/-?(\d+)/);
+    if (m) days = parseInt(m[0]);
+    if (days === null) return;
+    const bar = document.createElement('div');
+    bar.className = 'heat-bar';
+    let color, pct;
+    if (days < 0) {
+      color = 'var(--red)'; pct = Math.min(100, Math.abs(days) / 3);
+    } else if (days <= 30) {
+      color = 'var(--orange)'; pct = Math.max(10, 100 - (days / 30) * 80);
+    } else if (days <= 90) {
+      color = 'var(--accent)'; pct = Math.max(10, 60 - (days / 90) * 50);
+    } else {
+      color = 'var(--green)'; pct = Math.min(40, 10 + (days / 365) * 20);
+    }
+    bar.style.cssText = `width:${pct}%;background:${color}`;
+    td.insertBefore(bar, td.firstChild);
+  });
+}
+
+// ── ROW NUMBER INJECTION ────────────────────────────────────────
+function _injectRowNumbers(tbl, tbody, thead) {
+  if (!tbody || !thead) return;
+  const show = BB.rowNums[tbl];
+  // Header
+  const headerRow = thead.querySelector('tr');
+  if (headerRow) {
+    let numTh = headerRow.querySelector('th.row-num-col');
+    if (show && !numTh) {
+      numTh = document.createElement('th');
+      numTh.className = 'row-num-col';
+      numTh.innerHTML = '#';
+      headerRow.insertBefore(numTh, headerRow.firstChild);
+    } else if (!show && numTh) {
+      numTh.remove();
+    }
+  }
+  // Rows
+  let i = 0;
+  tbody.querySelectorAll('tr[data-uid]').forEach(tr => {
+    let numTd = tr.querySelector('td.row-num-cell');
+    if (show) {
+      i++;
+      if (!numTd) {
+        numTd = document.createElement('td');
+        numTd.className = 'row-num-cell';
+        tr.insertBefore(numTd, tr.firstChild);
+      }
+      numTd.textContent = i;
+    } else if (numTd) {
+      numTd.remove();
+    }
+  });
+}
+
+// ── TOTALS ROW INJECTION ────────────────────────────────────────
+function _injectTotalsRow(tbl, tbody, p) {
+  // Remove any existing totals row
+  const existing = tbody ? tbody.querySelector('tr.tbl-totals-row') : null;
+  if (existing) existing.remove();
+  if (!BB.totals[tbl] || !tbody || !p) return;
+
+  const rows = p.rows || [];
+  const total = rows.length;
+  const venc  = rows.filter(r => r.dias_vencer !== null && r.dias_vencer < 0).length;
+  const d30   = rows.filter(r => r.dias_vencer !== null && r.dias_vencer >= 0 && r.dias_vencer <= 30).length;
+  const ok    = rows.filter(r => r.dias_vencer !== null && r.dias_vencer > 90).length;
+  const saude = total ? Math.round(ok / total * 100) : 0;
+
+  // Count columns
+  const headerRow = document.querySelector(`#${tbl==='geral'?'eq-thead':'alert-thead'} tr`);
+  if (!headerRow) return;
+  const colCount = headerRow.querySelectorAll('th').length;
+
+  const tr = document.createElement('tr');
+  tr.className = 'tbl-totals-row';
+  for (let i = 0; i < colCount; i++) {
+    const td = document.createElement('td');
+    if (i === 0) {
+      td.innerHTML = `∑ TOTAL`;
+    } else {
+      // Find the column key from the header
+      const th = headerRow.querySelectorAll('th')[i];
+      const colKey = th ? th.dataset.col : '';
+      if (colKey === 'id' || colKey === '_chk') {
+        td.innerHTML = `<span style="color:var(--brand)">${total}</span>`;
+      } else if (colKey === 'dias_vencer') {
+        td.innerHTML = `<span style="color:var(--red)">${venc}⛔</span> <span style="color:var(--orange)">${d30}⏰</span> <span style="color:var(--green)">${ok}✓</span>`;
+      } else if (colKey === 'status_calib') {
+        td.innerHTML = `<span style="color:var(--green);font-weight:700">${saude}%</span> saúde`;
+      } else {
+        td.innerHTML = '';
+      }
+    }
+    tr.appendChild(td);
+  }
+  tbody.appendChild(tr);
+}
+
+// ── GROUP BY INJECTION ──────────────────────────────────────────
+function _injectGroupBy(tbl, tbody, p) {
+  const field = BB.groupBy[tbl];
+  if (!field || !tbody || !p) return;
+
+  const colCount = (document.querySelector(`#${tbl==='geral'?'eq-thead':'alert-thead'} tr`)?.querySelectorAll('th').length) || 8;
+  const allRows = Array.from(tbody.querySelectorAll('tr[data-uid]'));
+  // Group rows by field value
+  const groups = {};
+  const order = [];
+  allRows.forEach(tr => {
+    const uid = parseInt(tr.dataset.uid);
+    const r = (typeof DB !== 'undefined') ? DB.find(x => x._uid === uid) : null;
+    const val = r ? (r[field] || '(Não definido)') : '—';
+    if (!groups[val]) { groups[val] = []; order.push(val); }
+    groups[val].push(tr);
+  });
+
+  // Sort groups alphabetically
+  order.sort();
+
+  // Rebuild tbody with group headers
+  order.forEach((val, gi) => {
+    const gRows = groups[val];
+    const headerTr = document.createElement('tr');
+    headerTr.className = 'group-header-row';
+    headerTr.dataset.group = gi;
+    headerTr.innerHTML = `<td colspan="${colCount}"><span class="group-toggle-icon">▾</span><strong>${_escBB(val)}</strong><span class="group-count-badge">${gRows.length}</span></td>`;
+    headerTr.addEventListener('click', function() {
+      const collapsed = this.classList.toggle('collapsed');
+      const g = this.dataset.group;
+      tbody.querySelectorAll(`tr.group-data-row[data-group="${g}"]`).forEach(r => r.classList.toggle('group-hidden', collapsed));
+    });
+    tbody.insertBefore(headerTr, gRows[0]);
+    gRows.forEach(tr => {
+      tr.classList.add('group-data-row');
+      tr.dataset.group = gi;
+      tbody.insertBefore(tr, headerTr.nextSibling);
+    });
+  });
+}
+
+// ── PINNED COLUMN INJECTION ─────────────────────────────────────
+function _injectPinnedCols(tbl, tbody, thead) {
+  if (!tbody || !thead) return;
+  const pinned = BB.pinnedCols[tbl] || [];
+  if (!pinned.length) return;
+  // Calculate left offset per pinned column
+  const headerRow = thead.querySelector('tr');
+  if (!headerRow) return;
+  let offset = 0;
+  const colOffsets = {};
+  headerRow.querySelectorAll('th').forEach(th => {
+    const col = th.dataset.col;
+    if (pinned.includes(col)) {
+      colOffsets[col] = offset;
+      const w = th.getBoundingClientRect().width || 80;
+      th.classList.add('col-pinned');
+      th.style.left = offset + 'px';
+      offset += w;
+    }
+  });
+  // Apply to body cells
+  tbody.querySelectorAll('tr[data-uid]').forEach(tr => {
+    tr.querySelectorAll('td[data-col]').forEach(td => {
+      const col = td.dataset.col;
+      if (pinned.includes(col)) {
+        td.classList.add('col-pinned');
+        td.style.left = (colOffsets[col] || 0) + 'px';
+      }
+    });
+  });
+}
+
+// ── STATUS BAR UPDATE ───────────────────────────────────────────
+function _updateStatusBar(tbl) {
+  const bar = document.getElementById('excel-status-' + tbl);
+  if (!bar) return;
+  const p = (typeof pag !== 'undefined') ? (tbl === 'geral' ? pag.eq : pag.alert) : null;
+  if (!p) return;
+  const rows = p.rows || [];
+  const total = rows.length;
+  const venc  = rows.filter(r => r.dias_vencer !== null && r.dias_vencer < 0).length;
+  const ok    = rows.filter(r => r.dias_vencer !== null && r.dias_vencer > 90).length;
+  bar.style.display = 'flex';
+  const cntEl = document.getElementById('est-count-' + tbl);
+  const vencEl = document.getElementById('est-venc-' + tbl);
+  const okEl = document.getElementById('est-ok-' + tbl);
+  if (cntEl) cntEl.textContent = `Registros: ${total}`;
+  if (vencEl) vencEl.textContent = `⛔ Vencidos: ${venc}`;
+  if (okEl) okEl.textContent = `✅ Em dia: ${ok}`;
+}
+
+// ── COLUMN HEADER CONTEXT MENU ──────────────────────────────────
+let _ctxMenu = null;
+function _showColContextMenu(e, tbl, colKey, th) {
+  _hideColContextMenu();
+  const menu = document.createElement('div');
+  menu.className = 'th-ctx-menu';
+  menu.id = 'th-ctx-menu';
+  const pinned = BB.pinnedCols[tbl] || [];
+  const isPinned = pinned.includes(colKey);
+  const items = [
+    { icon: isPinned ? '📌' : '📍', label: isPinned ? 'Desafixar coluna' : 'Fixar coluna (Freeze)', action: () => _togglePinCol(tbl, colKey) },
+    { sep: true },
+    { icon: '↑', label: 'Ordenar Crescente (A→Z)', action: () => _sortByCol(tbl, colKey, 'asc') },
+    { icon: '↓', label: 'Ordenar Decrescente (Z→A)', action: () => _sortByCol(tbl, colKey, 'desc') },
+    { sep: true },
+    { icon: '🔍', label: 'Filtrar por esta coluna', action: () => _quickFilterCol(tbl, colKey) },
+    { icon: '👁', label: 'Ocultar coluna', action: () => { if(typeof showColMenu==='function') { if(typeof colVis!=='undefined' && colVis[tbl]) colVis[tbl][colKey]=false; if(typeof renderTable==='function') renderTable(tbl); } } },
+  ];
+  items.forEach(item => {
+    if (item.sep) {
+      const sep = document.createElement('div');
+      sep.className = 'th-ctx-sep';
+      menu.appendChild(sep);
+      return;
+    }
+    const div = document.createElement('div');
+    div.className = 'th-ctx-item' + (item.active ? ' active' : '');
+    div.innerHTML = `<span class="ctx-icon">${item.icon}</span><span>${item.label}</span>`;
+    div.addEventListener('click', () => { item.action(); _hideColContextMenu(); });
+    menu.appendChild(div);
+  });
+  document.body.appendChild(menu);
+  _ctxMenu = menu;
+  // Position
+  const rect = th.getBoundingClientRect();
+  menu.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+  menu.style.top = (rect.bottom + 2) + 'px';
+  setTimeout(() => document.addEventListener('click', _hideColContextMenu, { once: true }), 10);
+}
+function _hideColContextMenu() {
+  if (_ctxMenu) { _ctxMenu.remove(); _ctxMenu = null; }
+}
+
+// ── PIN / FREEZE COLUMN ─────────────────────────────────────────
+function _togglePinCol(tbl, colKey) {
+  const pinned = BB.pinnedCols[tbl] || [];
+  const idx = pinned.indexOf(colKey);
+  if (idx >= 0) pinned.splice(idx, 1);
+  else pinned.push(colKey);
+  BB.pinnedCols[tbl] = pinned;
+  _rerenderBBTable(tbl);
+}
+
+// ── QUICK SORT ──────────────────────────────────────────────────
+function _sortByCol(tbl, colKey, dir) {
+  if (typeof sortState !== 'undefined' && typeof renderTable === 'function') {
+    sortState[tbl] = { k: colKey, d: dir };
+    renderTable(tbl);
+    _afterRenderBB(tbl);
+  }
+}
+
+// ── QUICK FILTER ────────────────────────────────────────────────
+function _quickFilterCol(tbl, colKey) {
+  const val = prompt(`Filtrar coluna "${colKey}" por (deixe vazio para limpar):`);
+  if (val === null) return; // cancelled
+  // Inject search term
+  const searchEl = document.getElementById(tbl === 'geral' ? 'f-search' : 'f-search');
+  if (searchEl) { searchEl.value = val; if(typeof applyF==='function') applyF(); }
+}
+
+// ── SPARKLINES ─────────────────────────────────────────────────
+// Mini SVG sparkline for trend visualization
+function _buildSparklineSvg(values, color, w, h) {
+  if (!values || !values.length) return '';
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1 || 1)) * (w - 2) + 1;
+    const y = h - ((v - min) / range) * (h - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const lastVal = values[values.length - 1];
+  const dotColor = lastVal < 0 ? '#dc2626' : lastVal <= 30 ? '#ea580c' : '#16a34a';
+  const lastX = parseFloat(pts.split(' ').pop().split(',')[0]);
+  const lastY = parseFloat(pts.split(' ').pop().split(',')[1]);
+  return `<svg class="spark-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity=".8"/>
+    <circle cx="${lastX}" cy="${lastY}" r="2.5" fill="${dotColor}"/>
+  </svg>`;
+}
+
+// ── HELPER ─────────────────────────────────────────────────────
+function _escBB(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── TRIGGER AFTER RENDER ────────────────────────────────────────
+function _afterRenderBB(tbl) {
+  const bodyId   = tbl === 'geral' ? 'eq-tbody' : tbl === 'alert' ? 'alert-tbody' : 'rep-tbody';
+  const headId   = tbl === 'geral' ? 'eq-thead' : tbl === 'alert' ? 'alert-thead' : 'rep-thead';
+  const tbody    = document.getElementById(bodyId);
+  const thead    = document.getElementById(headId);
+  const p        = (typeof pag !== 'undefined') ? (tbl === 'geral' ? pag.eq : pag.alert) : null;
+
+  if (BB.heatBars[tbl]) _injectHeatBars(tbody);
+  _injectRowNumbers(tbl, tbody, thead);
+  if (BB.totals[tbl])   _injectTotalsRow(tbl, tbody, p);
+  if (BB.groupBy[tbl])  _injectGroupBy(tbl, tbody, p);
+  _injectPinnedCols(tbl, tbody, thead);
+  _updateStatusBar(tbl);
+
+  // Wire right-click on column headers
+  if (thead) {
+    thead.querySelectorAll('th[data-col]').forEach(th => {
+      if (!th._bbCtx) {
+        th._bbCtx = true;
+        th.addEventListener('contextmenu', e => {
+          e.preventDefault();
+          _showColContextMenu(e, tbl, th.dataset.col, th);
+        });
+      }
+    });
+  }
+}
+
+function _rerenderBBTable(tbl) {
+  if (typeof renderTable === 'function') renderTable(tbl);
+  else _afterRenderBB(tbl);
+}
+
+// ── HOOK INTO renderTable ────────────────────────────────────────
+// Wrap the existing renderTable to inject BB features after render
+(function patchRenderTable() {
+  if (typeof window.renderTable !== 'function') {
+    setTimeout(patchRenderTable, 200); return;
+  }
+  if (window.renderTable.__bbPatched) return;
+  const orig = window.renderTable;
+  window.renderTable = function(tbl, ...args) {
+    const result = orig.call(this, tbl, ...args);
+    // Schedule BB injection after DOM settles
+    requestAnimationFrame(() => _afterRenderBB(tbl || 'geral'));
+    return result;
+  };
+  window.renderTable.__bbPatched = true;
+  window.renderTable.__orig = orig;
+})();
+
+// ── COL TOOLTIP for resize ──────────────────────────────────────
+(function() {
+  const tip = document.createElement('div');
+  tip.className = 'col-width-tip';
+  tip.id = 'col-width-tip';
+  document.body.appendChild(tip);
+  document.addEventListener('mousemove', e => {
+    const resizer = e.target.closest && e.target.closest('.resizer');
+    if (resizer) {
+      const th = resizer.closest('th');
+      if (th) {
+        const w = Math.round(th.getBoundingClientRect().width);
+        tip.textContent = w + 'px';
+        tip.style.display = 'block';
+        tip.style.left = (e.clientX + 12) + 'px';
+        tip.style.top  = (e.clientY - 20) + 'px';
+        return;
+      }
+    }
+    tip.style.display = 'none';
+  });
+})();
+
+// ── KEYBOARD SHORTCUT: Alt+H = toggle heat bars ─────────────────
+document.addEventListener('keydown', e => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+  if (e.altKey && e.key === 'h') {
+    const btn = document.getElementById('btn-heatbar-geral');
+    toggleHeatBars('geral', btn);
+    showToast && showToast('🎨 Heat Bars: ' + (BB.heatBars.geral ? 'ON' : 'OFF'));
+  }
+  if (e.altKey && e.key === 't') {
+    const btn = document.getElementById('btn-totals-geral');
+    toggleTotalsRow('geral', btn);
+    showToast && showToast('∑ Linha de Totais: ' + (BB.totals.geral ? 'ON' : 'OFF'));
+  }
+  if (e.altKey && e.key === 'g') {
+    const sel = document.getElementById('group-by-geral');
+    if (sel) { sel.focus(); }
+  }
+});
+
+// ── INIT: run after DB loads ─────────────────────────────────────
+let _bbInitTries = 0;
+const _bbInitInterval = setInterval(() => {
+  _bbInitTries++;
+  if (typeof DB !== 'undefined' && DB && DB.length > 0) {
+    clearInterval(_bbInitInterval);
+    // Apply initial wrap classes
+    ['eq-wrap'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.classList.add('density-default', 'stripe-mode'); }
+    });
+    // First render pass
+    setTimeout(() => { _afterRenderBB('geral'); _afterRenderBB('alert'); }, 500);
+  }
+  if (_bbInitTries > 60) clearInterval(_bbInitInterval);
+}, 300);
+
+// Expose BB state for debugging
+window.__BB = BB;
+
+})(); // end IIFE
+</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     MOBILE & CROSS-BROWSER TOUCH SUPPORT — v1.0
+     Long-press context menu · Swipe-to-close modals ·
+     Touch fill drag · iOS Safari fixes
+══════════════════════════════════════════════════════════ -->
+<script>
+(function() {
+'use strict';
+
+var isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+// ── LONG-PRESS for contextmenu on touch devices ────────────────
+// Replaces right-click on column headers for iOS/Android
+if (isTouchDevice) {
+  var _lpTimer = null;
+  var _lpTarget = null;
+  var LP_DELAY = 500;
+
+  document.addEventListener('touchstart', function(e) {
+    var th = e.target.closest && e.target.closest('th[data-col]');
+    if (!th) return;
+    _lpTarget = th;
+    _lpTimer = setTimeout(function() {
+      if (_lpTarget) {
+        // Trigger contextmenu-equivalent
+        var rect = _lpTarget.getBoundingClientRect();
+        var fakeEvent = { preventDefault: function(){}, clientX: rect.left, clientY: rect.bottom };
+        // Find tbl
+        var thead = _lpTarget.closest('thead');
+        var tbl = 'geral';
+        if (thead && thead.id === 'alert-thead') tbl = 'alert';
+        if (typeof _showColContextMenu === 'function') {
+          _showColContextMenu(fakeEvent, tbl, _lpTarget.dataset.col, _lpTarget);
+        }
+        // Haptic feedback if available
+        if (navigator.vibrate) navigator.vibrate(30);
+      }
+      _lpTarget = null;
+    }, LP_DELAY);
+  }, { passive: true });
+
+  document.addEventListener('touchend', function() {
+    if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
+    _lpTarget = null;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function() {
+    if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
+    _lpTarget = null;
+  }, { passive: true });
+}
+
+// ── SWIPE-DOWN TO CLOSE MODALS on mobile ──────────────────────
+function _installSwipeClose(modalId, closeFunc) {
+  var el = document.getElementById(modalId);
+  if (!el) return;
+  var startY = 0, isDragging = false, modal = null;
+  el.addEventListener('touchstart', function(e) {
+    modal = e.target.closest('.modal, .drill-modal, #qr-modal-box, #pdf-print-box');
+    if (!modal) return;
+    startY = e.touches[0].clientY;
+    isDragging = false;
+  }, { passive: true });
+  el.addEventListener('touchmove', function(e) {
+    if (!modal) return;
+    var dy = e.touches[0].clientY - startY;
+    if (dy > 15) {
+      isDragging = true;
+      var t = Math.min(dy, 200);
+      modal.style.transform = 'translateY(' + t + 'px)';
+      modal.style.transition = 'none';
+      modal.style.opacity = String(1 - t / 400);
+    }
+  }, { passive: true });
+  el.addEventListener('touchend', function(e) {
+    if (!modal || !isDragging) { modal = null; return; }
+    var dy = e.changedTouches[0].clientY - startY;
+    if (dy > 80) {
+      // Dismiss
+      modal.style.transition = 'transform .2s ease, opacity .2s ease';
+      modal.style.transform = 'translateY(100%)';
+      modal.style.opacity = '0';
+      setTimeout(function() {
+        if (modal) { modal.style.transform = ''; modal.style.opacity = ''; modal.style.transition = ''; }
+        if (typeof closeFunc === 'function') closeFunc();
+        modal = null;
+      }, 200);
+    } else {
+      modal.style.transition = 'transform .2s ease';
+      modal.style.transform = '';
+      modal.style.opacity = '';
+      setTimeout(function() { if(modal){ modal.style.transition = ''; modal = null; } }, 200);
+    }
+    isDragging = false;
+  }, { passive: true });
+}
+
+// Install swipe-close on modals after DOM ready
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(function() {
+    if (typeof closeModal === 'function') _installSwipeClose('edit-modal', closeModal);
+    if (typeof closeDrill === 'function')  _installSwipeClose('drill-modal', function(){ if(typeof closeDrill==='function') closeDrill(); });
+    if (typeof closeQrModal === 'function') _installSwipeClose('qr-modal-ov', closeQrModal);
+  }, 800);
+});
+
+// ── TOUCH FILL DRAG support (mobile) ──────────────────────────
+// On touch devices, the fill handle is hidden, but we add a long-press
+// on editable cells to trigger a "fill down" modal instead
+if (isTouchDevice) {
+  var _fillLpTimer = null;
+  document.addEventListener('touchstart', function(e) {
+    var td = e.target.closest && e.target.closest('td.editable-cell');
+    if (!td) return;
+    var uid = td.closest('tr') && parseInt(td.closest('tr').dataset.uid || '0');
+    var k = td.dataset.col;
+    if (!uid || !k) return;
+    _fillLpTimer = setTimeout(function() {
+      if (navigator.vibrate) navigator.vibrate([20, 50, 20]);
+      // Show simple fill-down prompt
+      var val = (typeof DB !== 'undefined') ? (function(){ var r = DB.find(function(x){ return x._uid === uid; }); return r ? (r[k] || '') : ''; })() : '';
+      var count = prompt('Preencher células abaixo com:\n"' + val.slice(0,40) + '"\n\nQuantas células? (1-50)', '5');
+      if (count === null) return;
+      var n = Math.min(50, Math.max(1, parseInt(count) || 0));
+      if (!n) return;
+      // Get current filtered rows
+      var rows = (typeof pag !== 'undefined' && pag.eq) ? pag.eq.rows : [];
+      var srcIdx = rows.findIndex(function(x){ return x._uid === uid; });
+      if (srcIdx < 0) return;
+      var changed = 0;
+      for (var i = srcIdx + 1; i <= Math.min(srcIdx + n, rows.length - 1); i++) {
+        var rec = (typeof DB !== 'undefined') ? DB.find(function(x){ return x._uid === rows[i]._uid; }) : null;
+        if (!rec) continue;
+        rec[k] = k === 'freq_dias' ? (parseInt(val) || null) : val;
+        if (k === 'ult_calib' || k === 'prox_calib' || k === 'freq_dias') {
+          if (typeof recalcRecord === 'function') recalcRecord(rec);
+        }
+        changed++;
+      }
+      if (changed > 0) {
+        if (typeof saveLS === 'function') saveLS();
+        if (typeof fbSchedulePush === 'function' && typeof fbActive === 'function' && fbActive()) fbSchedulePush();
+        if (typeof showToast === 'function') showToast('✅ ' + changed + ' célula(s) preenchida(s)');
+        if (typeof refreshInPlace === 'function') refreshInPlace();
+      }
+    }, 700);
+  }, { passive: true });
+  document.addEventListener('touchend', function() {
+    if (_fillLpTimer) { clearTimeout(_fillLpTimer); _fillLpTimer = null; }
+  }, { passive: true });
+  document.addEventListener('touchmove', function() {
+    if (_fillLpTimer) { clearTimeout(_fillLpTimer); _fillLpTimer = null; }
+  }, { passive: true });
+}
+
+// ── FIX: iOS Safari position:sticky on table headers ─────────
+// iOS requires the scroll container (tbl-wrap) to have overflow:auto
+// and the sticky element's PARENT chain must NOT have overflow:hidden
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.tbl-wrap').forEach(function(wrap) {
+    // Ensure no parent has overflow:hidden which breaks sticky
+    var el = wrap.parentElement;
+    while (el && el !== document.body) {
+      var style = window.getComputedStyle(el);
+      if (style.overflow === 'hidden' || style.overflowX === 'hidden') {
+        el.style.overflow = 'visible';
+      }
+      el = el.parentElement;
+    }
+  });
+});
+
+// ── FIX: Prevent double-tap zoom on buttons (iOS) ─────────────
+if (isTouchDevice) {
+  var _lastTap = 0;
+  document.addEventListener('touchend', function(e) {
+    var btn = e.target.closest && e.target.closest('button, .btn-p, .btn-g, .tab, .pag-btn');
+    if (!btn) return;
+    var now = Date.now();
+    if (now - _lastTap < 300) { e.preventDefault(); }
+    _lastTap = now;
+  }, { passive: false });
+}
+
+// ── FIX: Resolve scrolling conflicts on mobile tables ─────────
+// Prevent body scroll when user is scrolling inside tbl-wrap
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.tbl-wrap').forEach(function(wrap) {
+    var startX, startY;
+    wrap.addEventListener('touchstart', function(e) {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    }, { passive: true });
+    wrap.addEventListener('touchmove', function(e) {
+      var dx = Math.abs(e.touches[0].clientX - startX);
+      var dy = Math.abs(e.touches[0].clientY - startY);
+      // If horizontal scroll detected, prevent page scroll
+      if (dx > dy && dx > 5) {
+        // Horizontal table scroll - let it bubble but don't stop
+      }
+    }, { passive: true });
+  });
+});
+
+// ── FIX: font-feature-settings fallback ────────────────────────
+// Some older browsers/WebViews ignore font-feature-settings silently (safe)
+
+// ── FIX: CSS Custom Properties (CSS Vars) in older Samsung Internet ──
+// Samsung Internet 4.x doesn't support CSS vars — detect and apply
+(function() {
+  var testEl = document.createElement('div');
+  testEl.style.cssText = 'color: var(--brand)';
+  var supported = testEl.style.color !== '';
+  if (!supported) {
+    // Apply static fallback styles for critical colors
+    document.documentElement.style.setProperty || (document.documentElement.style.setProperty = function(){});
+    var style = document.createElement('style');
+    style.textContent = [
+      'body{background:#f4f5f9;color:#1a1a1a}',
+      '.hdr{background:#fff;border-top:3px solid #0064b3}',
+      '.btn-p{background:#0064b3;color:#fff}',
+      '.badge{background:#e8f2fb;color:#0064b3}',
+      '.b-ok{background:#dcfce7;color:#15803d}',
+      '.b-err{background:#fef2f2;color:#b91c1c}',
+      '.b-warn{background:#fff7ed;color:#c2410c}',
+    ].join('\n');
+    document.head.appendChild(style);
+  }
+})();
+
+// ── FIX: min-width: max-content fallback for older browsers ────
+// Some browsers don't support max-content - use a large px value
+(function() {
+  try {
+    var t = document.createElement('div');
+    t.style.minWidth = 'max-content';
+    if (t.style.minWidth !== 'max-content') {
+      var s = document.createElement('style');
+      s.textContent = 'table { min-width: 900px; }';
+      document.head.appendChild(s);
+    }
+  } catch(e) {}
+})();
+
+// ── FIX: requestAnimationFrame in older WebViews ──────────────
+window.requestAnimationFrame = window.requestAnimationFrame
+  || window.webkitRequestAnimationFrame
+  || window.mozRequestAnimationFrame
+  || function(cb) { return setTimeout(cb, 16); };
+
+// ── OPTIONAL CHAINING SAFETY WRAPPER ──────────────────────────
+// Patches any remaining ?. usage at runtime that compiles cleanly
+// but may fail in older engines - already handled via Element.closest polyfill above
+
+})();
+</script>
+
+<!-- ═══ FONT PICKER MODAL ═══ -->
+<div id="font-picker-ov" onclick="if(event.target===this)closeFontPicker()">
+  <div id="font-picker-box">
+    <h3>🔤 Escolher Fonte</h3>
+    <p>A escolha é salva automaticamente.</p>
+
+    <div class="fp-option" data-font="dm-sans" onclick="applyFont('dm-sans')" id="fp-dm-sans">
+      <div>
+        <div class="fp-font-name" style="font-family:'DM Sans',sans-serif">DM Sans</div>
+        <div class="fp-font-desc">Padrão do sistema — clean e legível</div>
+      </div>
+      <span class="fp-check">✅</span>
+    </div>
+
+    <div class="fp-option" data-font="geist" onclick="applyFont('geist')" id="fp-geist">
+      <div>
+        <div class="fp-font-name" style="font-family:'Geist',system-ui,sans-serif">Geist</div>
+        <div class="fp-font-desc">Ultra moderna · Vercel / Linear</div>
+      </div>
+      <span class="fp-check">✅</span>
+    </div>
+
+    <div class="fp-option" data-font="jakarta" onclick="applyFont('jakarta')" id="fp-jakarta">
+      <div>
+        <div class="fp-font-name" style="font-family:'Plus Jakarta Sans',sans-serif">Plus Jakarta Sans</div>
+        <div class="fp-font-desc">Elegante e corporativa</div>
+      </div>
+      <span class="fp-check">✅</span>
+    </div>
+
+    <div class="fp-option" data-font="outfit" onclick="applyFont('outfit')" id="fp-outfit">
+      <div>
+        <div class="fp-font-name" style="font-family:'Outfit',sans-serif">Outfit</div>
+        <div class="fp-font-desc">Clean e minimalista</div>
+      </div>
+      <span class="fp-check">✅</span>
+    </div>
+
+    <div class="fp-option" data-font="bricolage" onclick="applyFont('bricolage')" id="fp-bricolage">
+      <div>
+        <div class="fp-font-name" style="font-family:'Bricolage Grotesque',sans-serif">Bricolage Grotesque</div>
+        <div class="fp-font-desc">Moderna com personalidade</div>
+      </div>
+      <span class="fp-check">✅</span>
+    </div>
+
+    <button class="fp-cancel" onclick="closeFontPicker()">Cancelar</button>
+  </div>
+</div>
+
+<script>
+// ── FONT PICKER ──────────────────────────────────────────────
+const FONT_MAP = {
+  'dm-sans':   { css: "'DM Sans', system-ui, sans-serif",           geistFace: false },
+  'geist':     { css: "'Geist', system-ui, sans-serif",             geistFace: true  },
+  'jakarta':   { css: "'Plus Jakarta Sans', system-ui, sans-serif", geistFace: false },
+  'outfit':    { css: "'Outfit', system-ui, sans-serif",            geistFace: false },
+  'bricolage': { css: "'Bricolage Grotesque', system-ui, sans-serif",geistFace: false },
+};
+
+// Geist via CDN (não está no Google Fonts)
+(function loadGeist() {
+  if (document.getElementById('geist-face')) return;
+  const s = document.createElement('style');
+  s.id = 'geist-face';
+  const base = 'https://cdn.jsdelivr.net/npm/geist@1.3.0/dist/fonts/geist-sans/';
+  s.textContent = [
+    `@font-face{font-family:'Geist';src:url('${base}Geist-Regular.woff2') format('woff2');font-weight:400}`,
+    `@font-face{font-family:'Geist';src:url('${base}Geist-Medium.woff2') format('woff2');font-weight:500}`,
+    `@font-face{font-family:'Geist';src:url('${base}Geist-SemiBold.woff2') format('woff2');font-weight:600}`,
+    `@font-face{font-family:'Geist';src:url('${base}Geist-Bold.woff2') format('woff2');font-weight:700}`,
+    `@font-face{font-family:'Geist';src:url('${base}Geist-Black.woff2') format('woff2');font-weight:800}`,
+  ].join('');
+  document.head.appendChild(s);
+})();
+
+function applyFont(key) {
+  const f = FONT_MAP[key];
+  if (!f) return;
+  document.documentElement.style.setProperty('--font', f.css);
+  document.body.style.fontFamily = f.css;
+  localStorage.setItem('rochling_font', key);
+  // Atualiza checkmarks
+  document.querySelectorAll('.fp-option').forEach(el => el.classList.remove('fp-active'));
+  const active = document.getElementById('fp-' + key);
+  if (active) active.classList.add('fp-active');
+  if (typeof showToast === 'function') showToast('✅ Fonte alterada: ' + key.replace('-', ' '));
+  setTimeout(closeFontPicker, 300);
+}
+
+function openFontPicker() {
+  document.getElementById('font-picker-ov').classList.add('open');
+}
+function closeFontPicker() {
+  document.getElementById('font-picker-ov').classList.remove('open');
+}
+
+// Carrega fonte salva ao iniciar
+(function() {
+  const saved = localStorage.getItem('rochling_font') || 'dm-sans';
+  applyFont(saved);
+})();
+</script>
+
+
