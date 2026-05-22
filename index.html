@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0064b3">
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v5)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v6)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição.">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -42,32 +42,45 @@ window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancel
 </script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <!-- qrcodejs — biblioteca QR robusta e testada (mesma API: new QRCode(el, opts)) -->
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 // Wrapper: garante compatibilidade com o .toDataURL() usado no restante do código
+// CORREÇÃO: qrcode.min.js carregado de forma síncrona (sem defer) para que
+// window.QRCode já exista quando este IIFE executar — sem race condition.
 (function(){
-  var _OrigQR = window.QRCode;
-  window.QRCode = function(el, opts) {
-    if (typeof opts === 'string') opts = { text: opts };
-    // qrcodejs usa width/height como px do elemento; garante fundo branco
-    var w = opts.width  || 220;
-    var h = opts.height || opts.width || 220;
-    var instance = new _OrigQR(el, {
-      text:           opts.text || '',
-      width:          w,
-      height:         h,
-      colorDark:      opts.colorDark  || '#000000',
-      colorLight:     opts.colorLight || '#ffffff',
-      correctLevel:   _OrigQR.CorrectLevel.M   // ECC M — bom equilíbrio densidade/robustez
-    });
-    // Expõe .toDataURL() — qrcodejs cria um <canvas> dentro do el
-    this.toDataURL = function(type) {
-      var canvas = el.querySelector('canvas');
-      return canvas ? canvas.toDataURL(type || 'image/png') : '';
+  function _installQRWrapper() {
+    if (typeof window.QRCode === 'undefined') {
+      // Fallback: biblioteca ainda não pronta (não deveria ocorrer sem defer)
+      console.warn('[QR] qrcode.min.js não carregou — tentando novamente em 100ms');
+      setTimeout(_installQRWrapper, 100);
+      return;
+    }
+    var _OrigQR = window.QRCode;
+    // Evita dupla instalação
+    if (_OrigQR._wrapped) return;
+    window.QRCode = function(el, opts) {
+      if (typeof opts === 'string') opts = { text: opts };
+      var w = opts.width  || 220;
+      var h = opts.height || opts.width || 220;
+      var instance = new _OrigQR(el, {
+        text:         opts.text || '',
+        width:        w,
+        height:       h,
+        colorDark:    opts.colorDark  || '#000000',
+        colorLight:   opts.colorLight || '#ffffff',
+        correctLevel: _OrigQR.CorrectLevel.M
+      });
+      // Expõe .toDataURL() — qrcodejs cria um <canvas> dentro do el
+      this.toDataURL = function(type) {
+        var canvas = el.querySelector('canvas');
+        return canvas ? canvas.toDataURL(type || 'image/png') : '';
+      };
+      this._instance = instance;
     };
-    this._instance = instance;
-  };
-  window.QRCode.CorrectLevel = _OrigQR.CorrectLevel;
+    window.QRCode.CorrectLevel = _OrigQR.CorrectLevel;
+    window.QRCode._wrapped = true;
+  }
+  _installQRWrapper();
 })();
 </script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -3332,6 +3345,43 @@ async function fbPush(manual) {
   try {
     const payload = DB.map(r=>{const{dias_vencer,...rest}=r;return rest;});
     await _colRef.doc('dados').set({ records: payload, updated: new Date().toISOString() });
+
+    // ── Sincroniza coleção pública para leitura via QR (sem auth) ──
+    // Apenas campos não-sensíveis expostos publicamente
+    try {
+      const pubColRef = _db.collection('equipamentos_publicos');
+      const batch = _db.batch();
+      DB.forEach(r => {
+        const safeId = String(r.id || r._uid || '').replace(/[^a-zA-Z0-9_\-]/g, '_');
+        if (!safeId) return;
+        const pubDoc = {
+          id:           r.id          || null,
+          descricao:    r.descricao   || null,
+          tipo:         r.tipo        || null,
+          fabricante:   r.fabricante  || null,
+          localizacao:  r.localizacao || null,
+          responsavel:  r.responsavel || null,
+          status:       r.status      || null,
+          status_calib: r.status_calib|| null,
+          empresa:      r.empresa     || null,
+          cod_lab:      r.cod_lab     || null,
+          ult_calib:    r.ult_calib   || null,
+          prox_calib:   r.prox_calib  || null,
+          freq_dias:    r.freq_dias   || null,
+          dias_vencer:  r.dias_vencer !== undefined ? r.dias_vencer : null,
+          observacoes:  r.observacoes || null,
+          _uid:         r._uid        || null,
+          _updated:     new Date().toISOString(),
+        };
+        batch.set(pubColRef.doc(safeId), pubDoc);
+      });
+      await batch.commit();
+    } catch(pubErr) {
+      // Falha na sync pública não bloqueia o save principal
+      console.warn('[fbPush] sync equipamentos_publicos falhou:', pubErr.message);
+    }
+    // ──────────────────────────────────────────────────────────────
+
     saveLS();
     _pending = false;
     const btn = document.getElementById('btn-sync-now');
@@ -3673,7 +3723,7 @@ async function initFirebase() {
         + '<div style="font-size:16px;font-weight:700;color:#1a1a1a">Equipamento não encontrado</div>'
         + '<div style="font-size:12px;color:#6b7280;font-family:monospace">ID buscado: <b>' + _escPub(decodeURIComponent(viewId)) + '</b></div>'
         + (dbCount === 0
-            ? '<div style="font-size:11px;color:#dc2626;margin-top:6px">⚠️ Base vazia — leitura Firestore bloqueada pelas Security Rules.<br>Habilite Auth Anônima no Firebase Console e verifique as regras.</div>'
+            ? '<div style="font-size:11px;color:#dc2626;margin-top:6px">⚠️ Nenhum dado público disponível.<br>Acesse o sistema com login e realize um Save para sincronizar os dados na coleção pública.</div>'
             : '<div style="font-size:11px;color:#6b7280;margin-top:4px">Base carregada com ' + dbCount + ' registro(s). ID não encontrado.</div>');
       document.body.appendChild(ov);
       return;
@@ -3681,48 +3731,35 @@ async function initFirebase() {
     buildPublicView(r);
   }
 
-  // Oculta o login, inicializa DB sem auth e renderiza a ficha pública
+  // Oculta o login, lê equipamentos_publicos (allow read: if true) e renderiza a ficha pública
+  // CORREÇÃO: usa equipamentos_publicos — leitura aberta, sem signInAnonymously necessário.
+  // Auth Anônima NÃO precisa estar habilitada no Firebase Console para QR funcionar.
   window.addEventListener('DOMContentLoaded', () => {
-    // Esconde o login overlay
+    // Esconde o login overlay — modo somente-leitura público
     const lo = document.getElementById('login-overlay');
     if (lo) lo.style.display = 'none';
     // Inicializa DB local (sem Firebase/auth)
     if (typeof initDB === 'function') initDB();
-    // Conecta Firebase com autenticação anônima, depois lê o Firestore
-    // Auth anônima satisfaz regras "allow read: if request.auth != null"
     (async () => {
       try {
         const cfg = FB_CONFIG_DEFAULT;
         let app;
         try { app = firebase.app(); } catch(e) { app = firebase.initializeApp(cfg); }
 
-        // Auth anônima — satisfaz regras que exigem request.auth sem login do usuário
-        try {
-          const auth = firebase.auth(app);
-          await auth.signInAnonymously();
-        } catch(authErr) {
-          console.warn('[público] auth anônima falhou:', authErr.code);
-        }
-
+        // ── Lê equipamentos_publicos — allow read: if true (sem auth) ──
         const db = firebase.firestore(app);
-        const snap = await db.collection('equipamentos').get();
+        const snap = await db.collection('equipamentos_publicos').get();
         if (!snap.empty) {
           const rows = [];
           snap.forEach(doc => {
             const data = doc.data();
-            // Estrutura padrão: doc 'dados' contém { records: [...] }
-            if (Array.isArray(data.records)) {
-              data.records.forEach(record => rows.push({ _uid: rows.length + 1, ...record }));
-            } else {
-              // Fallback: documento simples sem array interno
-              rows.push({ _uid: rows.length + 1, ...data });
-            }
+            rows.push({ _uid: rows.length + 1, ...data });
           });
           if (rows.length) {
             DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
           }
         } else {
-          console.warn('[público] Firestore retornou 0 docs — verifique as Security Rules.');
+          console.warn('[público] equipamentos_publicos vazia — realize um Save no sistema para sincronizar os dados públicos.');
         }
       } catch(e) {
         console.error('[público] erro Firestore:', e.code, e.message);
