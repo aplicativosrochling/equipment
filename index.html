@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0064b3">
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v6)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v7)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição.">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -44,14 +44,20 @@ window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancel
 <!-- qrcodejs — biblioteca QR robusta e testada (mesma API: new QRCode(el, opts)) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
-// Wrapper: garante compatibilidade com o .toDataURL() usado no restante do código
-// CORREÇÃO: qrcode.min.js carregado de forma síncrona (sem defer) para que
-// window.QRCode já exista quando este IIFE executar — sem race condition.
+// Wrapper: garante compatibilidade com o .toDataURL() usado no restante do código.
+// CORREÇÃO v7: limite de 20 tentativas (2s máx.) para evitar loop infinito se CDN atrasar ou falhar.
+// Executa após DOMContentLoaded se o script ainda não tiver carregado (fallback de segurança).
 (function(){
+  var MAX_RETRIES = 20; // 20 × 100 ms = 2 s
+  var _retries = 0;
+
   function _installQRWrapper() {
     if (typeof window.QRCode === 'undefined') {
-      // Fallback: biblioteca ainda não pronta (não deveria ocorrer sem defer)
-      console.warn('[QR] qrcode.min.js não carregou — tentando novamente em 100ms');
+      _retries++;
+      if (_retries > MAX_RETRIES) {
+        console.error('[QR] qrcode.min.js não carregou em ' + (MAX_RETRIES * 100) + ' ms — QR Code indisponível. Verifique a CDN ou o bloqueio de proxy.');
+        return; // Para definitivamente — sem loop infinito
+      }
       setTimeout(_installQRWrapper, 100);
       return;
     }
@@ -80,12 +86,20 @@ window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancel
     window.QRCode.CorrectLevel = _OrigQR.CorrectLevel;
     window.QRCode._wrapped = true;
   }
-  _installQRWrapper();
+
+  // Tenta instalar imediatamente (script síncrono sem defer).
+  // Se o DOM ainda não tiver carregado, usa DOMContentLoaded como barreira adicional.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _installQRWrapper);
+  } else {
+    _installQRWrapper();
+  }
 })();
 </script>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Bricolage+Grotesque:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- ── FONTS: todas as famílias em UMA única requisição → menos RTTs, melhor HTTP/2 ── -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 #font-picker-ov {
   display: none; position: fixed;
@@ -827,7 +841,7 @@ tr.selected td { background: rgba(0,100,179,.07) !important }
 body.col-resizing { cursor: col-resize !important; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none !important }
 body.col-resizing * { cursor: col-resize !important }
 @keyframes bell-ring{0%,100%{transform:rotate(0)}20%{transform:rotate(-15deg)}40%{transform:rotate(15deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(8deg)}}
-@media print{.hdr,.tabs,.filters,.modal-ov,.toast,.notif-panel,.btn-p,.btn-g,.btn-ic,.tgl{display:none!important}.page{display:none!important}#tab-relatorios{display:block!important}.main{margin-left:0!important}}
+/* @media print — consolidated at the bottom of the CSS section */
 
 /* ── PRINT PDF OVERLAY ── */
 #pdf-print-frame {
@@ -1383,13 +1397,24 @@ input[type="checkbox"], input[type="radio"] {
   .modal { max-height: 96vh !important; }
 }
 
-/* ── PRINT MEDIA: ensure tables print correctly ── */
+/* ── @MEDIA PRINT — bloco único consolidado (todas as regras de impressão aqui) ── */
 @media print {
-  .excel-toolbar, .excel-status-bar, .bulk-bar, .filters, .hdr, .tabs, 
-  .btn-p, .btn-g, .btn-ic, .pag { display: none !important; }
+  /* Ocultar elementos de UI que não fazem sentido impressos */
+  .hdr, .tabs, .filters, .modal-ov, .toast, .notif-panel,
+  .btn-p, .btn-g, .btn-ic, .tgl,
+  .excel-toolbar, .excel-status-bar, .bulk-bar, .pag { display: none !important; }
+
+  /* Ocultar todas as páginas exceto relatórios */
+  .page { display: none !important; }
+  #tab-relatorios { display: block !important; }
+  .main { margin-left: 0 !important; }
+
+  /* Tabela imprimível */
   .tbl-wrap { max-height: none !important; overflow: visible !important; }
   table { font-size: 9pt; border-collapse: collapse; }
   td, th { border: 0.5pt solid #ccc; padding: 4pt 5pt; }
+
+  /* Margens da página */
   @page { margin: 1.5cm; }
 }
 
@@ -1621,7 +1646,7 @@ input[type="checkbox"], input[type="radio"] {
     <div class="login-footer">
       Acesso restrito a e-mails autorizados.<br>
       Para solicitar acesso, contate o administrador.<br>
-      <a href="#" id="login-forgot" style="color:var(--accent2);font-size:11px;margin-top:6px;display:inline-block;text-decoration:underline;cursor:pointer">Esqueci minha senha</a>
+      <button type="button" id="login-forgot" style="background:transparent;border:none;color:var(--accent2);font-size:11px;margin-top:6px;display:inline-block;text-decoration:underline;cursor:pointer;font-family:var(--font);padding:0">Esqueci minha senha</button>
     </div>
   </div>
 </div>
@@ -3781,6 +3806,20 @@ async function initFirebase() {
 let _auth = null;
 
 async function initFirebaseAndAuth() {
+  // ── GUARD: Firebase CDN pode ter sido bloqueado (proxy corporativo, ad-blocker, offline) ──
+  // Sem este guard, `firebase` seria um ReferenceError catastrófico no console.
+  if (typeof firebase === 'undefined') {
+    console.warn('[Firebase] SDK não carregou — CDN bloqueada, proxy corporativo ou ausência de rede.');
+    const errEl  = document.getElementById('login-error');
+    const errMsg = document.getElementById('login-error-msg');
+    const loginBtn = document.getElementById('login-btn');
+    if (errMsg) errMsg.textContent = 'Serviço de autenticação indisponível. A CDN do Firebase está bloqueada ou inacessível. Contate o administrador de TI.';
+    if (errEl)  errEl.classList.add('on');
+    if (loginBtn) { loginBtn.disabled = true; loginBtn.style.opacity = '0.5'; loginBtn.title = 'Firebase indisponível'; }
+    showLoginScreen();
+    return;
+  }
+  // ── /GUARD ──
   let cfg = FB_CONFIG_DEFAULT;
   try {
     const saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}');
@@ -4481,7 +4520,7 @@ const INLINE_EDITABLE = {
   ]},
 };
 
-let _inlineActive = null; // { uid, k, td, origHTML }
+let _inlineActive = null; // { uid, k, td }
 
 function startInlineEdit(uid, k, td) {
   // Close any existing inline edit first
@@ -4494,7 +4533,7 @@ function startInlineEdit(uid, k, td) {
 
   const w = td.style.width || '120px';
   const curVal = r[k] || '';
-  _inlineActive = { uid, k, td, origHTML: td.innerHTML };
+  _inlineActive = { uid, k, td };
 
   let input;
   if(cfg.type === 'select') {
@@ -4657,10 +4696,13 @@ function _origCommitInlineEdit(silent) {
 
 function cancelInlineEdit() {
   if(!_inlineActive) return;
-  const { td, origHTML } = _inlineActive;
-  td.innerHTML = origHTML;
+  const { uid, td } = _inlineActive;
   td.style.padding = '';
   _inlineActive = null;
+  // SEGURANÇA: em vez de restaurar origHTML (innerHTML), re-renderizamos a célula
+  // a partir do dado em DB via renderCell(), que usa esc() para sanitizar.
+  // Isso garante que nenhum HTML arbitrário seja injetado via cancelamento.
+  rerenderRow(uid, 'geral');
 }
 
 // ── Re-render only ONE row without touching page/scroll/filters ────────────
