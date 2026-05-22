@@ -3350,11 +3350,13 @@ async function fbPush(manual) {
     // Apenas campos não-sensíveis expostos publicamente
     try {
       const pubColRef = _db.collection('equipamentos_publicos');
-      const batch = _db.batch();
+      // Firestore batch limit = 500 ops; divide em chunks para evitar erro
+      const CHUNK = 499;
+      const pubDocs = [];
       DB.forEach(r => {
         const safeId = String(r.id || r._uid || '').replace(/[^a-zA-Z0-9_\-]/g, '_');
         if (!safeId) return;
-        const pubDoc = {
+        pubDocs.push({ safeId, doc: {
           id:           r.id          || null,
           descricao:    r.descricao   || null,
           tipo:         r.tipo        || null,
@@ -3372,10 +3374,14 @@ async function fbPush(manual) {
           observacoes:  r.observacoes || null,
           _uid:         r._uid        || null,
           _updated:     new Date().toISOString(),
-        };
-        batch.set(pubColRef.doc(safeId), pubDoc);
+        }});
       });
-      await batch.commit();
+      for (let i = 0; i < pubDocs.length; i += CHUNK) {
+        const chunk = pubDocs.slice(i, i + CHUNK);
+        const batch = _db.batch();
+        chunk.forEach(({ safeId, doc }) => batch.set(pubColRef.doc(safeId), doc));
+        await batch.commit();
+      }
     } catch(pubErr) {
       // Falha na sync pública não bloqueia o save principal
       console.warn('[fbPush] sync equipamentos_publicos falhou:', pubErr.message);
@@ -3713,8 +3719,10 @@ async function initFirebase() {
       setTimeout(waitAndRender, 200);
       return;
     }
-    const r = DB.find(x => (x.id || '').toUpperCase() === decodeURIComponent(viewId).toUpperCase())
-           || DB.find(x => String(x._uid) === decodeURIComponent(viewId));
+    const vId = decodeURIComponent(viewId).toUpperCase();
+    const r = DB.find(x => (x.id || '').toUpperCase() === vId)
+           || DB.find(x => String(x._uid) === decodeURIComponent(viewId))
+           || DB.find(x => (x._docId || '').toUpperCase() === vId);
     if (!r) {
       const ov = document.createElement('div');
       const dbCount = (typeof DB !== 'undefined' && DB) ? DB.length : 0;
@@ -3753,7 +3761,9 @@ async function initFirebase() {
           const rows = [];
           snap.forEach(doc => {
             const data = doc.data();
-            rows.push({ _uid: rows.length + 1, ...data });
+            // _uid after spread so existing _uid in data is preserved;
+            // _docId captures the Firestore document ID (safeId) for fallback search
+            rows.push({ ...data, _uid: data._uid ?? (rows.length + 1), _docId: doc.id });
           });
           if (rows.length) {
             DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
