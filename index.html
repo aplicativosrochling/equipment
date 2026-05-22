@@ -8,6 +8,10 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0064b3">
 <title>Röchling Automotive — Controle de Equipamentos de Medição (v5)</title>
+<meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição.">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com; frame-src 'self' https://*.firebaseapp.com;">
 
 <!-- ── POLYFILLS: Element.closest, Optional Chaining safety, Object.fromEntries ── -->
 <script>
@@ -36,9 +40,9 @@ if (!Object.fromEntries) {
 window.requestAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || function(cb){ return setTimeout(cb, 16); };
 window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancelAnimationFrame || function(id){ clearTimeout(id); };
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <!-- qrcodejs — biblioteca QR robusta e testada (mesma API: new QRCode(el, opts)) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 // Wrapper: garante compatibilidade com o .toDataURL() usado no restante do código
 (function(){
@@ -745,6 +749,50 @@ tr.selected td { background: rgba(0,100,179,.07) !important }
   50%     { box-shadow: 0 0 0 7px rgba(0,100,179,.07) }
 }
 
+/* ── SAVE EDITS FLOATING BAR ── */
+#save-edits-bar {
+  position: fixed;
+  bottom: -80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 700;
+  background: var(--surf);
+  border: 1.5px solid var(--brand);
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.28), 0 0 0 1px rgba(0,100,179,.12);
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  transition: bottom .3s cubic-bezier(.34,1.56,.64,1);
+  white-space: nowrap;
+  min-width: 340px;
+}
+#save-edits-bar.visible { bottom: 24px; }
+#save-edits-bar .seb-icon { font-size: 16px; }
+#save-edits-bar .seb-msg { color: var(--tx2); font-weight: 500; flex: 1; }
+#save-edits-bar .seb-count {
+  background: var(--brand); color: #fff;
+  font-size: 10px; font-weight: 800; font-family: var(--mono);
+  padding: 1px 7px; border-radius: 99px;
+}
+#save-edits-bar .seb-save {
+  background: var(--brand); color: #fff;
+  border: none; padding: 7px 18px; border-radius: 7px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  font-family: var(--font); transition: var(--tr);
+  box-shadow: 0 2px 8px rgba(0,100,179,.35);
+}
+#save-edits-bar .seb-save:hover { background: var(--brand-dk); transform: translateY(-1px); }
+#save-edits-bar .seb-discard {
+  background: transparent; color: var(--tx3);
+  border: 1px solid var(--bdr2); padding: 6px 12px; border-radius: 7px;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  font-family: var(--font); transition: var(--tr);
+}
+#save-edits-bar .seb-discard:hover { color: var(--red); border-color: var(--red); background: rgba(220,38,38,.05); }
+
 .btn-g:disabled { cursor: not-allowed !important; pointer-events: none }
 
 /* DELETE BUTTON ── */
@@ -943,6 +991,80 @@ th.has-filter .th-inner::after {
   font-size: 10px;
   margin-left: 3px;
 }
+
+/* ── EXCEL COLUMN HEADER FILTER BUTTON ── */
+th .th-inner-wrap {
+  display: flex; align-items: center; overflow: hidden; gap: 0;
+}
+th .th-inner-wrap .th-inner {
+  flex: 1; min-width: 0; overflow: hidden;
+}
+.th-filter-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; flex-shrink: 0;
+  border: 1px solid transparent; border-radius: 2px;
+  background: transparent; color: var(--tx3);
+  font-size: 8px; line-height: 1; cursor: pointer;
+  transition: var(--tr); margin-left: 1px; padding: 0;
+  opacity: 0; pointer-events: none; font-family: var(--mono);
+}
+th:hover .th-filter-btn { opacity: .7; pointer-events: all; }
+.th-filter-btn:hover { background: var(--bdr2) !important; color: var(--brand) !important;
+  border-color: var(--bdr3) !important; opacity: 1 !important; }
+.th-filter-btn.active {
+  opacity: 1 !important; pointer-events: all !important;
+  background: var(--brand) !important; color: #fff !important;
+  border-color: var(--brand) !important;
+}
+th.has-col-filter { background: rgba(0,100,179,.07) !important; }
+
+/* ── EXCEL COL FILTER DROPDOWN ── */
+#col-filter-portal {
+  position: fixed; z-index: 99999;
+  background: var(--surf); border: 1px solid var(--bdr2);
+  border-radius: 8px; padding: 0; min-width: 210px; max-height: 340px;
+  display: none; flex-direction: column; overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,.45);
+  font-family: var(--font);
+}
+#col-filter-portal.cfd-open { display: flex; animation: fadeIn .1s; }
+.cfd-actions {
+  display: flex; gap: 4px; padding: 8px 8px 6px; flex-shrink: 0;
+}
+.cfd-actions button {
+  flex: 1; padding: 4px 0; font-size: 10px; font-weight: 700;
+  border-radius: 5px; cursor: pointer; font-family: var(--font);
+  transition: var(--tr); line-height: 1.4;
+}
+.cfd-btn-all { background: var(--brand); color: #fff; border: 1px solid var(--brand); }
+.cfd-btn-all:hover { background: var(--brand-dk); }
+.cfd-btn-clear { background: transparent; color: var(--tx2); border: 1px solid var(--bdr2); }
+.cfd-btn-clear:hover { border-color: var(--red); color: var(--red); }
+.cfd-sep { height: 1px; background: var(--bdr2); flex-shrink: 0; }
+.cfd-search {
+  margin: 4px 8px 4px; padding: 5px 8px; font-size: 11px; flex-shrink: 0;
+  background: var(--surf2); border: 1px solid var(--bdr2);
+  border-radius: 5px; color: var(--tx); outline: none; font-family: var(--font);
+  width: calc(100% - 16px);
+}
+.cfd-search:focus { border-color: var(--brand); }
+.cfd-list { overflow-y: auto; flex: 1; padding: 3px 4px; }
+.cfd-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 8px; cursor: pointer; border-radius: 5px;
+  font-size: 11px; color: var(--tx2); transition: background .1s;
+  -webkit-user-select: none; user-select: none;
+}
+.cfd-item:hover { background: var(--surf2); color: var(--tx); }
+.cfd-item input[type=checkbox] { accent-color: var(--brand); flex-shrink: 0; width: 13px; height: 13px; cursor: pointer; }
+.cfd-item .cfd-lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cfd-item .cfd-cnt { font-size: 9px; color: var(--tx3); font-family: var(--mono); flex-shrink: 0; }
+.cfd-header {
+  padding: 7px 10px 5px; font-size: 9px; font-weight: 700;
+  color: var(--tx3); text-transform: uppercase; letter-spacing: .6px;
+  border-bottom: 1px solid var(--bdr); flex-shrink: 0;
+}
+.cfd-empty { padding: 18px; text-align: center; font-size: 11px; color: var(--tx3); }
 
 /* ── ROW HIGHLIGHT ON HOVER — left accent ── */
 tr:hover td:first-child::before {
@@ -1259,9 +1381,9 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 </style>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <style>
 /* ══════════════════════════════════════════════
@@ -1475,7 +1597,7 @@ input[type="checkbox"], input[type="radio"] {
         placeholder="••••••••" autocomplete="current-password">
     </div>
 
-    <div class="login-error" id="login-error" role="alert" aria-live="polite">❌ <span id="login-error-msg">E-mail ou senha incorretos.</span></div>
+    <div class="login-error" id="login-error" role="alert" aria-live="polite"><span aria-hidden="true">❌ </span><span id="login-error-msg">E-mail ou senha incorretos.</span></div>
 
     <button class="login-btn" id="login-btn" type="submit">
       <span class="btn-label">Entrar</span>
@@ -1485,7 +1607,8 @@ input[type="checkbox"], input[type="radio"] {
 
     <div class="login-footer">
       Acesso restrito a e-mails autorizados.<br>
-      Para solicitar acesso, contate o administrador.
+      Para solicitar acesso, contate o administrador.<br>
+      <a href="#" id="login-forgot" style="color:var(--accent2);font-size:11px;margin-top:6px;display:inline-block;text-decoration:underline;cursor:pointer">Esqueci minha senha</a>
     </div>
   </div>
 </div>
@@ -1773,35 +1896,17 @@ input[type="checkbox"], input[type="radio"] {
 
   <!-- ── CARD LIST VIEW (padrão) ── -->
   <div id="eq-list-view">
+    <!-- Hidden inputs mantidos para compatibilidade com applyF() -->
+    <input type="hidden" id="f-de"><input type="hidden" id="f-ate">
+    <input type="hidden" id="f-ult-calib-de"><input type="hidden" id="f-ult-calib-ate">
+    <input type="hidden" id="f-prox-calib-de"><input type="hidden" id="f-prox-calib-ate">
     <div class="tbl-card" style="margin-bottom:12px">
-      <div class="filters">
-        <div class="fg" style="position:relative"><label>Tipo</label><div id="f-tipo-btn" class="multi-tipo-btn" onclick="toggleTipoDropdown('f-tipo-dd', event)" title="Selecionar tipos"><span id="f-tipo-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg" style="position:relative"><label>Cliente</label><div id="f-cli-btn" class="multi-tipo-btn" onclick="toggleMultiDD('f-cli-dd','f-cli-btn',event)" title="Selecionar clientes"><span id="f-cli-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg" style="position:relative"><label>Localização</label><div id="f-local-btn" class="multi-tipo-btn" onclick="toggleMultiDD('f-local-dd','f-local-btn',event)" title="Selecionar localizações"><span id="f-local-label">Todas</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg" style="position:relative"><label>Responsável</label><div id="f-resp-btn" class="multi-tipo-btn" onclick="toggleMultiDD('f-resp-dd','f-resp-btn',event)" title="Selecionar responsáveis"><span id="f-resp-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg" style="position:relative"><label>Empresa</label><div id="f-emp-btn" class="multi-tipo-btn" onclick="toggleMultiDD('f-emp-dd','f-emp-btn',event)" title="Selecionar empresas"><span id="f-emp-label">Todas</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg" style="position:relative"><label>Status Op.</label><div id="f-status-btn" class="multi-tipo-btn" onclick="toggleMultiDD('f-status-dd','f-status-btn',event)" title="Selecionar status"><span id="f-status-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg" style="position:relative"><label>Calibração</label><div id="f-calib-btn" class="multi-tipo-btn" onclick="toggleMultiDD('f-calib-dd','f-calib-btn',event)" title="Selecionar calibração"><span id="f-calib-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg"><label>De</label><input type="date" id="f-de" onchange="applyF()"></div>
-        <div class="fg"><label>Até</label><input type="date" id="f-ate" onchange="applyF()"></div>
-        <div class="fg" style="min-width:150px">
-          <label>Últ. Calib. (mês/ano)</label>
-          <input type="month" id="f-ult-calib-mes" onchange="applyF()" style="width:100%">
-        </div>
-        <div class="fg" style="min-width:150px">
-          <label>Próx. Calib. (mês/ano)</label>
-          <input type="month" id="f-prox-calib-mes" onchange="applyF()" style="width:100%">
-        </div>
-        <div class="fg" style="min-width:170px"><label>Buscar</label><input id="f-search" type="text" placeholder="Código, descrição..." oninput="applyF()"></div>
-        <div style="align-self:flex-end;display:flex;gap:5px">
-          <button id="btn-apply-filters" class="btn-g" onclick="applyFiltersNow()" title="Reaplicar filtros e atualizar gráficos">🔄 Aplicar</button>
-          <button class="btn-g" onclick="clearF()">✕ Limpar</button>
-        </div>
-      </div>
       <div class="tbl-hdr" style="border-bottom:none;padding-bottom:0">
         <span class="tbl-title">Equipamentos de Medição</span>
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
           <span class="tbl-cnt" id="eq-cnt">—</span>
+          <input class="search-box" id="f-search" placeholder="🔍 Buscar código, descrição..." oninput="applyF()" style="min-width:200px">
+          <button class="btn-g" onclick="clearF()" title="Limpar todos os filtros">✕ Limpar</button>
           <button class="btn-g" id="btn-card-select-toggle" onclick="toggleCardSelectMode()" title="Selecionar equipamentos para imprimir QR em lote">☑ Selecionar</button>
           <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
           <button class="btn-g" onclick="toggleEqView()" id="btn-toggle-eq-view" title="Alternar para visão de tabela">⊞ Tabela</button>
@@ -1826,37 +1931,17 @@ input[type="checkbox"], input[type="radio"] {
 
   <!-- ── TABLE VIEW (alternativo) ── -->
   <div id="eq-table-view" style="display:none">
-    <div class="tbl-card" style="margin-bottom:12px">
-      <div class="filters">
-        <div class="fg" style="position:relative"><label>Tipo</label><div id="ft-tipo-btn" class="multi-tipo-btn" onclick="toggleTipoDropdown('ft-tipo-dd', event)" title="Selecionar tipos"><span id="ft-tipo-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg" style="position:relative"><label>Cliente</label><div id="ft-cli-btn" class="multi-tipo-btn" onclick="toggleMultiDD('ft-cli-dd','ft-cli-btn',event)" title="Selecionar clientes"><span id="ft-cli-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg" style="position:relative"><label>Localização</label><div id="ft-local-btn" class="multi-tipo-btn" onclick="toggleMultiDD('ft-local-dd','ft-local-btn',event)" title="Selecionar localizações"><span id="ft-local-label">Todas</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg" style="position:relative"><label>Responsável</label><div id="ft-resp-btn" class="multi-tipo-btn" onclick="toggleMultiDD('ft-resp-dd','ft-resp-btn',event)" title="Selecionar responsáveis"><span id="ft-resp-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg" style="position:relative"><label>Empresa</label><div id="ft-emp-btn" class="multi-tipo-btn" onclick="toggleMultiDD('ft-emp-dd','ft-emp-btn',event)" title="Selecionar empresas"><span id="ft-emp-label">Todas</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg" style="position:relative"><label>Status Op.</label><div id="ft-status-btn" class="multi-tipo-btn" onclick="toggleMultiDD('ft-status-dd','ft-status-btn',event)" title="Selecionar status"><span id="ft-status-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg" style="position:relative"><label>Calibração</label><div id="ft-calib-btn" class="multi-tipo-btn" onclick="toggleMultiDD('ft-calib-dd','ft-calib-btn',event)" title="Selecionar calibração"><span id="ft-calib-label">Todos</span><span class="multi-tipo-arrow">&#9662;</span></div></div>
-        <div class="fg"><label>De</label><input type="date" id="ft-de" onchange="syncTblFilter('f-de',this.value)"></div>
-        <div class="fg"><label>Até</label><input type="date" id="ft-ate" onchange="syncTblFilter('f-ate',this.value)"></div>
-        <div class="fg" style="min-width:150px">
-          <label>Últ. Calib. (mês/ano)</label>
-          <input type="month" id="ft-ult-calib-mes" onchange="syncTblFilter('f-ult-calib-mes',this.value)" style="width:100%">
-        </div>
-        <div class="fg" style="min-width:150px">
-          <label>Próx. Calib. (mês/ano)</label>
-          <input type="month" id="ft-prox-calib-mes" onchange="syncTblFilter('f-prox-calib-mes',this.value)" style="width:100%">
-        </div>
-        <div class="fg" style="min-width:170px"><label>Buscar</label><input id="ft-search" type="text" placeholder="Código, descrição..." oninput="syncTblFilter('f-search',this.value)"></div>
-        <div style="align-self:flex-end;display:flex;gap:5px">
-          <button class="btn-g" onclick="applyFiltersNow()" title="Reaplicar filtros e atualizar gráficos">🔄 Aplicar</button>
-          <button class="btn-g" onclick="clearF()">✕ Limpar</button>
-        </div>
-      </div>
-    </div>
+    <!-- Hidden IDs para compatibilidade com syncTblFilter() -->
+    <input type="hidden" id="ft-de"><input type="hidden" id="ft-ate">
+    <input type="hidden" id="ft-ult-calib-de"><input type="hidden" id="ft-ult-calib-ate">
+    <input type="hidden" id="ft-prox-calib-de"><input type="hidden" id="ft-prox-calib-ate">
     <div class="tbl-card">
       <div class="tbl-hdr">
         <span class="tbl-title">Equipamentos de Medição</span>
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
           <span class="tbl-cnt" id="eq-cnt-tbl">—</span>
+          <input class="search-box" id="ft-search" placeholder="🔍 Buscar código, descrição..." oninput="syncTblFilter('f-search',this.value)" style="min-width:200px">
+          <button class="btn-g" onclick="clearF()" title="Limpar todos os filtros">✕ Limpar</button>
           <div class="col-panel"><button class="btn-g" id="btn-cols-eq" onclick="showColMenu('geral',this,event)">⚙ <span data-i18n="btn_cols_lbl">Colunas</span></button></div>
           <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
           <button class="btn-g" onclick="toggleEqView()" title="Voltar para lista de cards">☰ Lista</button>
@@ -1974,8 +2059,22 @@ input[type="checkbox"], input[type="radio"] {
       <div class="fg"><label>Empresa</label><select id="rep-f-emp" onchange="applyRepF()"><option value="">Todas</option></select></div>
       <div class="fg"><label>Status Op.</label><select id="rep-f-status" onchange="applyRepF()"><option value="">Todos</option><option>ATIVO</option><option>INATIVO</option></select></div>
       <div class="fg"><label>Calibração</label><select id="rep-f-calib" onchange="applyRepF()"><option value="">Todos</option><option value="ok">OK</option><option value="vencido">Vencido</option></select></div>
-      <div class="fg"><label>Últ. Calib. (mês/ano)</label><input type="month" id="rep-f-ult-mes" onchange="applyRepF()"></div>
-      <div class="fg"><label>Próx. Calib. (mês/ano)</label><input type="month" id="rep-f-prox-mes" onchange="applyRepF()"></div>
+      <div class="fg" style="min-width:220px">
+        <label>Últ. Calib. (mês/ano)</label>
+        <div style="display:flex;gap:4px;align-items:center">
+          <input type="month" id="rep-f-ult-mes-de" onchange="applyRepF()" style="flex:1;min-width:0" title="De">
+          <span style="font-size:11px;color:#888">até</span>
+          <input type="month" id="rep-f-ult-mes-ate" onchange="applyRepF()" style="flex:1;min-width:0" title="Até">
+        </div>
+      </div>
+      <div class="fg" style="min-width:220px">
+        <label>Próx. Calib. (mês/ano)</label>
+        <div style="display:flex;gap:4px;align-items:center">
+          <input type="month" id="rep-f-prox-mes-de" onchange="applyRepF()" style="flex:1;min-width:0" title="De">
+          <span style="font-size:11px;color:#888">até</span>
+          <input type="month" id="rep-f-prox-mes-ate" onchange="applyRepF()" style="flex:1;min-width:0" title="Até">
+        </div>
+      </div>
       <div class="fg"><label>Buscar</label><input id="rep-f-search" type="text" placeholder="Código, descrição..." oninput="applyRepF()"></div>
       <div style="display:flex;gap:5px;align-items:end">
         <button class="btn-g" onclick="applyRepF()" title="Reaplicar filtros">🔄 Aplicar</button>
@@ -3097,7 +3196,7 @@ function recalcDias(records) {
     let dv = diffDaysUTC(r.prox_calib);
     // Legacy fallback for non-ISO dates
     if(dv===null && r.prox_calib) {
-      try { dv = Math.round((new Date(r.prox_calib+'T00:00:00') - new Date(new Date().setHours(0,0,0,0))) / 86400000); } catch(e){}
+      try { dv = Math.round((new Date(r.prox_calib+'T00:00:00') - new Date(new Date().setHours(0,0,0,0))) / 86400000); } catch(e){ console.warn('[recalcDias]', e); }
     }
     // Auto-correct status_calib based on real date (fix stale Excel/localStorage data)
     let sc = r.status_calib || '';
@@ -3136,10 +3235,10 @@ function setSyncInd(text, color, spin) {
 
 // ── localStorage (cache offline) ─────────────────────────────────
 function saveLS() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(DB.map(r=>{const{dias_vencer,...rest}=r;return rest;}))); } catch(e){}
+  try { localStorage.setItem(LS_KEY, JSON.stringify(DB.map(r=>{const{dias_vencer,...rest}=r;return rest;}))); } catch(e){ console.warn('[saveLS]', e); }
 }
 function loadLS() {
-  try { const s=localStorage.getItem(LS_KEY); if(s){DB=recalcDias(JSON.parse(s));return true;} } catch(e){}
+  try { const s=localStorage.getItem(LS_KEY); if(s){DB=recalcDias(JSON.parse(s));return true;} } catch(e){ console.warn('[loadLS]', e); }
   return false;
 }
 
@@ -3268,9 +3367,7 @@ function fbStartListen() {
       updateKPIs(); buildAllCharts(); populateFilters();
       const hasFilter = _selectedTipos.size > 0 ||
         Object.values(_multiSel).some(function(s){return s.size>0;}) ||
-        ['f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search']
-        .some(id => { const el=document.getElementById(id); return el && el.value; });
-      if(hasFilter) applyF(); else refreshInPlace();
+        ['f-de','f-ate','f-ult-calib-de','f-ult-calib-ate','f-prox-calib-de','f-prox-calib-ate','f-search']
       renderAlerts();
       setSyncInd('🔥 Atualizado ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
     }
@@ -3300,8 +3397,19 @@ function openGsConfig() {
           <code id="fb-rules" style="display:block;background:var(--bg);border:1px solid var(--bdr2);border-radius:4px;padding:8px 40px 8px 10px;font-family:var(--mono);font-size:10px;color:var(--accent2);white-space:pre">rules_version = '2';
 service cloud.firestore {
   match /databases/{db}/documents {
-    match /{doc=**} {
-      allow read, write: if request.auth != null;
+    // Coleção principal — só usuários autenticados (não anônimos)
+    match /equipamentos/{doc} {
+      allow read:  if request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous';
+      allow write: if request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    // Ficha pública (QR) — leitura aberta SOMENTE em subcoleção dedicada
+    match /equipamentos_publicos/{doc} {
+      allow read:  if true;
+      allow write: if request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    // Bloqueia o resto por padrão
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }</code>
@@ -3450,14 +3558,19 @@ async function initFirebase() {
   if (!viewId) return;
 
   // Injeta overlay de ficha pública antes do login aparecer
+  // XSS-safe HTML escaper — escapes both text and attribute contexts
+  function _escPub(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/`/g,'&#96;');}
+  // Allow only safe color tokens (hex or rgb/rgba) — prevents CSS injection through statusColor/barColor
+  function _safeColor(c){ return /^#[0-9a-f]{3,8}$|^rgba?\([\d,\s.]+\)$/i.test(String(c||'')) ? c : '#6b7280'; }
+
   function buildPublicView(record) {
     const r = record;
     const d = r.dias_vencer;
     const fmt = v => v ? new Date(v+'T00:00:00').toLocaleDateString('pt-BR') : '—';
-    const statusColor = d === null ? '#6b7280' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : '#16a34a';
-    const statusText  = d === null ? '—' : d < 0 ? `⛔ Vencido há ${Math.abs(d)} dias` : d === 0 ? '🔴 Vence HOJE' : d <= 30 ? `⚠️ Vence em ${d} dias` : `✓ Em dia (+${d} dias)`;
+    const statusColor = _safeColor(d === null ? '#6b7280' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : '#16a34a');
+    const statusText  = d === null ? '—' : d < 0 ? `⛔ Vencido há ${Math.abs(d)|0} dias` : d === 0 ? '🔴 Vence HOJE' : d <= 30 ? `⚠️ Vence em ${d|0} dias` : `✓ Em dia (+${d|0} dias)`;
     const pct = r.freq_dias && d !== null ? Math.max(0, Math.min(100, Math.round(d / r.freq_dias * 100))) : 0;
-    const barColor = d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : d <= 90 ? '#f59e0b' : '#16a34a';
+    const barColor = _safeColor(d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : d <= 90 ? '#f59e0b' : '#16a34a');
 
     const ov = document.createElement('div');
     ov.id = 'public-view-ov';
@@ -3473,11 +3586,11 @@ async function initFirebase() {
                 <line x1="0" y1="31" x2="155" y2="31" stroke="#0064b3" stroke-width="1.5" opacity="0.35"/>
                 <text x="1" y="41" font-family="Arial,sans-serif" font-size="8.5" font-weight="600" fill="#0064b3" letter-spacing="3.2">AUTOMOTIVE</text>
               </svg>
-              <div style="font-size:10px;color:#6b7280;font-family:monospace;letter-spacing:.5px;margin-bottom:4px">${r.id || '—'}</div>
-              <div style="font-size:20px;font-weight:800;color:#1a1a1a;line-height:1.2">${r.descricao || r.tipo || '—'}</div>
-              <div style="font-size:12px;color:#6b7280;margin-top:3px">${[r.tipo,r.fabricante].filter(Boolean).join(' · ') || '—'}</div>
+              <div style="font-size:10px;color:#6b7280;font-family:monospace;letter-spacing:.5px;margin-bottom:4px">${_escPub(r.id || '—')}</div>
+              <div style="font-size:20px;font-weight:800;color:#1a1a1a;line-height:1.2">${_escPub(r.descricao || r.tipo || '—')}</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:3px">${_escPub([r.tipo,r.fabricante].filter(Boolean).join(' · ') || '—')}</div>
             </div>
-            <div style="display:inline-flex;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:800;border:1.5px solid ${statusColor};background:${statusColor}14;color:${statusColor};white-space:nowrap;flex-shrink:0">${statusText}</div>
+            <div style="display:inline-flex;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:800;border:1.5px solid ${statusColor};background:${statusColor}14;color:${statusColor};white-space:nowrap;flex-shrink:0">${_escPub(statusText)}</div>
           </div>
         </div>
 
@@ -3501,8 +3614,8 @@ async function initFirebase() {
           ].map((item,i) => `
             <div style="padding:12px 14px;text-align:center;${i<2?'border-right:1px solid #e8eaf0':''}">
               <div style="font-size:18px;margin-bottom:3px">${item[0]}</div>
-              <div style="font-size:8.5px;font-weight:700;color:#9ca3bc;text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px">${item[1]}</div>
-              <div style="font-family:monospace;font-size:12px;font-weight:700;color:#1a1a1a">${item[2]}</div>
+              <div style="font-size:8.5px;font-weight:700;color:#9ca3bc;text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px">${_escPub(item[1])}</div>
+              <div style="font-family:monospace;font-size:12px;font-weight:700;color:#1a1a1a">${_escPub(item[2])}</div>
             </div>`).join('')}
         </div>
 
@@ -3519,13 +3632,13 @@ async function initFirebase() {
             ['Cód. Labortec', r.cod_lab],
           ].map(([lbl,val]) => `
             <div>
-              <div style="font-size:9px;font-weight:700;color:#9ca3bc;text-transform:uppercase;letter-spacing:.7px;margin-bottom:2px">${lbl}</div>
-              <div style="font-size:12.5px;font-weight:500;color:#1a1a1a">${val || '—'}</div>
+              <div style="font-size:9px;font-weight:700;color:#9ca3bc;text-transform:uppercase;letter-spacing:.7px;margin-bottom:2px">${_escPub(lbl)}</div>
+              <div style="font-size:12.5px;font-weight:500;color:#1a1a1a">${_escPub(val || '—')}</div>
             </div>`).join('')}
         </div>
 
         ${(r.observacoes || r.notes) ? `
-        <div style="margin:0 24px 16px;padding:10px 14px;background:#f8f9fc;border:1px solid #e8eaf0;border-radius:8px;font-size:11.5px;color:#374151;line-height:1.6;white-space:pre-wrap">${r.observacoes || r.notes}</div>
+        <div style="margin:0 24px 16px;padding:10px 14px;background:#f8f9fc;border:1px solid #e8eaf0;border-radius:8px;font-size:11.5px;color:#374151;line-height:1.6;white-space:pre-wrap">${_escPub(r.observacoes || r.notes)}</div>
         ` : ''}
 
         <div style="padding:12px 24px;border-top:1px solid #e8eaf0;text-align:center;font-size:10px;color:#9ca3bc">
@@ -3558,7 +3671,7 @@ async function initFirebase() {
       ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:DM Sans,system-ui,sans-serif;flex-direction:column;gap:6px;padding:24px;text-align:center';
       ov.innerHTML = '<div style="font-size:36px">🔍</div>'
         + '<div style="font-size:16px;font-weight:700;color:#1a1a1a">Equipamento não encontrado</div>'
-        + '<div style="font-size:12px;color:#6b7280;font-family:monospace">ID buscado: <b>' + decodeURIComponent(viewId) + '</b></div>'
+        + '<div style="font-size:12px;color:#6b7280;font-family:monospace">ID buscado: <b>' + _escPub(decodeURIComponent(viewId)) + '</b></div>'
         + (dbCount === 0
             ? '<div style="font-size:11px;color:#dc2626;margin-top:6px">⚠️ Base vazia — leitura Firestore bloqueada pelas Security Rules.<br>Habilite Auth Anônima no Firebase Console e verifique as regras.</div>'
             : '<div style="font-size:11px;color:#6b7280;margin-top:4px">Base carregada com ' + dbCount + ' registro(s). ID não encontrado.</div>');
@@ -3630,12 +3743,8 @@ async function initFirebaseAndAuth() {
 
   let app;
   try {
-    // Elimina app anterior e cria um único app que serve Auth + Firestore
-    // (não executa em modo público para não matar o app usado na leitura anônima)
-    if (!new URLSearchParams(window.location.search).has('view')) {
-      try { await firebase.app().delete(); } catch(e){}
-    }
-    app = firebase.initializeApp(cfg);
+    // Reuse existing app if present (idempotent); only initialize once
+    try { app = firebase.app(); } catch(_) { app = firebase.initializeApp(cfg); }
     _auth = firebase.auth(app);
     // Firestore é inicializado DEPOIS do login (em showApp → initFirebase)
   } catch(e) {
@@ -3673,6 +3782,32 @@ function showLoginScreen() {
   if(chip) chip.style.display = 'none';
 }
 
+
+// Password reset flow (added by security audit)
+async function doForgotPassword(ev) {
+  if (ev && ev.preventDefault) ev.preventDefault();
+  if (!_auth) { alert('Serviço indisponível. Recarregue a página.'); return; }
+  const emailField = document.getElementById('login-email');
+  const email = (emailField && emailField.value || '').trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    alert('Digite seu e-mail no campo acima e clique em "Esqueci minha senha".');
+    if (emailField) emailField.focus();
+    return;
+  }
+  try {
+    await _auth.sendPasswordResetEmail(email);
+    alert('Enviamos um link de redefinição de senha para ' + email + '. Verifique sua caixa de entrada (e o spam).');
+  } catch (e) {
+    console.warn('[forgotPassword]', e);
+    // Don't leak whether email exists — generic message
+    alert('Se o e-mail estiver cadastrado, você receberá um link em instantes.');
+  }
+}
+document.addEventListener('DOMContentLoaded', function(){
+  var f = document.getElementById('login-forgot');
+  if (f) f.addEventListener('click', doForgotPassword);
+});
+
 async function doLogin() {
   const email    = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-pass').value;
@@ -3691,11 +3826,26 @@ async function doLogin() {
     return;
   }
 
+  // Input validation (defense in depth — Firebase also validates)
+  if(email.length > 254 || password.length > 128) {
+    errMsg.textContent = 'Credenciais com tamanho inválido.';
+    errEl.classList.add('on');
+    return;
+  }
+  // Basic email shape check
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errMsg.textContent = 'Endereço de e-mail inválido.';
+    errEl.classList.add('on');
+    return;
+  }
+
   btn.disabled = true;
   btn.classList.add('loading');
   errEl.classList.remove('on');
 
   try {
+    // Set persistence BEFORE sign-in for predictable session behavior
+    try { await _auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(pe){ console.warn('[setPersistence]', pe); }
     await _auth.signInWithEmailAndPassword(email, password);
     // onAuthStateChanged → showApp cuida do resto
   } catch(err) {
@@ -4048,7 +4198,7 @@ function buildMensalChart() {
     };
   }
 }
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/`/g,'&#96;');}
 
 function diasBadge(d){
   if(d===null||d===undefined)return '<span class="badge b-gray">—</span>';
@@ -4327,15 +4477,55 @@ function startInlineEdit(uid, k, td) {
   input.focus();
   if(input.select) input.select();
 
-  input.addEventListener('keydown', e => {
-    if(e.key === 'Enter')  { e.preventDefault(); commitInlineEdit(false); }
-    if(e.key === 'Escape') { e.preventDefault(); cancelInlineEdit(); }
-    if(e.key === 'Tab')    { e.preventDefault(); commitInlineEdit(false); moveInlineFocus(uid, k, e.shiftKey ? -1 : 1); }
-    e.stopPropagation();
-  });
-  input.addEventListener('blur', () => setTimeout(() => { if(_inlineActive) commitInlineEdit(false); }, 150));
-  if(cfg.type === 'select') {
+  // Para campos de data: abre o calendário automaticamente ao clicar na célula
+  if(cfg.type === 'date') {
+    requestAnimationFrame(() => {
+      try { if(typeof input.showPicker === 'function') input.showPicker(); } catch(e) {}
+    });
+  }
+
+  if(cfg.type === 'date') {
+    // IMPORTANTE: NÃO usar 'change' em input[type=date] para commit.
+    // Chrome/Edge dispara 'change' assim que o segmento do DIA é preenchido,
+    // antes de o usuário digitar mês e ano — o que destrói o input prematuramente.
+    // Estratégia:
+    //   • Digitação manual → confirma com Enter ou Tab
+    //   • Calendário picker → ao selecionar a data, o input perde foco → blur commita
+    let _dateCommitted = false;
+    const commitDate = () => {
+      if(_dateCommitted) return;
+      _dateCommitted = true;
+      commitInlineEdit(false);
+    };
+    // SEM 'change' — cobre calendário via blur e teclado via Enter/Tab
+    input.addEventListener('keydown', e => {
+      if(e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        // Pequeno delay para garantir que input.value foi atualizado pelo browser
+        setTimeout(commitDate, 30);
+      }
+      if(e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancelInlineEdit(); }
+      if(e.key === 'Tab')    { e.preventDefault(); e.stopPropagation(); setTimeout(commitDate, 30); setTimeout(() => moveInlineFocus(uid, k, e.shiftKey ? -1 : 1), 60); }
+    });
+    // blur cobre: (1) calendário picker fecha e input perde foco; (2) usuário clica fora
+    input.addEventListener('blur', () => setTimeout(commitDate, 300));
+  } else if(cfg.type === 'select') {
     input.addEventListener('change', () => commitInlineEdit(false));
+    input.addEventListener('keydown', e => {
+      if(e.key === 'Enter')  { e.preventDefault(); commitInlineEdit(false); }
+      if(e.key === 'Escape') { e.preventDefault(); cancelInlineEdit(); }
+      if(e.key === 'Tab')    { e.preventDefault(); commitInlineEdit(false); moveInlineFocus(uid, k, e.shiftKey ? -1 : 1); }
+      e.stopPropagation();
+    });
+  } else {
+    input.addEventListener('keydown', e => {
+      if(e.key === 'Enter')  { e.preventDefault(); commitInlineEdit(false); }
+      if(e.key === 'Escape') { e.preventDefault(); cancelInlineEdit(); }
+      if(e.key === 'Tab')    { e.preventDefault(); commitInlineEdit(false); moveInlineFocus(uid, k, e.shiftKey ? -1 : 1); }
+      e.stopPropagation();
+    });
+    input.addEventListener('blur', () => setTimeout(() => { if(_inlineActive) commitInlineEdit(false); }, 150));
   }
 }
 
@@ -4381,7 +4571,7 @@ function recalcRecord(r) {
   }
 }
 
-function commitInlineEdit(silent) {
+function _origCommitInlineEdit(silent) {
   if(!_inlineActive) return;
   const { uid, k, td } = _inlineActive;
   const input = td.querySelector('input,select');
@@ -4561,8 +4751,12 @@ function renderTable(tbl) {
       return `<th data-col="${c.k}" style="width:${w}px;min-width:${w}px;max-width:${w}px"><div class="th-inner" style="font-size:10px;color:var(--tx3);font-weight:600;letter-spacing:.3px">${c.l||''}</div></th>`;
     }
     const arr = s&&s.k===c.k ? (s.d==='asc'?' ↑':' ↓') : '';
-    return `<th data-col="${c.k}" style="width:${w}px;min-width:${w}px;max-width:${w}px">
-      <div class="th-inner" onclick="sortTable('${tbl}','${c.k}')"><span>${c.l}${arr}</span></div>
+    const _cfActive = typeof _cflActive === 'function' && _cflActive(tbl, c.k);
+    return `<th data-col="${c.k}" style="width:${w}px;min-width:${w}px;max-width:${w}px"${_cfActive?' class="has-col-filter"':''}>
+      <div class="th-inner-wrap">
+        <div class="th-inner" onclick="sortTable('${tbl}','${c.k}')"><span>${c.l}${arr}</span></div>
+        <button class="th-filter-btn${_cfActive?' active':''}" title="Filtrar por ${c.l}" onclick="toggleColFilterDd('${tbl}','${c.k}',event)">▾</button>
+      </div>
       <div class="resizer"></div>
     </th>`;
   }).join('')+'</tr>';
@@ -4972,7 +5166,8 @@ function syncTblFilter(targetId, value) {
 function _syncFiltersToTableView() {
   var pairs = [
     ['f-de','ft-de'],['f-ate','ft-ate'],
-    ['f-ult-calib-mes','ft-ult-calib-mes'],['f-prox-calib-mes','ft-prox-calib-mes'],
+    ['f-ult-calib-de','ft-ult-calib-de'],['f-ult-calib-ate','ft-ult-calib-ate'],
+    ['f-prox-calib-de','ft-prox-calib-de'],['f-prox-calib-ate','ft-prox-calib-ate'],
     ['f-search','ft-search']
   ];
   pairs.forEach(function(p){
@@ -4988,7 +5183,8 @@ function _syncFiltersToTableView() {
 function _syncFiltersFromTableView() {
   var pairs = [
     ['ft-de','f-de'],['ft-ate','f-ate'],
-    ['ft-ult-calib-mes','f-ult-calib-mes'],['ft-prox-calib-mes','f-prox-calib-mes'],
+    ['ft-ult-calib-de','f-ult-calib-de'],['ft-ult-calib-ate','f-ult-calib-ate'],
+    ['ft-prox-calib-de','f-prox-calib-de'],['ft-prox-calib-ate','f-prox-calib-ate'],
     ['ft-search','f-search']
   ];
   pairs.forEach(function(p){
@@ -4997,7 +5193,7 @@ function _syncFiltersFromTableView() {
   });
 }
 
-const FILTER_IDS = ['f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search'];
+const FILTER_IDS = ['f-de','f-ate','f-ult-calib-de','f-ult-calib-ate','f-prox-calib-de','f-prox-calib-ate','f-search'];
 function _saveFilters(){ try{
   var o={};
   FILTER_IDS.forEach(function(id){var e=document.getElementById(id); if(e&&e.value) o[id]=e.value;});
@@ -5031,7 +5227,8 @@ function applyF() {
   _saveFilters();
   var g=function(id){return (document.getElementById(id)||{}).value||'';};
   var de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
-  var ultCalibMes=g('f-ult-calib-mes'), proxCalibMes=g('f-prox-calib-mes');
+  var ultCalibDe=g('f-ult-calib-de'), ultCalibAte=g('f-ult-calib-ate');
+  var proxCalibDe=g('f-prox-calib-de'), proxCalibAte=g('f-prox-calib-ate');
   var rows = DB.slice();
   if(_selectedTipos.size>0) rows=rows.filter(function(r){return _selectedTipos.has(r.tipo);});
   var mCli   = _multiSel['f-cli']    || new Set();
@@ -5054,9 +5251,12 @@ function applyF() {
   }
   if(de)  rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib>=de;});
   if(ate) rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib<=ate;});
-  if(ultCalibMes) rows=rows.filter(function(r){return r.ult_calib&&r.ult_calib.slice(0,7)===ultCalibMes;});
-  if(proxCalibMes) rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib.slice(0,7)===proxCalibMes;});
+  if(ultCalibDe)  rows=rows.filter(function(r){return r.ult_calib&&r.ult_calib.slice(0,7)>=ultCalibDe;});
+  if(ultCalibAte) rows=rows.filter(function(r){return r.ult_calib&&r.ult_calib.slice(0,7)<=ultCalibAte;});
+  if(proxCalibDe)  rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib.slice(0,7)>=proxCalibDe;});
+  if(proxCalibAte) rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib.slice(0,7)<=proxCalibAte;});
   if(q)   rows=rows.filter(function(r){return Object.values(r).join(' ').toLowerCase().includes(q);});
+  if(typeof _applyColFilters==='function') rows=_applyColFilters(rows,'geral');
   pag.eq.rows=rows; pag.eq.p=1; renderTable('geral');
 }
 
@@ -5064,7 +5264,8 @@ function applyF() {
 function refreshInPlace() {
   var g = function(id){ return (document.getElementById(id)||{}).value||''; };
   var de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
-  var ultCalibMes=g('f-ult-calib-mes'), proxCalibMes=g('f-prox-calib-mes');
+  var ultCalibDe=g('f-ult-calib-de'), ultCalibAte=g('f-ult-calib-ate');
+  var proxCalibDe=g('f-prox-calib-de'), proxCalibAte=g('f-prox-calib-ate');
   var rows = DB.slice();
   if(_selectedTipos.size>0) rows=rows.filter(function(r){return _selectedTipos.has(r.tipo);});
   var mCli   = _multiSel['f-cli']    || new Set();
@@ -5087,9 +5288,12 @@ function refreshInPlace() {
   }
   if(de)  rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib>=de;});
   if(ate) rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib<=ate;});
-  if(ultCalibMes)  rows=rows.filter(function(r){return r.ult_calib&&r.ult_calib.slice(0,7)===ultCalibMes;});
-  if(proxCalibMes) rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib.slice(0,7)===proxCalibMes;});
+  if(ultCalibDe)  rows=rows.filter(function(r){return r.ult_calib&&r.ult_calib.slice(0,7)>=ultCalibDe;});
+  if(ultCalibAte) rows=rows.filter(function(r){return r.ult_calib&&r.ult_calib.slice(0,7)<=ultCalibAte;});
+  if(proxCalibDe)  rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib.slice(0,7)>=proxCalibDe;});
+  if(proxCalibAte) rows=rows.filter(function(r){return r.prox_calib&&r.prox_calib.slice(0,7)<=proxCalibAte;});
   if(q)   rows=rows.filter(function(r){return Object.values(r).join(' ').toLowerCase().includes(q);});
+  if(typeof _applyColFilters==='function') rows=_applyColFilters(rows,'geral');
 
   // Re-apply current sort WITHOUT changing it
   const s = sortState['geral'];
@@ -5126,7 +5330,7 @@ function refreshInPlace() {
 function clearF(){
   FILTER_IDS.forEach(function(id){var el=document.getElementById(id);if(el&&el.tagName==='INPUT')el.value='';});
   // Also clear table-view date/search mirror fields
-  ['ft-de','ft-ate','ft-ult-calib-mes','ft-prox-calib-mes','ft-search']
+  ['ft-de','ft-ate','ft-ult-calib-de','ft-ult-calib-ate','ft-prox-calib-de','ft-prox-calib-ate','ft-search']
     .forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   // Reset multi-select tipo
   _selectedTipos.clear();
@@ -5145,6 +5349,12 @@ function clearF(){
     });
     _multiUpdateLabel(canonicalId);
   });
+  // Reset column header filters
+  if(typeof _colFilters !== 'undefined') {
+    Object.keys(_colFilters).forEach(function(k){ _colFilters[k].clear(); });
+    var portal = document.getElementById('col-filter-portal');
+    if(portal) portal.classList.remove('cfd-open');
+  }
   try{localStorage.removeItem('rochling_filters_v1');}catch(e){}
   applyF();
 }
@@ -5328,7 +5538,9 @@ function _repFilterRows(){
   const g=id=>(document.getElementById(id)||{}).value||'';
   const tipo=g('rep-f-tipo'),cli=g('rep-f-cli'),local=g('rep-f-local'),resp=g('rep-f-resp'),
         emp=g('rep-f-emp'),stat=g('rep-f-status'),calib=g('rep-f-calib'),
-        ultM=g('rep-f-ult-mes'),proxM=g('rep-f-prox-mes'),q=g('rep-f-search').toLowerCase();
+        ultMDe=g('rep-f-ult-mes-de'),ultMAte=g('rep-f-ult-mes-ate'),
+        proxMDe=g('rep-f-prox-mes-de'),proxMAte=g('rep-f-prox-mes-ate'),
+        q=g('rep-f-search').toLowerCase();
   let rows=DB.filter(r=>{
     if(!r.prox_calib) return false;
     const d=new Date(r.prox_calib+'T00:00:00');
@@ -5344,8 +5556,10 @@ function _repFilterRows(){
   if(stat)  rows=rows.filter(r=>(r.status||'').toUpperCase()===stat.toUpperCase());
   if(calib==='ok')      rows=rows.filter(r=>r.dias_vencer===null||r.dias_vencer>=0);
   if(calib==='vencido') rows=rows.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0);
-  if(ultM)  rows=rows.filter(r=>r.ult_calib&&r.ult_calib.slice(0,7)===ultM);
-  if(proxM) rows=rows.filter(r=>r.prox_calib&&r.prox_calib.slice(0,7)===proxM);
+  if(ultMDe)  rows=rows.filter(r=>r.ult_calib&&r.ult_calib.slice(0,7)>=ultMDe);
+  if(ultMAte) rows=rows.filter(r=>r.ult_calib&&r.ult_calib.slice(0,7)<=ultMAte);
+  if(proxMDe)  rows=rows.filter(r=>r.prox_calib&&r.prox_calib.slice(0,7)>=proxMDe);
+  if(proxMAte) rows=rows.filter(r=>r.prox_calib&&r.prox_calib.slice(0,7)<=proxMAte);
   if(q)     rows=rows.filter(r=>Object.values(r).join(' ').toLowerCase().includes(q));
   rows.sort((a,b)=>new Date(a.prox_calib)-new Date(b.prox_calib));
   return rows;
@@ -5361,7 +5575,7 @@ function buildRepTable() {
 }
 function applyRepF(){ buildRepTable(); }
 function clearRepF(){
-  ['rep-f-tipo','rep-f-cli','rep-f-local','rep-f-resp','rep-f-emp','rep-f-status','rep-f-calib','rep-f-ult-mes','rep-f-prox-mes','rep-f-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['rep-f-tipo','rep-f-cli','rep-f-local','rep-f-resp','rep-f-emp','rep-f-status','rep-f-calib','rep-f-ult-mes-de','rep-f-ult-mes-ate','rep-f-prox-mes-de','rep-f-prox-mes-ate','rep-f-search'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const de=document.getElementById('rep-de'),ate=document.getElementById('rep-ate');
   if(de) de.value=''; if(ate) ate.value='';
   buildRepTable();
@@ -5872,7 +6086,7 @@ function updateAll(){
   const isFirstLoad = !pag.eq.rows || pag.eq.rows.length === 0;
   const hasFilter = _selectedTipos.size > 0 ||
     Object.values(_multiSel).some(function(s){ return s.size>0; }) ||
-    ['f-de','f-ate','f-ult-calib-mes','f-prox-calib-mes','f-search']
+    ['f-de','f-ate','f-ult-calib-de','f-ult-calib-ate','f-prox-calib-de','f-prox-calib-ate','f-search']
     .some(id => { const el=document.getElementById(id); return el && el.value; });
 
   if(isFirstLoad) {
@@ -8777,4 +8991,360 @@ function closeFontPicker() {
 })();
 </script>
 
+<!-- ═══ SAVE EDITS FLOATING BAR ═══ -->
+<div id="save-edits-bar">
+  <span class="seb-icon">✏️</span>
+  <span class="seb-msg">Alterações não salvas</span>
+  <span class="seb-count" id="seb-count">0</span>
+  <button class="seb-save" onclick="commitAllPendingEdits()">💾 Salvar alterações</button>
+  <button class="seb-discard" onclick="discardAllPendingEdits()">✕ Descartar</button>
+</div>
 
+<script>
+// ── SAVE-BAR: rastreia edições pendentes de forma explícita ──────────────────
+// Sobrescreve commitInlineEdit para acumular edições sem salvar no Firebase
+// até o usuário clicar "Salvar alterações".
+
+(function() {
+
+  // Guarda snapshot do DB antes de qualquer edição na sessão de edição atual
+  let _snapshotDB = null;       // JSON snapshot para descartar
+  let _pendingEdits = [];       // [{ uid, k, oldVal, newVal }]
+
+  function sebShow() {
+    const bar = document.getElementById('save-edits-bar');
+    const cnt = document.getElementById('seb-count');
+    if(!bar || !cnt) return;
+    cnt.textContent = _pendingEdits.length;
+    bar.classList.add('visible');
+  }
+  function sebHide() {
+    const bar = document.getElementById('save-edits-bar');
+    if(bar) bar.classList.remove('visible');
+  }
+
+  // ── Patch: commitInlineEdit ──
+  // Salva localmente e re-renderiza imediatamente,
+  // mas só envia ao Firebase quando o usuário confirmar.
+  // NOTA: _inlineActive, DB e _statsCache são declarados com let/const no escopo
+  // global e NÃO ficam em window — por isso usamos as variáveis diretamente.
+  window.commitInlineEdit = function(silent) {
+    if(!_inlineActive) return;
+    const { uid, k, td } = _inlineActive;
+    const input = td.querySelector('input,select');
+    if(!input) { _inlineActive = null; return; }
+
+    const newVal = k === 'freq_dias'
+      ? (parseInt(input.value) || null)
+      : input.value.trim();
+    const r = DB && DB.find(x => x._uid === uid);
+
+    // Normaliza datas para comparação (garante formato YYYY-MM-DD dos dois lados)
+    function normDate(v) {
+      if(!v) return '';
+      var s = String(v).trim();
+      // Já está em YYYY-MM-DD
+      if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      // Tenta converter DD/MM/YYYY
+      var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if(m) return m[3]+'-'+m[2]+'-'+m[1];
+      return s;
+    }
+    var compareOld = (k==='ult_calib'||k==='prox_calib') ? normDate(r&&r[k]) : String((r&&r[k])||'');
+    var compareNew = (k==='ult_calib'||k==='prox_calib') ? normDate(newVal)  : String(newVal||'');
+    // Se campo date, também normaliza o newVal antes de salvar
+    var finalVal = (k==='ult_calib'||k==='prox_calib') ? normDate(newVal) : newVal;
+
+    if(r && compareOld !== compareNew && compareNew !== '') {
+      // Tira snapshot antes da primeira edição da sessão
+      if(!_snapshotDB) {
+        _snapshotDB = JSON.stringify(DB);
+      }
+      // Registra edição pendente (merge se mesmo uid+k)
+      const existing = _pendingEdits.findIndex(e => e.uid === uid && e.k === k);
+      if(existing >= 0) {
+        _pendingEdits[existing].newVal = finalVal;
+      } else {
+        _pendingEdits.push({ uid, k, oldVal: r[k], newVal: finalVal });
+      }
+
+      pushUndo && pushUndo();
+      r[k] = finalVal;
+      _statsCache = null;
+
+      if(k === 'ult_calib' || k === 'prox_calib' || k === 'freq_dias') {
+        recalcRecord && recalcRecord(r);
+      }
+
+      _inlineActive = null;
+      // Salva só no localStorage (não Firebase)
+      window.saveLS && window.saveLS();
+
+      // Re-renderiza a linha imediatamente
+      window.rerenderRow && window.rerenderRow(uid, 'geral');
+
+      // Mostra barra de salvar
+      sebShow();
+
+      // Toast leve informando edição pendente
+      if(!silent) {
+        window.showToast && window.showToast('✏️ Editado — clique em 💾 Salvar alterações para confirmar');
+      }
+
+    } else {
+      _inlineActive = null;
+      window.rerenderRow && window.rerenderRow(uid, 'geral');
+    }
+    _inlineActive = null;
+  };
+
+  // ── Confirmar todas as edições → salva Firebase ──
+  window.commitAllPendingEdits = function() {
+    if(!_pendingEdits.length) { sebHide(); return; }
+    const n = _pendingEdits.length;
+    _pendingEdits = [];
+    _snapshotDB = null;
+    // Salva localmente e no Firebase
+    window.saveLS && window.saveLS();
+    window.fbSchedulePush && window.fbSchedulePush();
+    // Atualiza KPIs, gráficos e filtros
+    window.updateKPIs && window.updateKPIs();
+    window.buildAllCharts && window.buildAllCharts();
+    window.refreshInPlace && window.refreshInPlace();
+    sebHide();
+    window.showToast && window.showToast('✅ ' + n + ' alteração(ões) salva(s) com sucesso!');
+  };
+
+  // ── Descartar todas as edições ──
+  window.discardAllPendingEdits = function() {
+    if(!_snapshotDB) { sebHide(); return; }
+    try {
+      const restored = JSON.parse(_snapshotDB);
+      // Restaura DB preservando referência do array
+      DB.length = 0;
+      restored.forEach(r => DB.push(r));
+    } catch(e) {}
+    _pendingEdits = [];
+    _snapshotDB = null;
+    window.saveLS && window.saveLS();
+    window.refreshInPlace && window.refreshInPlace();
+    window.updateKPIs && window.updateKPIs();
+    sebHide();
+    window.showToast && window.showToast('↩️ Alterações descartadas', 'warn');
+  };
+
+})();
+</script>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// EXCEL COLUMN HEADER FILTERS — v1.0
+// Clique na ▾ de qualquer coluna para filtrar por checkboxes,
+// igual ao Excel. Suporte especial para datas ("abr-26", etc).
+// ════════════════════════════════════════════════════════════════
+
+var _colFilters = {};   // { 'geral/ult_calib': Set<string>, ... }
+
+var _MONTH_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+var _DATE_COLS = new Set(['ult_calib','prox_calib']);
+
+function _cflKey(tbl, col) { return tbl + '/' + col; }
+
+function _cflGetSet(tbl, col) {
+  var k = _cflKey(tbl, col);
+  if (!_colFilters[k]) _colFilters[k] = new Set();
+  return _colFilters[k];
+}
+
+function _cflActive(tbl, col) {
+  var k = _cflKey(tbl, col);
+  return !!(_colFilters[k] && _colFilters[k].size > 0);
+}
+
+// YYYY-MM-DD  →  "abr-26"
+function _cflFmtDate(d) {
+  if (!d) return '';
+  var m = String(d).match(/^(\d{4})-(\d{2})/);
+  if (!m) return String(d);
+  return (_MONTH_PT[parseInt(m[2],10)-1] || '???') + '-' + m[1].slice(2);
+}
+
+// "abr-26" → sortable number
+function _cflDateKey(s) {
+  var m = s.match(/^(\w{3})-(\d{2})$/);
+  if (!m) return 0;
+  return parseInt(m[2],10)*100 + _MONTH_PT.indexOf(m[1]);
+}
+
+// Unique display values + counts for a column
+function _cflGetValues(tbl, col) {
+  var isDate = _DATE_COLS.has(col);
+  var countMap = {};
+  (DB||[]).forEach(function(r) {
+    var v = r[col];
+    if (v===null||v===undefined||v==='') return;
+    var display = isDate ? _cflFmtDate(v) : String(v).trim();
+    if (display) countMap[display] = (countMap[display]||0) + 1;
+  });
+  var vals = Object.keys(countMap);
+  if (isDate) vals.sort(function(a,b){ return _cflDateKey(a)-_cflDateKey(b); });
+  else vals.sort(function(a,b){ return a.localeCompare(b,'pt-BR',{sensitivity:'base'}); });
+  return { vals:vals, counts:countMap };
+}
+
+// Apply col filters — called from applyF / refreshInPlace
+function _applyColFilters(rows, tbl) {
+  Object.keys(_colFilters).forEach(function(key) {
+    var sel = _colFilters[key];
+    if (!sel||sel.size===0) return;
+    var parts = key.split('/');
+    if (parts[0]!==tbl) return;
+    var col = parts[1], isDate = _DATE_COLS.has(col);
+    rows = rows.filter(function(r) {
+      var v = r[col];
+      if (v===null||v===undefined||v==='') return false;
+      return sel.has(isDate ? _cflFmtDate(v) : String(v).trim());
+    });
+  });
+  return rows;
+}
+
+// ── Portal dropdown singleton ─────────────────────────────────
+var _cfdPortal=null, _cfdTbl=null, _cfdCol=null;
+
+function _cfdEnsure() {
+  if (!_cfdPortal) {
+    _cfdPortal = document.createElement('div');
+    _cfdPortal.id = 'col-filter-portal';
+    document.body.appendChild(_cfdPortal);
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('#col-filter-portal') && !e.target.closest('.th-filter-btn')) {
+        _cfdPortal.classList.remove('cfd-open');
+        _cfdTbl=null; _cfdCol=null;
+      }
+    }, true);
+  }
+  return _cfdPortal;
+}
+
+function _cfdBuild(tbl, col, rect) {
+  var portal = _cfdEnsure();
+  _cfdTbl=tbl; _cfdCol=col;
+
+  var sel = _cflGetSet(tbl, col);
+  var vc  = _cflGetValues(tbl, col);
+  var colDef = (typeof COL_DEFS!=='undefined' && COL_DEFS[tbl]||[]).find(function(c){return c.k===col;});
+  var colLabel = colDef ? colDef.l : col;
+
+  portal.innerHTML = '';
+
+  // Header
+  var hdr = document.createElement('div');
+  hdr.className = 'cfd-header';
+  hdr.textContent = 'Filtrar: ' + colLabel;
+  portal.appendChild(hdr);
+
+  // Action buttons
+  var actDiv = document.createElement('div');
+  actDiv.className = 'cfd-actions';
+  actDiv.addEventListener('click', function(e){e.stopPropagation();});
+
+  var btnAll = document.createElement('button');
+  btnAll.className = 'cfd-btn-all'; btnAll.textContent = '✓ Todos';
+  btnAll.onclick = function() {
+    sel.clear();
+    portal.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=false;});
+    _cfdSync(tbl,col);
+  };
+
+  var btnClr = document.createElement('button');
+  btnClr.className = 'cfd-btn-clear'; btnClr.textContent = '✕ Limpar';
+  btnClr.onclick = function() {
+    sel.clear();
+    portal.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=false;});
+    _cfdSync(tbl,col);
+  };
+
+  actDiv.appendChild(btnAll); actDiv.appendChild(btnClr);
+  portal.appendChild(actDiv);
+
+  var sep1=document.createElement('div'); sep1.className='cfd-sep'; portal.appendChild(sep1);
+
+  // Search
+  var srch = document.createElement('input');
+  srch.className='cfd-search'; srch.placeholder='Buscar...'; srch.type='text';
+  srch.addEventListener('click',function(e){e.stopPropagation();});
+  srch.addEventListener('input',function(){
+    var q=this.value.toLowerCase();
+    listDiv.querySelectorAll('.cfd-item').forEach(function(item){
+      var t=(item.querySelector('.cfd-lbl')||{}).textContent||'';
+      item.style.display = t.toLowerCase().indexOf(q)>=0?'':'none';
+    });
+  });
+  portal.appendChild(srch);
+
+  var sep2=document.createElement('div'); sep2.className='cfd-sep'; portal.appendChild(sep2);
+
+  // List
+  var listDiv=document.createElement('div'); listDiv.className='cfd-list';
+
+  if (!vc.vals.length) {
+    var empty=document.createElement('div'); empty.className='cfd-empty'; empty.textContent='Sem dados';
+    listDiv.appendChild(empty);
+  } else {
+    vc.vals.forEach(function(val) {
+      var lbl=document.createElement('label'); lbl.className='cfd-item';
+      lbl.addEventListener('click',function(e){e.stopPropagation();});
+
+      var chk=document.createElement('input'); chk.type='checkbox'; chk.value=val; chk.checked=sel.has(val);
+      chk.addEventListener('change',function(){
+        if(this.checked) sel.add(val); else sel.delete(val);
+        _cfdSync(tbl,col);
+      });
+
+      var sp=document.createElement('span'); sp.className='cfd-lbl'; sp.textContent=val;
+      var cnt=document.createElement('span'); cnt.className='cfd-cnt'; cnt.textContent=vc.counts[val]||'';
+
+      lbl.appendChild(chk); lbl.appendChild(sp); lbl.appendChild(cnt);
+      listDiv.appendChild(lbl);
+    });
+  }
+  portal.appendChild(listDiv);
+
+  // Show & position
+  portal.classList.add('cfd-open');
+  portal.style.left = Math.min(rect.left, window.innerWidth-224)+'px';
+  portal.style.top  = (rect.bottom+4)+'px';
+  requestAnimationFrame(function(){
+    var r=portal.getBoundingClientRect();
+    if(r.bottom>window.innerHeight-8) portal.style.top=Math.max(8,rect.top-r.height-4)+'px';
+  });
+  setTimeout(function(){srch.focus();},60);
+}
+
+function _cfdSync(tbl, col) {
+  var tblIds={geral:'tbl-geral',alert:'tbl-alert',rep:'tbl-rep'};
+  var tblEl=document.getElementById(tblIds[tbl]||('tbl-'+tbl));
+  if (tblEl) {
+    var th=tblEl.querySelector('th[data-col="'+col+'"]');
+    if (th) {
+      var isActive=_cflActive(tbl,col);
+      var btn=th.querySelector('.th-filter-btn');
+      if(btn) btn.classList.toggle('active',isActive);
+      th.classList.toggle('has-col-filter',isActive);
+    }
+  }
+  if(typeof applyF==='function') applyF();
+}
+
+// ── Public: called by onclick in th header ────────────────────
+function toggleColFilterDd(tbl, col, event) {
+  if(event){event.stopPropagation();event.preventDefault();}
+  var portal=_cfdEnsure();
+  var alreadyOpen = portal.classList.contains('cfd-open') && _cfdTbl===tbl && _cfdCol===col;
+  document.querySelectorAll('.multi-tipo-dd').forEach(function(d){d.style.display='none';});
+  if(alreadyOpen){ portal.classList.remove('cfd-open'); _cfdTbl=null; _cfdCol=null; return; }
+  var btn=event.currentTarget||event.target;
+  _cfdBuild(tbl, col, btn.getBoundingClientRect());
+}
+</script>
