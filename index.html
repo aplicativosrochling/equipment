@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0064b3">
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v12)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v13)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição.">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -3849,49 +3849,14 @@ async function fbPush(manual) {
   setSyncInd(t('sync_saving'), 'var(--accent2)', true);
   try {
     const payload = DB.map(r=>{const{dias_vencer,...rest}=r;return rest;});
+
+    // FIX v13: save principal é aguardado — sync pública roda em paralelo (fire-and-forget)
     await _colRef.doc('dados').set({ records: payload, updated: new Date().toISOString() });
 
-    // ── Sincroniza coleção pública para leitura via QR (sem auth) ──
-    // Apenas campos não-sensíveis expostos publicamente
-    try {
-      const pubColRef = _db.collection('equipamentos_publicos');
-      // Firestore batch limit = 500 ops; divide em chunks para evitar erro
-      const CHUNK = 499;
-      const pubDocs = [];
-      DB.forEach(r => {
-        const safeId = String(r.id || r._uid || '').replace(/[^a-zA-Z0-9_\-]/g, '_');
-        if (!safeId) return;
-        pubDocs.push({ safeId, doc: {
-          id:           r.id          || null,
-          descricao:    r.descricao   || null,
-          tipo:         r.tipo        || null,
-          fabricante:   r.fabricante  || null,
-          localizacao:  r.localizacao || null,
-          responsavel:  r.responsavel || null,
-          status:       r.status      || null,
-          status_calib: r.status_calib|| null,
-          empresa:      r.empresa     || null,
-          cod_lab:      r.cod_lab     || null,
-          ult_calib:    r.ult_calib   || null,
-          prox_calib:   r.prox_calib  || null,
-          freq_dias:    r.freq_dias   || null,
-          dias_vencer:  r.dias_vencer !== undefined ? r.dias_vencer : null,
-          observacoes:  r.observacoes || null,
-          _uid:         r._uid        || null,
-          _updated:     new Date().toISOString(),
-        }});
-      });
-      for (let i = 0; i < pubDocs.length; i += CHUNK) {
-        const chunk = pubDocs.slice(i, i + CHUNK);
-        const batch = _db.batch();
-        chunk.forEach(({ safeId, doc }) => batch.set(pubColRef.doc(safeId), doc));
-        await batch.commit();
-      }
-    } catch(pubErr) {
-      // Falha na sync pública não bloqueia o save principal
-      console.warn('[fbPush] sync equipamentos_publicos falhou:', pubErr.message);
-    }
-    // ──────────────────────────────────────────────────────────────
+    // ── Sincroniza coleção pública (QR) — desacoplada do save principal ──
+    // Não bloqueia o indicador de "Salvo"; falhas não afetam o fluxo principal.
+    setTimeout(() => _syncPublicCollection(), 0);
+    // ────────────────────────────────────────────────────────────────────
 
     saveLS();
     _pending = false;
@@ -3905,9 +3870,52 @@ async function fbPush(manual) {
     saveLS();
     if(manual) showToast('Falha Firebase. Salvo localmente.', 'err');
   } finally {
-    // Garante que _pending nunca fique travado em true indefinidamente
-    // Se ainda há timer agendado, mantém pending; caso contrário libera
     if(!_pushTimer) _pending = false;
+  }
+}
+
+// FIX v13: sync pública separada — batches em paralelo (Promise.all) em vez de serial
+async function _syncPublicCollection() {
+  if(!fbActive()) return;
+  try {
+    const pubColRef = _db.collection('equipamentos_publicos');
+    const CHUNK = 499;
+    const now = new Date().toISOString();
+    const pubDocs = [];
+    DB.forEach(r => {
+      const safeId = String(r.id || r._uid || '').replace(/[^a-zA-Z0-9_\-]/g, '_');
+      if (!safeId) return;
+      pubDocs.push({ safeId, doc: {
+        id:           r.id          || null,
+        descricao:    r.descricao   || null,
+        tipo:         r.tipo        || null,
+        fabricante:   r.fabricante  || null,
+        localizacao:  r.localizacao || null,
+        responsavel:  r.responsavel || null,
+        status:       r.status      || null,
+        status_calib: r.status_calib|| null,
+        empresa:      r.empresa     || null,
+        cod_lab:      r.cod_lab     || null,
+        ult_calib:    r.ult_calib   || null,
+        prox_calib:   r.prox_calib  || null,
+        freq_dias:    r.freq_dias   || null,
+        dias_vencer:  r.dias_vencer !== undefined ? r.dias_vencer : null,
+        observacoes:  r.observacoes || null,
+        _uid:         r._uid        || null,
+        _updated:     now,
+      }});
+    });
+    // FIX: todos os chunks disparam simultaneamente em vez de esperar um a um
+    const batchPromises = [];
+    for (let i = 0; i < pubDocs.length; i += CHUNK) {
+      const chunk = pubDocs.slice(i, i + CHUNK);
+      const batch = _db.batch();
+      chunk.forEach(({ safeId, doc }) => batch.set(pubColRef.doc(safeId), doc));
+      batchPromises.push(batch.commit());
+    }
+    await Promise.all(batchPromises);
+  } catch(pubErr) {
+    console.warn('[fbPush] sync equipamentos_publicos falhou:', pubErr.message);
   }
 }
 
