@@ -7473,7 +7473,7 @@ function _handleQrDeepLink() {
 
     if(changed > 0) {
       saveLS();
-      if(fbActive()) fbSchedulePush();
+      fbSchedulePush(); // [FIX] Agenda sync Firebase sem guarda fbActive() — fbPushOrRetry() já gerencia retry em caso de instabilidade
       showToast(`✅ ${changed} célula(s) preenchida(s) — clique em 🔄 para atualizar filtros`);
       // Re-render only the affected rows — stay in place
       previewIdxs.forEach(idx => {
@@ -9630,7 +9630,7 @@ if (isTouchDevice) {
       }
       if (changed > 0) {
         if (typeof saveLS === 'function') saveLS();
-        if (typeof fbSchedulePush === 'function' && typeof fbActive === 'function' && fbActive()) fbSchedulePush();
+        if (typeof fbSchedulePush === 'function') fbSchedulePush(); // [FIX] Agenda sync Firebase sem guarda fbActive() — fbPushOrRetry() já gerencia retry em caso de instabilidade
         if (typeof showToast === 'function') showToast('✅ ' + changed + ' célula(s) preenchida(s)');
         if (typeof refreshInPlace === 'function') refreshInPlace();
       }
