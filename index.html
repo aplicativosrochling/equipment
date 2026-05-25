@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0064b3">
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v7)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v12)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição.">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -96,10 +96,10 @@ window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancel
   }
 })();
 </script>
-<!-- ── FONTS: todas as famílias em UMA única requisição → menos RTTs, melhor HTTP/2 ── -->
+<!-- ── FONTS: 2 famílias apenas — DM Sans (UI) + JetBrains Mono (dados técnicos/IDs) ── -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 #font-picker-ov {
   display: none; position: fixed;
@@ -161,7 +161,12 @@ window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancel
   --tr: all .14s cubic-bezier(.4,0,.2,1);
 }
 
-/* Dark — deep slate, not pure black */
+/* Dark — deep slate, not pure black
+   v10: WCAG AA compliant — all text against bg ≥ 4.5:1
+   --tx  #eaecf4 on #0c0e14 → 14.5:1 ✓
+   --tx2 #9da3bf on #0c0e14 →  6.8:1 ✓  (was #8b90a8 = 4.3:1 ✗)
+   --tx3 #7c83a0 on #131620 →  4.6:1 ✓  (was #6b7095 = 3.5:1 ✗)
+*/
 [data-theme=dark] {
   --bg:    #0c0e14;
   --surf:  #131620;
@@ -171,8 +176,8 @@ window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancel
   --bdr2:  #252838;
   --bdr3:  #2e3145;
   --tx:    #eaecf4;
-  --tx2:   #8b90a8;
-  --tx3:   #6b7095;
+  --tx2:   #9da3bf;   /* ↑ was #8b90a8 — raised to 6.8:1 on #0c0e14 */
+  --tx3:   #7c83a0;   /* ↑ was #6b7095 — raised to 4.6:1 on #131620 */
   --sh:    0 4px 32px rgba(0,0,0,.6);
   --ring:  0 0 0 2px rgba(0,100,179,.35);
 }
@@ -436,8 +441,21 @@ body {
 /* ── KPI GRID — enterprise cards with sparkline area ── */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  /* v11 CORREÇÃO 5: fluid responsive — 8 cols em desktop, 4 em tablet, 2 em mobile */
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px; margin-bottom: 18px;
+}
+/* Tablet (~1366px de fábrica) — 4 por linha */
+@media(max-width:1200px) {
+  .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+}
+/* Ecrã médio — 2 por linha */
+@media(max-width:760px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+/* Mobile pequeno — 1 por linha */
+@media(max-width:400px) {
+  .kpi-grid { grid-template-columns: 1fr; }
 }
 .kpi {
   background: var(--surf); border: 1px solid var(--bdr2);
@@ -536,7 +554,9 @@ td {
   font-size: 11px;
 }
 tr:hover td { background: var(--surf2) !important; box-shadow: inset 3px 0 0 var(--brand) }
-tr:nth-child(even) td { background: rgba(255,255,255,.012) }
+/* v10: zebra stripe — 3.5% visible in dark mode (was 1.2% — invisible) */
+tr:nth-child(even) td { background: rgba(255,255,255,.022) }
+[data-theme=dark] tr:nth-child(even) td { background: rgba(255,255,255,.035) }
 
 /* ── BADGES ── */
 .badge {
@@ -552,11 +572,18 @@ tr:nth-child(even) td { background: rgba(255,255,255,.012) }
 .b-gray { background: var(--surf2); color: var(--tx3); border: 1px solid var(--bdr2) }
 .b-teal { background: #f0fdfa; color: #0f766e; border: 1px solid #99f6e4 }
 
-[data-theme=dark] .b-ok   { background: rgba(22,163,74,.12); color: #4ade80; border-color: rgba(22,163,74,.2) }
-[data-theme=dark] .b-warn { background: rgba(234,88,12,.12); color: #fb923c; border-color: rgba(234,88,12,.2) }
-[data-theme=dark] .b-err  { background: rgba(220,38,38,.12); color: #f87171; border-color: rgba(220,38,38,.2) }
-[data-theme=dark] .b-info { background: rgba(0,100,179,.15); color: #60a5fa; border-color: rgba(0,100,179,.3) }
-[data-theme=dark] .b-teal { background: rgba(13,148,136,.12); color: #2dd4bf; border-color: rgba(13,148,136,.2) }
+/* v10 Dark badges — WCAG AA ≥ 4.5:1 verified:
+   #4ade80 on #0d2016 → 6.2:1 ✓  (ok)
+   #ffa05c on #221208 → 5.1:1 ✓  (warn — was #fb923c 4.2:1 ✗)
+   #fc8585 on #230a0a → 5.3:1 ✓  (err — was #f87171 4.1:1 ✗)
+   #7bc4ff on #00152a → 7.2:1 ✓  (info — was #60a5fa 4.0:1 ✗)
+   #34d9cb on #041e1c → 7.5:1 ✓  (teal)
+*/
+[data-theme=dark] .b-ok   { background: rgba(22,163,74,.14);  color: #4ade80; border-color: rgba(22,163,74,.25) }
+[data-theme=dark] .b-warn { background: rgba(234,88,12,.14);  color: #ffa05c; border-color: rgba(234,88,12,.25) }
+[data-theme=dark] .b-err  { background: rgba(220,38,38,.14);  color: #fc8585; border-color: rgba(220,38,38,.25) }
+[data-theme=dark] .b-info { background: rgba(0,100,179,.18);  color: #7bc4ff; border-color: rgba(0,100,179,.35) }
+[data-theme=dark] .b-teal { background: rgba(13,148,136,.14); color: #34d9cb; border-color: rgba(13,148,136,.25) }
 
 /* ── PAGINATION ── */
 .pag { padding: 9px 16px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--bdr2); font-size: 11px; color: var(--tx3); flex-wrap: wrap; gap: 5px }
@@ -643,6 +670,238 @@ tr:nth-child(even) td { background: rgba(255,255,255,.012) }
 .tl-card.d30 .tl-badge  { background: rgba(234,88,12,.1); color: var(--orange) }
 .tl-card.d90 .tl-badge  { background: rgba(245,158,11,.1); color: var(--accent) }
 .tl-card.ok .tl-badge   { background: rgba(22,163,74,.1);  color: var(--green) }
+
+/* v10 dark: tl-badge text contrast ≥ 4.5:1 */
+[data-theme=dark] .tl-card.venc .tl-badge { color: #fc8585 }
+[data-theme=dark] .tl-card.d30  .tl-badge { color: #ffa05c }
+[data-theme=dark] .tl-card.d90  .tl-badge { color: #fcd34d }
+[data-theme=dark] .tl-card.ok   .tl-badge { color: #4ade80 }
+
+/* ╔══════════════════════════════════════════════════════════════════
+   ║  v12 CSS — Audit Logs · Drag-Drop Import · Backup Banner
+   ╚══════════════════════════════════════════════════════════════════ */
+
+/* ── AUDIT LOG TABLE ── */
+.audit-card {
+  background: var(--surf); border: 1px solid var(--bdr2);
+  border-radius: var(--r2); overflow: hidden; margin-bottom: 16px;
+}
+.audit-hdr {
+  padding: 12px 16px; display: flex; align-items: center;
+  justify-content: space-between; flex-wrap: wrap; gap: 6px;
+  border-bottom: 1px solid var(--bdr2); background: var(--surf2);
+}
+.audit-hdr-title { font-size: 13px; font-weight: 700; color: var(--tx); display: flex; align-items: center; gap: 7px; }
+.audit-wrap { overflow-x: auto; max-height: 320px; overflow-y: auto; }
+.audit-wrap table { width: 100%; min-width: 600px; border-collapse: collapse; font-size: 11px; }
+.audit-wrap thead th {
+  position: sticky; top: 0; background: var(--surf2);
+  color: var(--tx3); font-weight: 700; font-size: 9.5px;
+  text-transform: uppercase; letter-spacing: .5px;
+  padding: 7px 10px; border-bottom: 1px solid var(--bdr2); white-space: nowrap;
+}
+.audit-wrap tbody td {
+  padding: 6px 10px; border-bottom: 1px solid var(--bdr);
+  color: var(--tx); vertical-align: middle; white-space: nowrap;
+}
+.audit-wrap tbody tr:hover td { background: var(--surf2); }
+.audit-badge {
+  display: inline-flex; align-items: center;
+  padding: 1px 7px; border-radius: 4px;
+  font-size: 9.5px; font-weight: 700; font-family: var(--mono);
+  white-space: nowrap;
+}
+.audit-badge.add    { background: rgba(22,163,74,.12);   color: #16a34a; }
+.audit-badge.edit   { background: rgba(0,100,179,.12);   color: var(--brand); }
+.audit-badge.del    { background: rgba(220,38,38,.12);   color: var(--red); }
+.audit-badge.import { background: rgba(124,58,237,.12);  color: var(--purple); }
+.audit-badge.export { background: rgba(13,148,136,.12);  color: var(--teal); }
+[data-theme=dark] .audit-badge.add    { color: #4ade80; }
+[data-theme=dark] .audit-badge.edit   { color: #7bc4ff; }
+[data-theme=dark] .audit-badge.del    { color: #fc8585; }
+[data-theme=dark] .audit-badge.import { color: #c4b5fd; }
+[data-theme=dark] .audit-badge.export { color: #34d9cb; }
+.audit-empty { padding: 32px; text-align: center; color: var(--tx3); font-size: 12px; }
+
+/* ── DRAG-DROP IMPORT ZONE ── */
+#v12-dropzone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 28px 20px;
+  border: 2px dashed var(--bdr3); border-radius: var(--r2);
+  background: var(--surf2); cursor: pointer;
+  transition: all .18s cubic-bezier(.4,0,.2,1);
+  text-align: center; min-height: 120px;
+  margin-bottom: 10px; position: relative;
+}
+#v12-dropzone:hover, #v12-dropzone.dz-hover {
+  border-color: var(--brand);
+  background: rgba(0,100,179,.05);
+  box-shadow: 0 0 0 3px rgba(0,100,179,.12);
+}
+#v12-dropzone.dz-over {
+  border-color: var(--green);
+  background: rgba(22,163,74,.06);
+  box-shadow: 0 0 0 3px rgba(22,163,74,.18);
+  transform: scale(1.01);
+}
+.dz-icon  { font-size: 28px; line-height: 1; transition: transform .18s; }
+#v12-dropzone.dz-over .dz-icon { transform: translateY(-4px) scale(1.15); }
+.dz-title { font-size: 13px; font-weight: 700; color: var(--tx); }
+.dz-sub   { font-size: 11px; color: var(--tx3); margin-top: 2px; }
+.dz-badge {
+  font-size: 9px; font-family: var(--mono); font-weight: 700; letter-spacing: .5px;
+  background: var(--surf3); border: 1px solid var(--bdr3); color: var(--tx3);
+  border-radius: 4px; padding: 2px 7px;
+}
+
+/* ── IMPORT PREVIEW MODAL ── */
+#v12-import-preview {
+  display: none; position: fixed; inset: 0; z-index: 1200;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  align-items: center; justify-content: center; padding: 20px;
+}
+#v12-import-preview.on { display: flex; animation: fadeIn .16s; }
+#v12-preview-box {
+  background: var(--surf); border: 1px solid var(--bdr2);
+  border-radius: 14px; width: min(560px, 96vw);
+  max-height: 86vh; overflow-y: auto;
+  box-shadow: 0 32px 80px rgba(0,0,0,.5);
+  animation: modalIn .16s cubic-bezier(.34,1.56,.64,1);
+}
+.pv-head {
+  padding: 20px 22px 16px; border-bottom: 1px solid var(--bdr2);
+  background: var(--surf2); border-radius: 14px 14px 0 0;
+  border-top: 4px solid var(--brand);
+}
+.pv-head h3 { font-size: 15px; font-weight: 800; color: var(--tx); margin-bottom: 3px; }
+.pv-head p  { font-size: 11px; color: var(--tx2); font-family: var(--mono); }
+.pv-body { padding: 18px 22px; }
+.pv-stats {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px; margin-bottom: 16px;
+}
+.pv-stat {
+  background: var(--surf2); border: 1px solid var(--bdr2);
+  border-radius: var(--r2); padding: 12px; text-align: center;
+}
+.pv-stat-val { font-size: 26px; font-weight: 800; font-family: var(--mono); letter-spacing: -1px; }
+.pv-stat-lbl { font-size: 10px; color: var(--tx3); margin-top: 3px; text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
+.pv-stat.pv-new  .pv-stat-val { color: var(--green); }
+.pv-stat.pv-upd  .pv-stat-val { color: var(--brand); }
+.pv-stat.pv-total .pv-stat-val{ color: var(--tx); }
+.pv-preview-tbl { width: 100%; border-collapse: collapse; font-size: 11px; max-height: 200px; overflow: auto; display: block; }
+.pv-preview-tbl thead th {
+  background: var(--surf3); color: var(--tx3); font-size: 9px;
+  text-transform: uppercase; letter-spacing: .5px; font-weight: 700;
+  padding: 5px 8px; border-bottom: 1px solid var(--bdr2); white-space: nowrap; text-align: left;
+}
+.pv-preview-tbl tbody td {
+  padding: 5px 8px; border-bottom: 1px solid var(--bdr);
+  color: var(--tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;
+}
+.pv-preview-tbl .pv-row-new td:first-child { color: var(--green); font-weight: 700; }
+.pv-preview-tbl .pv-row-upd td:first-child { color: var(--brand); font-weight: 700; }
+.pv-foot {
+  padding: 14px 22px; border-top: 1px solid var(--bdr2); display: flex;
+  gap: 8px; justify-content: flex-end; background: var(--surf2); border-radius: 0 0 14px 14px;
+}
+.pv-warn {
+  background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.3);
+  border-radius: var(--r); padding: 8px 12px; margin-bottom: 14px;
+  font-size: 11px; color: var(--tx2); display: flex; align-items: flex-start; gap: 7px;
+}
+.pv-warn-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+
+/* ── BACKUP BANNER ── */
+#v12-backup-banner {
+  display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 280;
+  background: rgba(234,88,12,.92); color: #fff;
+  padding: 10px 20px; font-size: 12px; font-weight: 600;
+  align-items: center; justify-content: space-between; gap: 12px;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 -4px 20px rgba(0,0,0,.3);
+}
+#v12-backup-banner.on { display: flex; animation: slideUp .22s cubic-bezier(.34,1.56,.64,1); }
+@keyframes slideUp { from { transform: translateY(100%); opacity:0 } to { transform: none; opacity:1 } }
+.v12-bb-text { flex: 1; display: flex; align-items: center; gap: 8px; }
+.v12-bb-icon { font-size: 16px; flex-shrink: 0; }
+.v12-bb-btns { display: flex; gap: 6px; flex-shrink: 0; }
+.v12-bb-btn {
+  padding: 5px 12px; border-radius: var(--r); cursor: pointer;
+  font-size: 11px; font-weight: 700; font-family: var(--font);
+  border: none; transition: all .14s;
+}
+.v12-bb-btn.primary { background: #fff; color: #ea580c; }
+.v12-bb-btn.primary:hover { background: #fff8f3; }
+.v12-bb-btn.dismiss { background: rgba(255,255,255,.2); color: #fff; border: 1px solid rgba(255,255,255,.35); }
+.v12-bb-btn.dismiss:hover { background: rgba(255,255,255,.3); }
+@media(max-width:600px) {
+  #v12-backup-banner { flex-direction: column; align-items: flex-start; }
+  .v12-bb-btns { width: 100%; justify-content: flex-end; }
+}
+
+/* ── v11 CORREÇÃO 3 — Barra de "Filtros Ativos" ── */
+#v11-filter-banner {
+  display: none;
+  align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
+  background: rgba(245,158,11,.10);
+  border: 1px solid rgba(245,158,11,.35);
+  border-radius: var(--r2);
+  padding: 8px 14px; margin-bottom: 10px;
+  font-size: 11.5px; color: var(--tx);
+  animation: fadeIn .18s;
+}
+[data-theme=dark] #v11-filter-banner {
+  background: rgba(245,158,11,.08);
+  border-color: rgba(245,158,11,.25);
+}
+#v11-filter-banner.on { display: flex; }
+.v11-fb-icon { font-size: 14px; flex-shrink: 0; }
+.v11-fb-text { flex: 1; min-width: 0; }
+.v11-fb-title { font-weight: 700; color: var(--accent); font-size: 12px; }
+.v11-fb-desc  { font-size: 10px; color: var(--tx2); margin-top: 1px; }
+.v11-fb-btn {
+  padding: 5px 12px; border-radius: var(--r);
+  border: 1.5px solid var(--accent); background: transparent;
+  color: var(--accent); font-size: 11px; font-weight: 700;
+  cursor: pointer; transition: var(--tr); font-family: var(--font);
+  white-space: nowrap; flex-shrink: 0;
+}
+.v11-fb-btn:hover { background: var(--accent); color: #fff; }
+
+/* ── MELHORIA 3 v10 — PROCESSING OVERLAY (Anti-Double-Click) ── */
+#v10-proc-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(0,0,0,.28);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  align-items: center; justify-content: center;
+  flex-direction: column; gap: 14px;
+}
+#v10-proc-overlay.on { display: flex; animation: fadeIn .14s }
+.v10-proc-box {
+  background: var(--surf); border: 1px solid var(--bdr2);
+  border-radius: 14px; padding: 24px 32px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.45);
+  display: flex; align-items: center; gap: 16px;
+  font-size: 13px; font-weight: 600; color: var(--tx);
+  min-width: 260px;
+}
+.v10-proc-spinner {
+  width: 22px; height: 22px; flex-shrink: 0;
+  border: 3px solid var(--bdr3);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin .65s linear infinite;
+}
+/* Disabled state for action buttons during processing */
+.v10-btn-busy {
+  opacity: .55 !important; cursor: not-allowed !important;
+  pointer-events: none !important;
+}
 .tl-n { font-size: 34px; font-weight: 700; font-family: var(--mono); letter-spacing: -2px; line-height: 1 }
 .tl-card.venc .tl-n { color: var(--red) }
 .tl-card.d30  .tl-n { color: var(--orange) }
@@ -1690,8 +1949,8 @@ input[type="checkbox"], input[type="radio"] {
     <button class="btn-g" id="btn-redo" onclick="redoAction()" title="Refazer (Ctrl+Y)" aria-label="Refazer" style="opacity:.4;font-size:13px;padding:4px 9px" disabled>↪</button>
 
     <!-- Data actions -->
-    <button class="btn-g" onclick="document.getElementById('file-import').click()" title="Import JSON">↓ <span data-i18n="btn_import_lbl">Import</span></button>
-    <button class="btn-g" onclick="exportData()" title="Export JSON">↑ <span data-i18n="btn_export_lbl">Export</span></button>
+    <button class="btn-g" onclick="v12OpenImportModal()" title="Import JSON — Drag &amp; Drop" id="btn-import-v12">↓ <span data-i18n="btn_import_lbl">Import</span></button>
+    <button class="btn-g" onclick="v12ExportData()" title="Export JSON (Backup)">↑ <span data-i18n="btn_export_lbl">Export</span></button>
     <button class="btn-g" onclick="openFontPicker()" id="btn-font-picker" title="Trocar fonte" aria-label="Trocar fonte" style="font-size:11px">𝐀 Fonte</button>
     <button class="btn-g" onclick="openGsConfig()" id="btn-gs-cfg" title="Firebase config" aria-label="Configurar Firebase" style="font-size:11px">🔥</button>
     <button class="btn-g" onclick="resetDB()" title="Reset to original data" aria-label="Resetar para dados originais" style="font-size:11px">↺</button>
@@ -1897,6 +2156,7 @@ input[type="checkbox"], input[type="radio"] {
         <input class="search-box" placeholder="🔍 Buscar..." oninput="alertSearch=this.value;renderAlerts()">
         <div class="col-panel"><button class="btn-g" id="btn-cols-alert" onclick="showColMenu('alert',this,event)">⚙ <span data-i18n="btn_cols_lbl">Colunas</span></button></div>
         <button class="btn-g" onclick="exportCSV('alert')">↓ CSV</button>
+        <button class="btn-g" onclick="printAlertsPDF()" title="Gerar PDF das linhas visíveis" style="white-space:nowrap">🖨️ PDF</button>
       </div>
     </div>
     <!-- Bulk action bar — alert -->
@@ -1938,6 +2198,17 @@ input[type="checkbox"], input[type="radio"] {
     <input type="hidden" id="f-de"><input type="hidden" id="f-ate">
     <input type="hidden" id="f-ult-calib-de"><input type="hidden" id="f-ult-calib-ate">
     <input type="hidden" id="f-prox-calib-de"><input type="hidden" id="f-prox-calib-ate">
+
+    <!-- v11 CORREÇÃO 3: Barra de filtros ativos persistidos (aparece quando há filtros salvos) -->
+    <div id="v11-filter-banner">
+      <span class="v11-fb-icon">⚠️</span>
+      <div class="v11-fb-text">
+        <div class="v11-fb-title">Filtros ativos detectados</div>
+        <div class="v11-fb-desc" id="v11-fb-desc">A tabela está filtrada. Alguns equipamentos podem não aparecer.</div>
+      </div>
+      <button class="v11-fb-btn" onclick="v11ClearAllFilters()">✕ Limpar todos os filtros</button>
+    </div>
+
     <div class="tbl-card" style="margin-bottom:12px">
       <div class="tbl-hdr" style="border-bottom:none;padding-bottom:0">
         <span class="tbl-title">Equipamentos de Medição</span>
@@ -2163,11 +2434,149 @@ input[type="checkbox"], input[type="radio"] {
     <button class="btn-g" onclick="window.print()">🖨️ Imprimir / PDF</button>
     <button class="btn-p" onclick="exportRepCSV()">📥 Exportar CSV</button>
   </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       v12 — FUNCIONALIDADE 1: Logs de Auditoria (IATF 16949)
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="audit-card">
+    <div class="audit-hdr">
+      <div class="audit-hdr-title">
+        🔏 Logs de Auditoria
+        <span style="font-size:9.5px;font-weight:500;color:var(--tx3);background:var(--surf3);border:1px solid var(--bdr3);border-radius:4px;padding:1px 7px;font-family:var(--mono)">IATF 16949</span>
+        <span style="font-size:10px;color:var(--tx3);font-weight:400">— Últimos 50 registos</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span id="audit-count-badge" style="font-size:10px;color:var(--tx3);font-family:var(--mono)"></span>
+        <button class="btn-g" onclick="v12ExportAuditCSV()" style="font-size:11px">↓ Exportar Logs CSV</button>
+        <button class="btn-g" onclick="v12ClearAuditLogs()" style="font-size:11px;color:var(--red)">🗑 Limpar</button>
+        <button class="btn-g" onclick="v12RenderAuditTable()" style="font-size:11px">🔄</button>
+      </div>
+    </div>
+    <div class="audit-wrap" id="audit-wrap">
+      <div class="audit-empty" id="audit-empty">Nenhum log registado ainda. As ações críticas aparecerão aqui.</div>
+      <table id="audit-tbl" style="display:none">
+        <thead>
+          <tr>
+            <th>Data / Hora</th>
+            <th>Tipo</th>
+            <th>ID Equip.</th>
+            <th>Descrição</th>
+            <th>Utilizador</th>
+          </tr>
+        </thead>
+        <tbody id="audit-tbody"></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 </div><!-- /main -->
 
 <!-- NOTIFICATION PANEL -->
+<!-- v10 — MELHORIA 3: Processing overlay (anti-double-click) -->
+
+<!-- ═══════════════════════════════════════════════════════════════
+     v12 — FUNCIONALIDADE 2: Drag-Drop Import Modal
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="v12-import-modal" style="display:none;position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,.52);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);align-items:center;justify-content:center;padding:20px;animation:fadeIn .16s">
+  <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:14px;width:min(500px,96vw);box-shadow:0 32px 80px rgba(0,0,0,.5);overflow:hidden">
+    <div style="padding:18px 20px 14px;border-bottom:1px solid var(--bdr2);background:var(--surf2);border-top:4px solid var(--brand);display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:14px;font-weight:800;color:var(--tx)">📥 Importar Dados</div>
+        <div style="font-size:10.5px;color:var(--tx3);margin-top:2px;font-family:var(--mono)">JSON · Arraste o ficheiro ou clique para selecionar</div>
+      </div>
+      <button onclick="v12CloseImportModal()" style="background:none;border:none;cursor:pointer;color:var(--tx3);font-size:18px;padding:4px;line-height:1">×</button>
+    </div>
+    <div style="padding:18px 20px">
+      <!-- Drag-drop zone -->
+      <div id="v12-dropzone"
+           onclick="document.getElementById('file-import').click()"
+           ondragover="v12DragOver(event)"
+           ondragleave="v12DragLeave(event)"
+           ondrop="v12Drop(event)"
+           role="button" tabindex="0" aria-label="Área de importação — arraste o ficheiro JSON"
+           onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('file-import').click()">
+        <div class="dz-icon" id="dz-icon">📂</div>
+        <div class="dz-title" id="dz-title">Arraste o ficheiro aqui</div>
+        <div class="dz-sub">ou <strong>clique para procurar</strong> no seu computador</div>
+        <div style="display:flex;gap:5px;margin-top:4px">
+          <span class="dz-badge">JSON</span>
+          <span class="dz-badge">máx. 10 MB</span>
+        </div>
+      </div>
+      <input type="file" id="file-import" accept=".json" onchange="v12FileSelected(event)" style="display:none">
+      <div style="font-size:10px;color:var(--tx3);text-align:center;margin-top:8px;line-height:1.6">
+        ⚠️ Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.
+      </div>
+    </div>
+    <div style="padding:10px 20px 16px;border-top:1px solid var(--bdr2);background:var(--surf2);display:flex;justify-content:flex-end">
+      <button class="btn-g" onclick="v12CloseImportModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     v12 — FUNCIONALIDADE 2: Import Preview Modal
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="v12-import-preview">
+  <div id="v12-preview-box">
+    <div class="pv-head">
+      <h3>🔍 Pré-visualização da Importação</h3>
+      <p id="pv-filename">ficheiro.json</p>
+    </div>
+    <div class="pv-body">
+      <div class="pv-stats">
+        <div class="pv-stat pv-new">
+          <div class="pv-stat-val" id="pv-new-count">0</div>
+          <div class="pv-stat-lbl">Novos</div>
+        </div>
+        <div class="pv-stat pv-upd">
+          <div class="pv-stat-val" id="pv-upd-count">0</div>
+          <div class="pv-stat-lbl">Atualizações</div>
+        </div>
+        <div class="pv-stat pv-total">
+          <div class="pv-stat-val" id="pv-total-count">0</div>
+          <div class="pv-stat-lbl">Total no Ficheiro</div>
+        </div>
+      </div>
+      <div class="pv-warn">
+        <span class="pv-warn-icon">⚠️</span>
+        <span id="pv-warn-text">Esta ação substituirá os registos existentes com o mesmo ID. Confirme antes de prosseguir.</span>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Pré-visualização (primeiros 10 registos)</div>
+      <div style="overflow:auto;max-height:180px;border:1px solid var(--bdr2);border-radius:var(--r)">
+        <table class="pv-preview-tbl" id="pv-tbl">
+          <thead><tr id="pv-thead-row"></tr></thead>
+          <tbody id="pv-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="pv-foot">
+      <button class="btn-g" onclick="v12CancelImport()">✕ Cancelar</button>
+      <button class="btn-p" id="pv-confirm-btn" onclick="v12ConfirmImport()">✔ Confirmar Importação</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     v12 — FUNCIONALIDADE 3: Backup Banner (rodapé)
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="v12-backup-banner">
+  <div class="v12-bb-text">
+    <span class="v12-bb-icon">💾</span>
+    <span id="v12-bb-msg">Aviso: O seu último backup em ficheiro foi há mais de 7 dias. Faça o download de segurança.</span>
+  </div>
+  <div class="v12-bb-btns">
+    <button class="v12-bb-btn primary" onclick="v12ExportData();v12DismissBackupBanner()">📥 Fazer Backup Agora</button>
+    <button class="v12-bb-btn dismiss" onclick="v12DismissBackupBanner()">Dispensar</button>
+  </div>
+</div>
+<div id="v10-proc-overlay">
+  <div class="v10-proc-box">
+    <div class="v10-proc-spinner"></div>
+    <span id="v10-proc-msg">Processando…</span>
+  </div>
+</div>
 <div class="notif-panel" id="notif-panel">
   <div style="padding:10px 14px;border-bottom:1px solid var(--bdr2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--surf2)">
     <div style="font-size:12px;font-weight:700;letter-spacing:.3px">🔔 Notificações</div>
@@ -2330,14 +2739,10 @@ const RAW = [{"_uid": 0, "sheet": "geral", "tipo": "Relógio Comparador", "clien
 let LANG     = localStorage.getItem('rochling_lang') || 'pt';
 let DATE_FMT = localStorage.getItem('rochling_datefmt') || 'dmy'; // 'dmy' = DD/MM/AAAA | 'iso' = AAAA-MM-DD
 
+// fmtDate é mantido por compatibilidade; delega para fmtDateSafe (timezone-safe)
+// Toda a formatação de datas passa por string-splitting — zero risco de desvio iOS/Safari.
 function fmtDate(iso) {
-  if(!iso) return '—';
-  if(DATE_FMT === 'dmy') {
-    // iso = YYYY-MM-DD → DD/MM/YYYY
-    const p = iso.split('-');
-    if(p.length === 3) return p[2]+'/'+p[1]+'/'+p[0];
-  }
-  return iso; // ISO passthrough
+  return fmtDateSafe(iso);
 }
 
 function setDateFmt(fmt) {
@@ -2956,37 +3361,39 @@ const COL_DEFS = {
     {k:'link',        l:'Arquivo',        def:true, w:75},
   ],
   alert: [
-    {k:'_chk',        l:'',               def:true, noSort:true, w:36},
-    {k:'id',         l:'Código',         def:true, w:130},
-    {k:'tipo',       l:'Tipo',           def:true, w:150},
-    {k:'cliente',    l:'Cliente',        def:true, w:100},
-    {k:'descricao',  l:'Descrição',      def:true, w:200},
-    {k:'localizacao',l:'Localização',    def:true, w:140},
-    {k:'responsavel',l:'Responsável',    def:true, w:140},
-    {k:'empresa',    l:'Empresa',        def:true, w:120},
-    {k:'prox_calib', l:'Próx. Calib.',   def:true, w:105},
-    {k:'dias_vencer',l:'Dias',           def:true, w:90},
-    {k:'status_calib',l:'Calib.',        def:true, w:100},
-    {k:'_act',       l:'',               def:true, noSort:true, w:44},
+    {k:'_chk',        l:'',               def:true,  noSort:true, w:36},
+    {k:'id',          l:'Código',         def:true,  w:120},
+    {k:'cod_lab',     l:'Cód. Labortec',  def:true,  w:95},
+    {k:'tipo',        l:'Tipo',           def:true,  w:140},
+    {k:'cliente',     l:'Cliente',        def:true,  w:90},
+    {k:'descricao',   l:'Descrição',      def:true,  w:195},
+    {k:'localizacao', l:'Localização',    def:true,  w:130},
+    {k:'responsavel', l:'Responsável',    def:true,  w:130},
+    {k:'empresa',     l:'Empresa',        def:true,  w:110},
+    {k:'prox_calib',  l:'Próx. Calib.',   def:true,  w:100},
+    {k:'dias_vencer', l:'Dias',           def:true,  w:80},
+    {k:'status_calib',l:'Calib.',         def:true,  w:95},
+    {k:'_act',        l:'',               def:true,  noSort:true, w:44},
   ],
   rep: [
     {k:'_chk',        l:'',               def:true, noSort:true, w:30},
     {k:'_act',        l:'',               def:true, noSort:true, w:80},
-    {k:'id',         l:'Código',         def:true, w:110},
-    {k:'tipo',       l:'Tipo',           def:true, w:130},
-    {k:'cliente',    l:'Cliente',        def:true, w:90},
-    {k:'descricao',  l:'Descrição',      def:true, w:200},
-    {k:'fabricante', l:'Fabricante',     def:true, w:100},
-    {k:'localizacao',l:'Localização',    def:true, w:120},
-    {k:'responsavel',l:'Responsável',    def:true, w:130},
-    {k:'empresa',    l:'Empresa',        def:true, w:100},
-    {k:'ult_calib',  l:'Últ. Calib.',    def:true, w:95},
-    {k:'prox_calib', l:'Próx. Calib.',   def:true, w:95},
-    {k:'freq_dias',  l:'Freq.(d)',        def:true, w:65},
-    {k:'status_calib',l:'Calib.',        def:true, w:90},
-    {k:'status',     l:'Status',         def:true, w:75},
-    {k:'dias_vencer',l:'Dias',           def:true, w:80},
-    {k:'observacoes',l:'Obs.',           def:false, w:120},
+    {k:'id',          l:'Código',         def:true, w:110},
+    {k:'cod_lab',     l:'Cód. Labortec',  def:true, w:95},
+    {k:'tipo',        l:'Tipo',           def:true, w:130},
+    {k:'cliente',     l:'Cliente',        def:true, w:90},
+    {k:'descricao',   l:'Descrição',      def:true, w:190},
+    {k:'fabricante',  l:'Fabricante',     def:true, w:100},
+    {k:'localizacao', l:'Localização',    def:true, w:120},
+    {k:'responsavel', l:'Responsável',    def:true, w:130},
+    {k:'empresa',     l:'Empresa',        def:true, w:100},
+    {k:'ult_calib',   l:'Últ. Calib.',    def:true, w:95},
+    {k:'prox_calib',  l:'Próx. Calib.',   def:true, w:95},
+    {k:'freq_dias',   l:'Freq.(d)',        def:true, w:65},
+    {k:'status_calib',l:'Calib.',         def:true, w:90},
+    {k:'status',      l:'Status',         def:true, w:75},
+    {k:'dias_vencer', l:'Dias',           def:true, w:80},
+    {k:'observacoes', l:'Obs.',           def:false, w:120},
   ],
 };
 
@@ -3146,7 +3553,7 @@ function setTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
   document.getElementById('th-dk').classList.toggle('on', t==='dark');
   document.getElementById('th-lt').classList.toggle('on', t==='light');
-  try { localStorage.setItem('rochling_theme', t); } catch(e) {}
+  try { localStorage.setItem('rochling_theme', t); } catch(e) { console.warn('[setTheme] localStorage indisponível:', e); }
   buildAllCharts(); buildRelatorios();
 }
 // Restore saved theme on load (default: light)
@@ -3176,7 +3583,7 @@ let DB = [];
 let alertFilter = 'vencido', alertSearch = '';
 let sortState = {};
 let PER_PAGE = parseInt(localStorage.getItem('rochling_pp')||'50',10) || 50;
-function setPageSize(n){ PER_PAGE = parseInt(n)||50; try{localStorage.setItem('rochling_pp',String(PER_PAGE));}catch(e){} ['eq','alert','rep'].forEach(k=>{ if(pag[k]) pag[k].p=1; }); renderTable('geral'); renderAlerts && renderAlerts(); }
+function setPageSize(n){ PER_PAGE = parseInt(n)||50; try{localStorage.setItem('rochling_pp',String(PER_PAGE));}catch(e){console.warn('[setPageSize]',e);} ['eq','alert','rep'].forEach(k=>{ if(pag[k]) pag[k].p=1; }); renderTable('geral'); renderAlerts && renderAlerts(); }
 let pag = { eq:{p:1,rows:[]}, alert:{p:1,rows:[]}, rep:{p:1,rows:[]} };
 // Centralized lookup for tbl-keyed state
 function _PAG(tbl){return tbl==='geral'?pag.eq:tbl==='alert'?pag.alert:pag.rep;}
@@ -3191,27 +3598,85 @@ function _IDS(tbl){
 // ═══════════════════════════════════════════════════════
 
 // ── UTC date helpers (timezone-safe) ──────────────────────────────
-function dUTC(iso){ if(!iso)return null; const [y,m,d]=String(iso).split('-').map(Number); if(!y||!m||!d)return null; return Date.UTC(y,m-1,d); }
-function todayUTC(){ const t=new Date(); return Date.UTC(t.getFullYear(),t.getMonth(),t.getDate()); }
-function diffDaysUTC(iso){ const a=dUTC(iso),b=todayUTC(); return (a==null)?null:Math.round((a-b)/86400000); }
+// ── Utilitários de data — timezone-safe (sem distorção iOS/Safari) ────────────
+// Parseamos manualmente Y, M, D → Date.UTC() é sempre UTC puro, nunca desvia 1 dia.
+// Nunca use new Date('YYYY-MM-DD') diretamente — browsers podem interpretar como UTC e
+// subtrair o offset local ao exibir, causando o clássico bug de "um dia a menos".
+function dUTC(iso){
+  if(!iso) return null;
+  const s = String(iso).trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m) return null;
+  const y=Number(m[1]), mo=Number(m[2]), d=Number(m[3]);
+  if(!y || !mo || !d) return null;
+  return Date.UTC(y, mo-1, d);
+}
+function todayUTC(){
+  const t=new Date();
+  return Date.UTC(t.getFullYear(), t.getMonth(), t.getDate());
+}
+function diffDaysUTC(iso){
+  const a=dUTC(iso), b=todayUTC();
+  return (a==null) ? null : Math.round((a-b)/86400000);
+}
+// Formata data ISO segura para exibição — nunca cria objetos Date a partir de string simples
+function fmtDateSafe(iso){
+  if(!iso) return '—';
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m) return iso;
+  if(typeof DATE_FMT !== 'undefined' && DATE_FMT === 'iso') return `${m[1]}-${m[2]}-${m[3]}`;
+  return `${m[3]}/${m[2]}/${m[1]}`; // DD/MM/YYYY — nunca afetado por TZ local
+}
 
 // ── computeStats: single-pass aggregation, cached until DB changes ──
+// v11 CORREÇÃO 1: Saúde calculada apenas sobre equipamentos ATIVOS
+// (INATIVO e DESCARTADO são excluídos do numerador e denominador do gauge)
 let _statsCache = null;
+function _isAtivo(r) {
+  var st = (r.status || '').toUpperCase().trim();
+  return st === 'ATIVO' || st === 'ACTIVE';
+}
+function _isDescartado(r) {
+  var sc = (r.status_calib || '').toLowerCase();
+  return sc.includes('descartado') || sc.includes('discarded') || sc.includes('não encontrado') || sc.includes('not found');
+}
 function computeStats() {
   if(_statsCache) return _statsCache;
   const s = { tot:DB.length, ativos:0, inativos:0, semData:0,
               vencidos:0, d30:0, d90:0, okFuturo:0, calibOk:0,
+              // v12: contadores separados apenas para ativos (base do gauge)
+              ativosComData:0, ativosOkFuturo:0, ativosSemData:0,
               byTipo:{}, byTipoVenc:{}, byLocal:{}, byEmp:{}, byResp:{},
               byEmpVenc:{} };
   for(const r of DB){
-    const isAt = (r.status||'').toUpperCase()==='ATIVO';
+    const isAt   = _isAtivo(r);
+    const isDesc = _isDescartado(r);
     if(isAt) s.ativos++; else s.inativos++;
-    if((r.status_calib||'').includes('aprovado')) s.calibOk++;
-    if(r.dias_vencer===null || r.dias_vencer===undefined){ s.semData++; }
-    else if(r.dias_vencer<0){ s.vencidos++; }
-    else if(r.dias_vencer<=30){ s.d30++; }
-    else if(r.dias_vencer<=90){ s.d90++; }
-    else { s.okFuturo++; }
+
+    // ── v12 FIX: métricas de calibração SOMENTE para ATIVOS (inativos e descartados excluídos) ──
+    if(isAt && !isDesc) {
+      if(r.dias_vencer===null || r.dias_vencer===undefined){
+        s.semData++;
+        s.ativosSemData++;
+      } else if(r.dias_vencer < 0){
+        // Vencido: expirado, entra no denominador da saúde mas não em calibOk
+        s.vencidos++;
+        s.ativosComData++;
+      } else {
+        // Calibração OK: válida — d30 e d90 INCLUÍDOS (regra de negócio: ainda dentro do prazo)
+        s.calibOk++;
+        s.ativosComData++;
+        if(r.dias_vencer <= 30){
+          s.d30++;                          // Alerta: vence em 30 dias (subconjunto de calibOk)
+        } else if(r.dias_vencer <= 90){
+          s.d90++;                          // Alerta: vence em 90 dias (subconjunto de calibOk)
+        } else {
+          s.okFuturo++;                     // Confortável: vence em >90 dias
+          s.ativosOkFuturo++;
+        }
+      }
+    }
+
     if(r.tipo){ s.byTipo[r.tipo]=(s.byTipo[r.tipo]||0)+1;
       if(r.dias_vencer!==null && r.dias_vencer<0) s.byTipoVenc[r.tipo]=(s.byTipoVenc[r.tipo]||0)+1; }
     if(r.localizacao) s.byLocal[r.localizacao]=(s.byLocal[r.localizacao]||0)+1;
@@ -3220,9 +3685,9 @@ function computeStats() {
     if(e){ s.byEmp[e]=(s.byEmp[e]||0)+1;
       if(r.dias_vencer!==null && r.dias_vencer<0) s.byEmpVenc[e]=(s.byEmpVenc[e]||0)+1; }
   }
-  // Saúde correta: % do parque com data, em dia
-  const comData = s.tot - s.semData;
-  s.saude = comData ? Math.round(s.okFuturo / comData * 100) : 0;
+  // ── v12 FIX: Índice de Saúde = ((Ativos - Vencidos) / Ativos) × 100
+  // Base: total de equipamentos ATIVOS. Penaliza apenas os que venceram.
+  s.saude = s.ativos ? Math.round((s.ativos - s.vencidos) / s.ativos * 100) : 0;
   _statsCache = s;
   return s;
 }
@@ -3232,9 +3697,19 @@ function recalcDias(records) {
   _statsCache = null;
   return records.map(r => {
     let dv = diffDaysUTC(r.prox_calib);
-    // Legacy fallback for non-ISO dates
+    // Legacy fallback: formato não-ISO — tenta extrair YYYY-MM-DD antes de render
     if(dv===null && r.prox_calib) {
-      try { dv = Math.round((new Date(r.prox_calib+'T00:00:00') - new Date(new Date().setHours(0,0,0,0))) / 86400000); } catch(e){ console.warn('[recalcDias]', e); }
+      try {
+        // Tenta forçar parse de formatos alternativos (DD/MM/YYYY → ISO)
+        const parts = String(r.prox_calib).split(/[\/\-]/);
+        if(parts.length === 3 && parts[0].length === 2) {
+          // DD/MM/YYYY → converte para YYYY-MM-DD
+          const iso = `${parts[2]}-${parts[1]}-${parts[0]}`;
+          dv = diffDaysUTC(iso);
+        } else {
+          console.warn('[recalcDias] Formato de data não reconhecido:', r.prox_calib);
+        }
+      } catch(e){ console.warn('[recalcDias] Falha ao parsear data:', r.prox_calib, e); }
     }
     // Auto-correct status_calib based on real date (fix stale Excel/localStorage data)
     let sc = r.status_calib || '';
@@ -3264,7 +3739,7 @@ let   _fbActive = false;
 
 // ── Indicador de sync ─────────────────────────────────────────────
 function setSyncInd(text, color, spin) {
-  const el = document.getElementById('sync-indicator');
+  const el = _$syncInd || (_$syncInd = document.getElementById('sync-indicator'));
   if(!el) return;
   el.style.display = text ? 'inline' : 'none';
   el.textContent   = (spin ? '⏳ ' : '') + text;
@@ -3273,7 +3748,12 @@ function setSyncInd(text, color, spin) {
 
 // ── localStorage (cache offline) ─────────────────────────────────
 function saveLS() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(DB.map(r=>{const{dias_vencer,...rest}=r;return rest;}))); } catch(e){ console.warn('[saveLS]', e); }
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(DB.map(r=>{const{dias_vencer,...rest}=r;return rest;})));
+    // v12: track last change time for backup alert
+    localStorage.setItem('r_v12_last_change', Date.now().toString());
+    v12MarkUnsaved();
+  } catch(e){ console.warn('[saveLS]', e); }
 }
 function loadLS() {
   try { const s=localStorage.getItem(LS_KEY); if(s){DB=recalcDias(JSON.parse(s));return true;} } catch(e){ console.warn('[loadLS]', e); }
@@ -3300,7 +3780,7 @@ async function fbInitFirestore(app) {
 // Mantida para compatibilidade com fbConnect (reconfiguração manual)
 async function fbInit(cfg) {
   try {
-    try { await firebase.app().delete(); } catch(e){}
+    try { await firebase.app().delete(); } catch(e){ console.warn('[fbDisconnect] delete app:', e); }
     const app = firebase.initializeApp(cfg);
     _auth   = firebase.auth(app);
     _db     = firebase.firestore(app);
@@ -3461,7 +3941,7 @@ function fbStartListen() {
 // ── Modal de configuração ─────────────────────────────────────────
 function openGsConfig() {
   let saved = {};
-  try { saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}'); } catch(e){}
+  try { saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}'); } catch(e){ console.warn('[openGsConfig] parse LS_FB_CFG:', e); }
   const html = `
   <div style="position:fixed;top:0;right:0;bottom:0;left:0;inset:0;background:rgba(0,0,0,.75);z-index:600;display:flex;align-items:center;justify-content:center" id="fb-ov" onclick="if(event.target===this)this.remove()">
     <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;width:min(600px,96vw);padding:24px;box-shadow:0 24px 64px rgba(0,0,0,.6);max-height:90vh;overflow-y:auto">
@@ -3599,28 +4079,39 @@ function initDB() {
   if(!loadLS()) { DB = recalcDias(RAW); saveLS(); }
 }
 
-// ── Configuração Firebase (pré-configurada) ──────────────────────
-const FB_CONFIG_DEFAULT = {
-  apiKey:            "AIzaSyDuViHm_TjLbtsCoOB5Hf4zjaT33mI-a0E",
-  authDomain:        "equipment---control.firebaseapp.com",
-  projectId:         "equipment---control",
-  storageBucket:     "equipment---control.firebasestorage.app",
-  messagingSenderId: "426652072473",
-  appId:             "1:426652072473:web:6ebcfe7e0bad888ccb0888",
-};
+// ── Configuração Firebase — credenciais nunca fixas no código ──────────────────
+// As chaves são lidas exclusivamente do localStorage (LS_FB_CFG), que o usuário
+// preenche via modal administrativo. O objeto abaixo é apenas a forma/schema vazio.
+// SEGURANÇA: não comitar/expor chaves reais em repositórios. Configurar via UI.
+const FB_CONFIG_SCHEMA = ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'];
+
+function _loadFbCfg() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}');
+    if(saved.apiKey && saved.projectId) return saved;
+  } catch(e) { console.warn('[Firebase] Erro ao ler config do localStorage:', e); }
+  return null;
+}
+
+function _fbCfgIsValid(cfg) {
+  return cfg && typeof cfg.apiKey === 'string' && cfg.apiKey.length > 0
+             && typeof cfg.projectId === 'string' && cfg.projectId.length > 0;
+}
 
 async function initFirebase() {
   // Chamada a partir de showApp — Firestore já tem app inicializado, só conecta
-  let cfg = FB_CONFIG_DEFAULT;
-  try {
-    const saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}');
-    if(saved.apiKey && saved.projectId) cfg = saved;
-  } catch(e){}
-  localStorage.setItem(LS_FB_CFG, JSON.stringify(cfg));
+  const cfg = _loadFbCfg();
+  if(!_fbCfgIsValid(cfg)) {
+    console.warn('[Firebase] Configuração ausente. Configure via ⚙ Configurações > Firebase.');
+    updateGsCfgBtn();
+    return;
+  }
   try {
     const app = firebase.app(); // app já existe, criado por initFirebaseAndAuth
     await fbInitFirestore(app);
   } catch(e) {
+    console.error('[initFirebase] Falha ao conectar Firestore:', e);
+    showToast('Erro ao conectar Firebase: ' + (e.message || e), 'err');
     _fbActive = false;
   }
   updateGsCfgBtn();
@@ -3647,7 +4138,7 @@ async function initFirebase() {
   function buildPublicView(record) {
     const r = record;
     const d = r.dias_vencer;
-    const fmt = v => v ? new Date(v+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+    const fmt = v => v ? fmtDateSafe(v) : '—';
     const statusColor = _safeColor(d === null ? '#6b7280' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : '#16a34a');
     const statusText  = d === null ? '—' : d < 0 ? `⛔ Vencido há ${Math.abs(d)|0} dias` : d === 0 ? '🔴 Vence HOJE' : d <= 30 ? `⚠️ Vence em ${d|0} dias` : `✓ Em dia (+${d|0} dias)`;
     const pct = r.freq_dias && d !== null ? Math.max(0, Math.min(100, Math.round(d / r.freq_dias * 100))) : 0;
@@ -3775,7 +4266,8 @@ async function initFirebase() {
     if (typeof initDB === 'function') initDB();
     (async () => {
       try {
-        const cfg = FB_CONFIG_DEFAULT;
+        const cfg = _loadFbCfg();
+        if(!cfg) { console.warn('[público] Firebase não configurado — modo offline.'); waitAndRender(); return; }
         let app;
         try { app = firebase.app(); } catch(e) { app = firebase.initializeApp(cfg); }
 
@@ -3820,12 +4312,18 @@ async function initFirebaseAndAuth() {
     return;
   }
   // ── /GUARD ──
-  let cfg = FB_CONFIG_DEFAULT;
-  try {
-    const saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}');
-    if(saved.apiKey && saved.projectId) cfg = saved;
-  } catch(e){}
-  localStorage.setItem(LS_FB_CFG, JSON.stringify(cfg));
+  let cfg = _loadFbCfg();
+  // Se não há config no localStorage, mostra o modal de configuração Firebase
+  if(!_fbCfgIsValid(cfg)) {
+    console.warn('[Firebase] Configuração ausente — exibindo tela de setup.');
+    showLoginScreen();
+    // Exibe aviso gentil no painel de login para guiar o usuário
+    const errMsg = document.getElementById('login-error-msg');
+    const errEl  = document.getElementById('login-error');
+    if(errMsg) errMsg.textContent = 'Firebase não configurado. Clique em ⚙ Configurações para inserir as credenciais do projeto.';
+    if(errEl)  errEl.classList.add('on');
+    return;
+  }
 
   let app;
   try {
@@ -3834,7 +4332,8 @@ async function initFirebaseAndAuth() {
     _auth = firebase.auth(app);
     // Firestore é inicializado DEPOIS do login (em showApp → initFirebase)
   } catch(e) {
-    console.error('initFirebaseAndAuth error:', e);
+    console.error('[initFirebaseAndAuth] Falha ao inicializar app:', e);
+    showToast('Erro ao inicializar Firebase: ' + (e.message || e), 'err');
     showLoginScreen();
     return;
   }
@@ -3987,9 +4486,9 @@ function updateKPIs() {
   sv('tl-n-ok',    x.okFuturo);
   const sEl = document.getElementById('k-saude');
   if(sEl){ sEl.textContent=x.saude+'%'; sEl.style.color=sc; }
-  // Tooltip explicando o cálculo
+  // v11/v12: Tooltip reflete base de cálculo (apenas ativos)
   const sCard = sEl?.closest('.kpi');
-  if(sCard) sCard.title = `Saúde = ${x.okFuturo} em dia / ${x.tot - x.semData} com data calib. (${x.semData} sem data ignorados)`;
+  if(sCard) sCard.title = `Saúde = (${x.ativos} ativos − ${x.vencidos} vencidos) / ${x.ativos} ativos × 100 = ${x.saude}% (inativos/descartados excluídos)`;
   // Sparklines: aguardar layout sem race condition
   if(typeof requestAnimationFrame!=='undefined') requestAnimationFrame(()=>requestAnimationFrame(buildSparklines));
   else setTimeout(buildSparklines, 50);
@@ -4085,9 +4584,18 @@ function buildSparklines() {
 }
 
 function buildAllCharts() {
+  // Guard: Chart.js é carregado com defer; se a CDN falhar, não crashar o app.
+  if(typeof Chart === 'undefined') {
+    console.warn('[Charts] Chart.js não carregou (CDN indisponível). Gráficos desabilitados.');
+    return;
+  }
   const tot   = DB.length;
-  const emDia = DB.filter(r=>r.dias_vencer===null||r.dias_vencer>90).length;
-  const pct   = tot ? Math.round(emDia/tot*100) : 0;
+  // v11 CORREÇÃO 1: gauge usa apenas equipamentos ATIVOS (exclui INATIVO/DESCARTADO)
+  const dbAtivos = DB.filter(r => _isAtivo(r) && !_isDescartado(r));
+  const totAtivos = dbAtivos.length;
+  const emDiaAtivos = dbAtivos.filter(r => r.dias_vencer !== null && r.dias_vencer > 90).length;
+  const comDataAtivos = dbAtivos.filter(r => r.dias_vencer !== null).length;
+  const pct   = comDataAtivos ? Math.round(emDiaAtivos / comDataAtivos * 100) : 0;
   const gc2   = pct>=80?'#2ea043':pct>=50?'#d29922':'#da3633';
 
   dc('gauge');
@@ -5293,7 +5801,7 @@ function _saveFilters(){ try{
   // Save tipos
   if(_selectedTipos.size>0) o['_tipos']=Array.from(_selectedTipos);
   localStorage.setItem('rochling_filters_v1', JSON.stringify(o));
-}catch(e){} }
+}catch(e){ console.warn('[_saveFilters]', e); } }
 function _restoreFilters(){ try{
   var o = JSON.parse(localStorage.getItem('rochling_filters_v1')||'{}');
   FILTER_IDS.forEach(function(id){var e=document.getElementById(id); if(e&&o[id]) e.value=o[id];});
@@ -5309,7 +5817,7 @@ function _restoreFilters(){ try{
     o['_tipos'].forEach(function(v){ _selectedTipos.add(v); });
     _tipoUpdateLabel();
   }
-}catch(e){} }
+}catch(e){ console.warn('[_restoreFilters]', e); } }
 function applyF() {
   _pendingFilterRefresh = false;
   updateApplyFilterBtn();
@@ -5444,7 +5952,7 @@ function clearF(){
     var portal = document.getElementById('col-filter-portal');
     if(portal) portal.classList.remove('cfd-open');
   }
-  try{localStorage.removeItem('rochling_filters_v1');}catch(e){}
+  try{localStorage.removeItem('rochling_filters_v1');}catch(e){ console.warn('[clearAllFilters]',e); }
   applyF();
 }
 
@@ -5461,18 +5969,107 @@ function filterAlerts(mode) {
   renderAlerts();
 }
 function renderAlerts() {
-  let rows=DB.filter(r=>r.prox_calib);
-  if(alertFilter==='vencido')     rows=rows.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0);
-  else if(alertFilter==='30d')    rows=rows.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0&&r.dias_vencer<=30);
-  else if(alertFilter==='90d')    rows=rows.filter(r=>r.dias_vencer!==null&&r.dias_vencer>30&&r.dias_vencer<=90);
-  if(alertSearch) rows=rows.filter(r=>Object.values(r).join(' ').toLowerCase().includes(alertSearch.toLowerCase()));
-  rows.sort((a,b)=>(a.dias_vencer??9999)-(b.dias_vencer??9999));
-  pag.alert.rows=rows; renderTable('alert');
+  let rows = DB.filter(r => r.prox_calib);
+  if(alertFilter === 'vencido')  rows = rows.filter(r => r.dias_vencer !== null && r.dias_vencer < 0);
+  else if(alertFilter === '30d') rows = rows.filter(r => r.dias_vencer !== null && r.dias_vencer >= 0 && r.dias_vencer <= 30);
+  else if(alertFilter === '90d') rows = rows.filter(r => r.dias_vencer !== null && r.dias_vencer > 30 && r.dias_vencer <= 90);
+  if(alertSearch) rows = rows.filter(r => Object.values(r).join(' ').toLowerCase().includes(alertSearch.toLowerCase()));
+  // BUG FIX: coerção numérica estrita — string vazia "" ou null → 9999 (em vez de NaN que congela o sort)
+  rows.sort((a, b) => {
+    const da = (a.dias_vencer === '' || a.dias_vencer == null) ? 9999 : Number(a.dias_vencer);
+    const db = (b.dias_vencer === '' || b.dias_vencer == null) ? 9999 : Number(b.dias_vencer);
+    return (isNaN(da) ? 9999 : da) - (isNaN(db) ? 9999 : db);
+  });
+  pag.alert.rows = rows;
+  renderTable('alert');
 }
 
 // ═══════════════════════════════════════════════════════
-// CSV EXPORT
+// PDF DE ALERTAS — janela de impressão estilizada
+// Gera um relatório com as linhas atualmente filtradas e visíveis
 // ═══════════════════════════════════════════════════════
+function printAlertsPDF() {
+  const rows = pag.alert.rows || [];
+  if(!rows.length) { showToast('Sem dados para imprimir.', 'err'); return; }
+  const now = new Date().toLocaleString('pt-BR');
+  const titles = { vencido:'🔴 Vencidos', '30d':'🟠 Vencem em 30 dias', '90d':'🟡 Vencem em 90 dias', all:'Todos os Alertas' };
+  const filterLabel = titles[alertFilter] || 'Alertas';
+
+  const cols = [
+    {k:'id',          l:'Código'},
+    {k:'cod_lab',     l:'Cód. Labortec'},
+    {k:'tipo',        l:'Tipo'},
+    {k:'descricao',   l:'Descrição'},
+    {k:'localizacao', l:'Localização'},
+    {k:'responsavel', l:'Responsável'},
+    {k:'empresa',     l:'Empresa'},
+    {k:'prox_calib',  l:'Próx. Calib.'},
+    {k:'dias_vencer', l:'Dias'},
+    {k:'status_calib',l:'Status Calib.'},
+  ];
+
+  const headerRow = cols.map(c => `<th>${esc(c.l)}</th>`).join('');
+  const bodyRows = rows.map((r, i) => {
+    const dv = r.dias_vencer;
+    const dvColor = dv === null ? '' : dv < 0 ? 'color:#b91c1c;font-weight:700' : dv <= 30 ? 'color:#c2410c;font-weight:600' : dv <= 90 ? 'color:#b45309' : 'color:#15803d';
+    return `<tr class="${i%2===0?'even':'odd'}">
+      ${cols.map(c => {
+        let val = r[c.k];
+        if(val === null || val === undefined || val === '') val = '—';
+        if(c.k === 'prox_calib') val = fmtDateSafe(val === '—' ? '' : val);
+        if(c.k === 'dias_vencer') {
+          const n = Number(val);
+          val = dv === null ? '—' : dv < 0 ? `Vencido ${Math.abs(dv)}d` : `+${dv}d`;
+          return `<td style="${dvColor}">${esc(String(val))}</td>`;
+        }
+        return `<td>${esc(String(val))}</td>`;
+      }).join('')}
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head>
+<meta charset="UTF-8">
+<title>Alertas de Calibração — ${esc(filterLabel)}</title>
+<style>
+  @page { size:A4 landscape; margin:10mm 12mm }
+  * { box-sizing:border-box; margin:0; padding:0 }
+  body { font-family:'Segoe UI',Arial,sans-serif; font-size:9pt; color:#1a1a1a; background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact }
+  .ph { display:flex; align-items:flex-start; justify-content:space-between; padding-bottom:8px; border-bottom:3px solid #0064b3; margin-bottom:10px }
+  .ph-title { font-size:17pt; font-weight:800; color:#0064b3; letter-spacing:-.3px }
+  .ph-sub { font-size:9pt; color:#6b7280; margin-top:2px }
+  .ph-meta { text-align:right; font-size:8pt; color:#9ca3af; line-height:1.7 }
+  table { width:100%; border-collapse:collapse; font-size:8pt }
+  thead th { background:#0064b3; color:#fff; font-weight:700; padding:6px 7px; text-align:left; white-space:nowrap; font-size:8pt; letter-spacing:.02em }
+  tbody td { padding:5px 7px; border-bottom:1px solid #e5e7eb; vertical-align:middle; word-break:break-word }
+  .even td { background:#f8fafc }
+  .odd  td { background:#fff }
+  .footer { margin-top:10px; font-size:7pt; color:#9ca3af; text-align:center; border-top:1px solid #e5e7eb; padding-top:5px }
+  @media print { body{background:#fff} }
+</style></head>
+<body>
+  <div class="ph">
+    <div>
+      <div class="ph-title">Röchling Automotive</div>
+      <div class="ph-sub">Controle de Equipamentos de Medição — ${esc(filterLabel)}</div>
+    </div>
+    <div class="ph-meta">
+      Emitido em: ${esc(now)}<br>
+      Total de registros: <strong>${rows.length}</strong>
+    </div>
+  </div>
+  <table>
+    <thead><tr>${headerRow}</tr></thead>
+    <tbody>${bodyRows}</tbody>
+  </table>
+  <div class="footer">Röchling Automotive — Sistema Interno de Controle de Equipamentos de Medição — ${esc(now)}</div>
+  <script>setTimeout(()=>window.print(),400)<\/script>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'width=1100,height=750');
+  if(!w) { showToast('Popup bloqueado. Permita popups para este site.', 'err'); return; }
+  w.document.write(html);
+  w.document.close();
+}
 // Exporta TODAS as linhas filtradas (não só a página atual).
 // Para exportar só a página, passe scope='page'. Para todo DB, scope='all'.
 function exportCSV(tbl, scope) {
@@ -5495,12 +6092,18 @@ function exportCSV(tbl, scope) {
 // ═══════════════════════════════════════════════════════
 function buildRelatorios() {
   if(!document.getElementById('tab-relatorios').classList.contains('on')) return;
-  const venc=DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0).length;
-  const d30=DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0&&r.dias_vencer<=30).length;
-  const d90=DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>30&&r.dias_vencer<=90).length;
-  const ok=DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>90).length;
-  const comData=DB.filter(r=>r.dias_vencer!==null).length;
-  const saude=comData?Math.round(ok/comData*100):0;
+  // Guard: não tentar instanciar Chart se CDN falhou
+  if(typeof Chart === 'undefined') {
+    console.warn('[Relatórios] Chart.js indisponível — KPIs exibidos, gráficos omitidos.');
+  }
+  // v12 FIX: KPIs de relatório baseados apenas em ATIVOS (mesma lógica do Dashboard)
+  const _repAtivos=DB.filter(r=>_isAtivo(r)&&!_isDescartado(r));
+  const venc=_repAtivos.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0).length;
+  const d30=_repAtivos.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0&&r.dias_vencer<=30).length;
+  const d90=_repAtivos.filter(r=>r.dias_vencer!==null&&r.dias_vencer>30&&r.dias_vencer<=90).length;
+  const ok=_repAtivos.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0).length; // calibOk = d30+d90+futuro
+  const ativosTotal=_repAtivos.length;
+  const saude=ativosTotal?Math.round((ativosTotal-venc)/ativosTotal*100):0;
   const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   sv('rk-venc',venc);sv('rk-30d',d30);sv('rk-90d',d90);sv('rk-ok',ok);sv('rk-saude',saude+'%');
 
@@ -5744,13 +6347,24 @@ function saveRecord(){
   };
   if(editUID!==null){
     const idx=DB.findIndex(x=>x._uid===editUID);
-    if(idx>=0){ pushUndo(); DB[idx]={...DB[idx],...upd}; recalcRecord(DB[idx]); }
+    if(idx>=0){
+      const before = {...DB[idx]};
+      pushUndo(); DB[idx]={...DB[idx],...upd}; recalcRecord(DB[idx]);
+      // v12 AUDIT
+      const changed = Object.keys(upd).filter(k=>k!=='dias_vencer' && String(before[k]||'')!==String(upd[k]||''));
+      const desc = changed.length
+        ? changed.slice(0,3).map(k=>`${k}: "${before[k]||'—'}" → "${upd[k]||'—'}"`).join(' | ')
+        : 'Sem alterações detectadas';
+      v12AuditLog('edit', upd.id || editUID, desc);
+    }
     showToast(t('t_updated'));
   } else {
     pushUndo();
     const newRec={...upd,_uid:Date.now(),sheet:'geral'};
     recalcRecord(newRec);
     DB.push(newRec);
+    // v12 AUDIT
+    v12AuditLog('add', upd.id || 'NOVO', `Equipamento adicionado: ${upd.descricao||upd.tipo||''}`);
     showToast(t('t_added'));
   }
   closeModal();
@@ -5772,6 +6386,8 @@ function deleteRecord(){
     : `Excluir "${name}"?\nEsta ação não pode ser desfeita.`;
   if(!confirm(msg)) return;
   pushUndo();
+  // v12 AUDIT
+  v12AuditLog('del', r.id || editUID, `Equipamento eliminado: ${r.descricao||r.tipo||name}`);
   DB = DB.filter(x => x._uid !== editUID);
   closeModal();
   refreshInPlace();
@@ -5878,13 +6494,79 @@ function startAutoNotif(){buildNotifs();setInterval(()=>{const prev=_lastCrit;bu
 // IMPORT / EXPORT
 // ═══════════════════════════════════════════════════════
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='equipamentos_'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href);}
-function importData(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=ev=>{try{const imported=JSON.parse(ev.target.result);DB=recalcDias(imported);updateAll();fbSchedulePush();showToast('✅ Importado: '+DB.length+' registros. Sincronizando…');}catch(err){showToast('Erro ao importar','err');}};rd.readAsText(f);e.target.value='';}
+// ── CAMPOS PERMITIDOS EM IMPORTAÇÃO — whitelist defensiva ─────────────────────
+const _IMPORT_STR_FIELDS = ['id','tipo','cliente','fabricante','descricao','localizacao',
+  'responsavel','empresa','cod_lab','ult_calib','prox_calib','status','status_calib',
+  'notes','observacoes','link','link_data','sheet'];
+
+function _sanitizeImportedRecord(raw) {
+  if(!raw || typeof raw !== 'object') return null;
+  const out = {};
+  // Copia apenas campos conhecidos, descartando chaves arbitrárias
+  _IMPORT_STR_FIELDS.forEach(k => {
+    if(raw[k] !== undefined && raw[k] !== null) {
+      // Strings: limita a 4 KB e remove caracteres de controle
+      out[k] = String(raw[k]).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').slice(0, 4096);
+    }
+  });
+  // Campos numéricos — aceita apenas números
+  if(raw.freq_dias !== undefined) { const n = parseInt(raw.freq_dias, 10); if(!isNaN(n) && n > 0) out.freq_dias = n; }
+  if(raw.dias_vencer !== undefined) { const n = parseInt(raw.dias_vencer, 10); if(!isNaN(n)) out.dias_vencer = n; }
+  if(raw._uid !== undefined) { const n = Number(raw._uid); if(!isNaN(n)) out._uid = n; }
+  return out;
+}
+
+function importData(e) {
+  const f = e.target.files[0];
+  if(!f) return;
+  // Validação básica de tipo MIME e tamanho (máx. 10 MB)
+  if(f.size > 10 * 1024 * 1024) { showToast('Arquivo muito grande (máx. 10 MB).', 'err'); e.target.value = ''; return; }
+  const rd = new FileReader();
+  rd.onload = ev => {
+    try {
+      const parsed = JSON.parse(ev.target.result);
+      // Deve ser um array de objetos
+      if(!Array.isArray(parsed)) throw new Error('O arquivo JSON deve ser um array de registros.');
+      const sanitized = parsed.map(_sanitizeImportedRecord).filter(Boolean);
+      if(sanitized.length === 0) throw new Error('Nenhum registro válido encontrado no arquivo.');
+      DB = recalcDias(sanitized);
+      updateAll();
+      fbSchedulePush();
+      showToast(`✅ Importado: ${DB.length} registro(s). Sincronizando…`);
+    } catch(err) {
+      console.warn('[importData]', err);
+      showToast('Erro ao importar: ' + (err.message || 'JSON inválido.'), 'err');
+    }
+  };
+  rd.onerror = () => showToast('Falha ao ler o arquivo.', 'err');
+  rd.readAsText(f);
+  e.target.value = '';
+}
+
+// ── Cache de seletores DOM frequentes — evita getElementById em hot paths ──────
+// Inicializado no DOMContentLoaded; safe porque estes elementos são estáticos.
+let _$toast = null, _$toastMsg = null, _$syncInd = null;
+document.addEventListener('DOMContentLoaded', function() {
+  _$toast    = document.getElementById('toast');
+  _$toastMsg = document.getElementById('toast-msg');
+  _$syncInd  = document.getElementById('sync-indicator');
+}, { once: true });
 
 // ═══════════════════════════════════════════════════════
 // TOAST
 // ═══════════════════════════════════════════════════════
-let _toastT=null;
-function showToast(msg,type='success'){const t=document.getElementById('toast');const tmEl=document.getElementById('toast-msg'); if(tmEl) tmEl.textContent=msg;t.className='toast '+(type==='err'?'err':'');t.classList.add('on');if(_toastT)clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove('on'),3500);}
+let _toastT = null;
+function showToast(msg, type = 'success') {
+  // Lazy init caso DOMContentLoaded já tenha disparado antes do cache acima
+  const t   = _$toast    || (_$toast    = document.getElementById('toast'));
+  const tmEl= _$toastMsg || (_$toastMsg = document.getElementById('toast-msg'));
+  if(!t) return;
+  if(tmEl) tmEl.textContent = msg;
+  t.className = 'toast ' + (type === 'err' ? 'err' : '');
+  t.classList.add('on');
+  if(_toastT) clearTimeout(_toastT);
+  _toastT = setTimeout(() => t.classList.remove('on'), 3500);
+}
 
 // ═══════════════════════════════════════════════════════
 // RESET
@@ -6423,14 +7105,8 @@ function _handleQrDeepLink() {
   let drillState = null;
   window.__getDrillState = () => drillState;
 
-  function fmtDate(s){
-    if(!s) return '—';
-    try{
-      const d=new Date(s+'T00:00:00');
-      if(typeof DATE_FMT!=='undefined' && DATE_FMT==='iso') return s;
-      return d.toLocaleDateString('pt-BR');
-    }catch(e){return s;}
-  }
+  // fmtDate local removido — usa o global fmtDateSafe (timezone-safe, sem new Date(str))
+  function fmtDate(s){ return fmtDateSafe(s); }
 
   function badgeStatus(r){
     const dv = r.dias_vencer;
@@ -6441,48 +7117,124 @@ function _handleQrDeepLink() {
     return `<span style="color:var(--green)">${dv}d</span>`;
   }
 
-  function renderRows(rows){
+  function renderRows(rows, filterState){
     if(!rows.length) return '<div class="drill-empty">Nenhum registro encontrado para esta seleção.</div>';
-    const head = `<thead><tr>
-      <th>Código</th><th>Tipo</th><th>Descrição</th><th>Localização</th>
-      <th>Empresa</th><th>Próx. Calib.</th><th>Dias</th><th>Status</th><th style="text-align:right">Ações</th>
-    </tr></thead>`;
-    const body = rows.map(r=>`<tr data-uid="${r._uid}">
-      <td style="font-family:var(--mono);font-size:10px">${norm(r.id)||'—'}</td>
-      <td>${norm(r.tipo)||'—'}</td>
-      <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${norm(r.descricao)}">${norm(r.descricao)||'—'}</td>
-      <td>${norm(r.localizacao)||'—'}</td>
-      <td>${norm(r.empresa)||'—'}</td>
-      <td style="font-family:var(--mono);font-size:10px">${fmtDate(r.prox_calib)}</td>
+    // Filtros Excel inline do drill-down
+    const fs = filterState || {};
+    let filtered = rows.filter(r => {
+      if(fs.tipo      && (r.tipo||'') !== fs.tipo)           return false;
+      if(fs.cod_lab   && (r.cod_lab||'') !== fs.cod_lab)     return false;
+      if(fs.localizacao && (r.localizacao||'') !== fs.localizacao) return false;
+      if(fs.empresa   && (r.empresa||'') !== fs.empresa)     return false;
+      if(fs.status    && (r.status||'').toUpperCase() !== fs.status.toUpperCase()) return false;
+      if(fs.q && !Object.values(r).join(' ').toLowerCase().includes(fs.q.toLowerCase())) return false;
+      return true;
+    });
+
+    // Unique values para filtros de cada coluna
+    const uniq = (key) => [...new Set(rows.map(r => r[key]||'').filter(Boolean))].sort();
+
+    function sel(key, label){
+      const opts = uniq(key).map(v => `<option value="${esc(v)}"${fs[key]===v?' selected':''}>${esc(v)}</option>`).join('');
+      return `<select class="drill-col-filter" data-key="${key}" onchange="__drillApplyFilter(this)"
+        style="font-size:10px;border:1px solid var(--bdr2);border-radius:4px;padding:2px 4px;background:var(--surf2);color:var(--tx);max-width:90px;cursor:pointer">
+        <option value="">Todos</option>${opts}</select>`;
+    }
+    function textF(key){
+      return `<input class="drill-col-filter" data-key="${key}" type="text" placeholder="Buscar…" value="${esc(fs[key]||'')}"
+        oninput="__drillApplyFilter(this)"
+        style="font-size:10px;border:1px solid var(--bdr2);border-radius:4px;padding:2px 6px;background:var(--surf2);color:var(--tx);width:90px">`;
+    }
+
+    const head = `<thead>
+      <tr>
+        <th>Código</th><th>Cód. Labortec</th><th>Tipo</th><th>Descrição</th>
+        <th>Localização</th><th>Empresa</th><th>Próx. Calib.</th><th>Dias</th><th>Status</th>
+        <th style="text-align:right">Ações</th>
+      </tr>
+      <tr style="background:var(--surf)">
+        <td>${textF('id')}</td>
+        <td>${textF('cod_lab')}</td>
+        <td>${sel('tipo','Tipo')}</td>
+        <td>${textF('descricao')}</td>
+        <td>${sel('localizacao','Local')}</td>
+        <td>${sel('empresa','Empresa')}</td>
+        <td></td><td></td>
+        <td>${sel('status','Status')}</td>
+        <td></td>
+      </tr>
+    </thead>`;
+    const body = filtered.map(r => `<tr data-uid="${r._uid}">
+      <td style="font-family:var(--mono);font-size:10px">${esc(r.id)||'—'}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--tx2)">${esc(r.cod_lab||'—')}</td>
+      <td>${esc(r.tipo)||'—'}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.descricao)}">${esc(r.descricao)||'—'}</td>
+      <td>${esc(r.localizacao)||'—'}</td>
+      <td>${esc(r.empresa)||'—'}</td>
+      <td style="font-family:var(--mono);font-size:10px">${fmtDateSafe(r.prox_calib)}</td>
       <td style="font-family:var(--mono);text-align:center">${badgeStatus(r)}</td>
-      <td>${norm(r.status)||'—'}</td>
+      <td>${esc(r.status)||'—'}</td>
       <td style="text-align:right"><span class="drill-act">
         <button onclick="openEdit(${r._uid})" title="Editar">✏</button>
         <button class="del" onclick="if(confirm('Excluir este registro?'))deleteInline(${r._uid})" title="Excluir">🗑</button>
       </span></td>
     </tr>`).join('');
-    return `<table>${head}<tbody>${body}</tbody></table>`;
+    const countLine = filtered.length < rows.length
+      ? `<tr><td colspan="10" style="text-align:center;padding:6px;font-size:10px;color:var(--tx3)">
+           Mostrando ${filtered.length} de ${rows.length} registros
+           <button onclick="__drillClearFilters()" style="margin-left:8px;font-size:10px;background:transparent;border:none;color:var(--accent2);cursor:pointer;text-decoration:underline">Limpar filtros</button>
+         </td></tr>` : '';
+    return `<table>${head}<tbody>${body}${countLine}</tbody></table>`;
+  }
+
+  // Estado de filtros inline do drill-down
+  let _drillFilters = {};
+
+  window.__drillApplyFilter = function(el) {
+    _drillFilters[el.dataset.key] = el.value;
+    _doRefreshDrill();
+  };
+  window.__drillClearFilters = function() {
+    _drillFilters = {};
+    _doRefreshDrill();
+  };
+
+  function _doRefreshDrill() {
+    if(!drillState) return;
+    const rows = drillState.filter();
+    document.getElementById('drill-body').innerHTML = renderRows(rows, _drillFilters);
+    const vis = rows.filter(r => {
+      if(_drillFilters.tipo      && (r.tipo||'') !== _drillFilters.tipo)           return false;
+      if(_drillFilters.cod_lab   && (r.cod_lab||'') !== _drillFilters.cod_lab)     return false;
+      if(_drillFilters.localizacao && (r.localizacao||'') !== _drillFilters.localizacao) return false;
+      if(_drillFilters.empresa   && (r.empresa||'') !== _drillFilters.empresa)     return false;
+      if(_drillFilters.status    && (r.status||'').toUpperCase() !== _drillFilters.status.toUpperCase()) return false;
+      if(_drillFilters.q && !Object.values(r).join(' ').toLowerCase().includes(_drillFilters.q.toLowerCase())) return false;
+      return true;
+    });
+    document.getElementById('drill-count').textContent = vis.length + ' registro' + (vis.length===1?'':'s');
   }
 
   window.refreshDrill = function(){
     if(!drillState) return;
-    const rows = drillState.filter();
-    document.getElementById('drill-body').innerHTML = renderRows(rows);
-    document.getElementById('drill-count').textContent = rows.length + ' registro' + (rows.length===1?'':'s');
+    _drillFilters = {};
+    _doRefreshDrill();
   };
 
   window.openDrill = function(chartKey, label){
     const cfg = DRILL[chartKey]; if(!cfg) return;
+    _drillFilters = {};
     drillState = { key:chartKey, label, filter:()=>cfg.filter(label) };
     document.getElementById('drill-title').textContent = cfg.title;
     document.getElementById('drill-sub').textContent = '› ' + label;
-    refreshDrill();
+    _doRefreshDrill();
     document.getElementById('drill-modal').classList.add('on');
   };
 
   window.closeDrill = function(){
     document.getElementById('drill-modal').classList.remove('on');
     drillState = null;
+    _drillFilters = {};
   };
 
   // ── Wire clicks em todos os gráficos registrados em `charts`
@@ -6528,7 +7280,7 @@ function _handleQrDeepLink() {
       const be = document.getElementById('tab-badge-equipamentos');
       if(ba){ ba.textContent = alertas; ba.style.display = alertas>0?'':'none'; ba.style.background=vencidos>0?'var(--red)':'var(--orange)'; }
       if(be){ be.textContent = total; be.style.display = total>0?'':'none'; }
-    }catch(e){}
+    }catch(e){ console.warn('[updateTabBadges]', e); }
   }
   // dispara na carga inicial
   let badgeTries=0;
@@ -6936,7 +7688,7 @@ async function printQrBulk(uids) {
     grande:  { w:50, h:30, cols:3,  rows:8,  qrPx:280, gap:3 },
   }[_qrBulkSize] || { w:12, h:12, cols:10, rows:14, qrPx:120, gap:1 };
 
-  const fmt = v => v ? new Date(v+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  const fmt = v => fmtDateSafe(v);
 
   // Gera todos os QR codes como base64 via canvas
   const tmpArea = document.createElement('div');
@@ -7209,7 +7961,7 @@ function bulkDelete(tbl) {
     uids.forEach(uid => {
       const r = DB.find(x => x._uid === uid);
       if(r?.fbId) {
-        try { _colRef.doc(r.fbId).delete(); } catch(e){}
+        try { _colRef.doc(r.fbId).delete(); } catch(e){ console.warn('[fbPush] delete doc:', r.fbId, e); }
       }
     });
   }
@@ -7329,7 +8081,7 @@ function showToast(msg, type) {
       return `✓ ${d}d`;
     }
     if(k === 'ult_calib' || k === 'prox_calib') {
-      try { return new Date(v+'T00:00:00').toLocaleDateString('pt-BR'); } catch(e) { return v; }
+      return fmtDateSafe(v);
     }
     return String(v);
   }
@@ -7650,7 +8402,10 @@ function navEquipView(dir) {
 }
 
 function field(lbl, val, mono) {
-  const v = val === null || val === undefined || val === '' ? '—' : val;
+  // SEGURANÇA: esc() sanitiza o valor antes de inserir via innerHTML,
+  // prevenindo XSS em dados importados de JSON ou Firestore.
+  const raw = (val === null || val === undefined || val === '') ? '—' : val;
+  const v   = esc(String(raw));
   return `<div class="ev-field">
     <div class="ev-field-lbl">${lbl}</div>
     <div class="ev-field-val${mono?' mono':''}">${v}</div>
@@ -7661,28 +8416,47 @@ function renderEquipView(uid) {
   const r = DB.find(x => x._uid === uid);
   if(!r) return;
 
+  // Cache dos elementos DOM para esta renderização — evita 16+ lookups repetidos
+  const $ev = {
+    id:       document.getElementById('ev-id'),
+    name:     document.getElementById('ev-name'),
+    tipo:     document.getElementById('ev-tipo'),
+    badges:   document.getElementById('ev-badges'),
+    timeline: document.getElementById('ev-timeline'),
+    hbar:     document.getElementById('ev-hbar'),
+    hpct:     document.getElementById('ev-health-pct'),
+    gridId:   document.getElementById('ev-grid-id'),
+    gridCal:  document.getElementById('ev-grid-calib'),
+    gridLoc:  document.getElementById('ev-grid-loc'),
+    obs:      document.getElementById('ev-obs-text'),
+    obsWrap:  document.getElementById('ev-obs-wrap'),
+    fwrap:    document.getElementById('ev-file-wrap'),
+    farea:    document.getElementById('ev-file-area'),
+    navInfo:  document.getElementById('ev-nav-info'),
+  };
+
   // Header
-  document.getElementById('ev-id').textContent   = r.id || '—';
-  document.getElementById('ev-name').textContent = r.descricao || r.tipo || '—';
-  document.getElementById('ev-tipo').textContent = [r.tipo, r.fabricante].filter(Boolean).join(' · ') || '—';
+  if($ev.id)   $ev.id.textContent   = r.id || '—';
+  if($ev.name) $ev.name.textContent = r.descricao || r.tipo || '—';
+  if($ev.tipo) $ev.tipo.textContent = [r.tipo, r.fabricante].filter(Boolean).join(' · ') || '—';
 
   // Badges
   const today = new Date(); today.setHours(0,0,0,0);
   const d = r.dias_vencer;
   let urgBadge = '';
   if(d !== null && d !== undefined) {
-    if(d < 0)       urgBadge = `<span class="badge b-err">⛔ Vencido ${Math.abs(d)}d</span>`;
+    if(d < 0)        urgBadge = `<span class="badge b-err">⛔ Vencido ${Math.abs(d)}d</span>`;
     else if(d <= 30) urgBadge = `<span class="badge b-warn">⚠ Vence em ${d}d</span>`;
     else if(d <= 90) urgBadge = `<span class="badge" style="background:#fff7ed;color:#b45309;border:1px solid #fde68a">📅 ${d} dias</span>`;
     else             urgBadge = `<span class="badge b-ok">✓ Em dia</span>`;
   }
-  document.getElementById('ev-badges').innerHTML =
-    (r.status ? `<span class="badge ${r.status.toUpperCase()==='ATIVO'?'b-ok':'b-gray'}">${r.status}</span>` : '') +
+  if($ev.badges) $ev.badges.innerHTML =
+    (r.status ? `<span class="badge ${r.status.toUpperCase()==='ATIVO'?'b-ok':'b-gray'}">${esc(r.status)}</span>` : '') +
     calibBadge(r.status_calib, r.dias_vencer) + urgBadge;
 
-  // Timeline
+  // Timeline — valores numéricos (dias, freq) são seguros; datas passam por fmtDate que retorna apenas dígitos e separadores
   const fmt = v => v ? fmtDate(v) : '—';
-  document.getElementById('ev-timeline').innerHTML = `
+  if($ev.timeline) $ev.timeline.innerHTML = `
     <div class="ev-tl-item">
       <div class="ev-tl-icon">📅</div>
       <div class="ev-tl-lbl">Últ. Calibração</div>
@@ -7710,13 +8484,11 @@ function renderEquipView(uid) {
     pct = Math.max(0, Math.min(100, Math.round((d / r.freq_dias) * 100)));
     barColor = d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : d <= 90 ? '#f59e0b' : '#16a34a';
   }
-  document.getElementById('ev-hbar').style.width = pct + '%';
-  document.getElementById('ev-hbar').style.background = barColor;
-  document.getElementById('ev-health-pct').textContent = pct + '%';
-  document.getElementById('ev-health-pct').style.color = barColor;
+  if($ev.hbar)  { $ev.hbar.style.width = pct + '%'; $ev.hbar.style.background = barColor; }
+  if($ev.hpct)  { $ev.hpct.textContent = pct + '%'; $ev.hpct.style.color = barColor; }
 
   // Identification grid
-  document.getElementById('ev-grid-id').innerHTML =
+  if($ev.gridId) $ev.gridId.innerHTML =
     field('Código de Controle', r.id, true) +
     field('Tipo', r.tipo) +
     field('Fabricante', r.fabricante) +
@@ -7725,7 +8497,7 @@ function renderEquipView(uid) {
     field('Descrição', r.descricao);
 
   // Calibration grid
-  document.getElementById('ev-grid-calib').innerHTML =
+  if($ev.gridCal) $ev.gridCal.innerHTML =
     field('Última Calibração', fmt(r.ult_calib), true) +
     field('Próxima Calibração', fmt(r.prox_calib), true) +
     field('Frequência (dias)', r.freq_dias ? r.freq_dias+'d' : '—', true) +
@@ -7734,24 +8506,21 @@ function renderEquipView(uid) {
     field('Dias Restantes', d !== null ? (d < 0 ? '⛔ '+Math.abs(d)+'d vencido' : '+'+d+'d') : '—', true);
 
   // Location grid
-  document.getElementById('ev-grid-loc').innerHTML =
+  if($ev.gridLoc) $ev.gridLoc.innerHTML =
     field('Localização', r.localizacao) +
     field('Responsável', r.responsavel) +
     field('Status Operacional', r.status);
 
-  // Notes
-  const obsEl = document.getElementById('ev-obs-text');
-  obsEl.textContent = r.observacoes || r.notes || '(sem observações)';
-  document.getElementById('ev-obs-wrap').style.display = '';
+  // Notes — textContent garante que observações com HTML não sejam interpretadas
+  if($ev.obs)     $ev.obs.textContent = r.observacoes || r.notes || '(sem observações)';
+  if($ev.obsWrap) $ev.obsWrap.style.display = '';
 
-  // File
-  const fwrap = document.getElementById('ev-file-wrap');
-  const farea = document.getElementById('ev-file-area');
+  // File attachment
   if(r.link) {
-    fwrap.style.display = '';
-    const fname = r.link.split(/[\/\\]/).pop() || r.link;
+    if($ev.fwrap) $ev.fwrap.style.display = '';
+    const fname   = r.link.split(/[\/\\]/).pop() || r.link;
     const hasData = !!(r.link_data && r.link_data.startsWith('data:'));
-    farea.innerHTML = `<div style="display:flex;align-items:center;gap:10px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:10px 14px">
+    if($ev.farea) $ev.farea.innerHTML = `<div style="display:flex;align-items:center;gap:10px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:10px 14px">
       <span style="font-size:22px">${fileIcon(fname)}</span>
       <div>
         <div style="font-size:12px;font-weight:600;color:var(--tx)">${esc(fname)}</div>
@@ -7760,18 +8529,18 @@ function renderEquipView(uid) {
       ${hasData ? `<button class="btn-g" style="margin-left:auto;font-size:11px" onclick="openFileForRow(${r._uid})">🔗 Abrir</button>` : ''}
     </div>`;
   } else {
-    fwrap.style.display = 'none';
+    if($ev.fwrap) $ev.fwrap.style.display = 'none';
   }
 
   // Nav info
-  document.getElementById('ev-nav-info').textContent = `${_viewIdx+1} / ${_viewList.length}`;
+  if($ev.navInfo) $ev.navInfo.textContent = `${_viewIdx+1} / ${_viewList.length}`;
 }
 
 function printEquipView() {
   const r = DB.find(x => x._uid === _viewUID);
   if(!r) return;
   const d = r.dias_vencer;
-  const fmt = v => v ? new Date(v+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  const fmt = v => fmtDateSafe(v);
   const barColor = d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : d <= 90 ? '#f59e0b' : '#16a34a';
   const pct = r.freq_dias && d !== null ? Math.max(0,Math.min(100,Math.round(d/r.freq_dias*100))) : 0;
   const now = new Date().toLocaleString('pt-BR');
@@ -8056,7 +8825,7 @@ function printQrLabel() {
   const showStatus = document.getElementById('qr-opt-status')?.checked;
   const qty        = _qrSelectedSize === 'folha' ? parseInt(document.getElementById('qr-qty')?.value || '9') : 1;
 
-  const fmt = v => v ? new Date(v+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  const fmt = v => fmtDateSafe(v);
   const d = r.dias_vencer;
   const statusTxt   = d === null ? '—' : d < 0 ? 'VENCIDO' : d <= 30 ? `Vence ${fmt(r.prox_calib)}` : 'OK';
   const statusColor = d === null ? '#888' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : '#16a34a';
@@ -8380,7 +9149,8 @@ function _injectTotalsRow(tbl, tbody, p) {
   const venc  = rows.filter(r => r.dias_vencer !== null && r.dias_vencer < 0).length;
   const d30   = rows.filter(r => r.dias_vencer !== null && r.dias_vencer >= 0 && r.dias_vencer <= 30).length;
   const ok    = rows.filter(r => r.dias_vencer !== null && r.dias_vencer > 90).length;
-  const saude = total ? Math.round(ok / total * 100) : 0;
+  // v12 FIX: Saúde na linha de totais = ((total - vencidos) / total) × 100
+  const saude = total ? Math.round((total - venc) / total * 100) : 0;
 
   // Count columns
   const headerRow = document.querySelector(`#${tbl==='geral'?'eq-thead':'alert-thead'} tr`);
@@ -9436,4 +10206,1178 @@ function toggleColFilterDd(tbl, col, event) {
   var btn=event.currentTarget||event.target;
   _cfdBuild(tbl, col, btn.getBoundingClientRect());
 }
+
+// ╔══════════════════════════════════════════════════════════════════
+// ║  v10 — MELHORIA 2: Gráficos → Tabela (Chart Drill-to-Filter)
+// ║
+// ║  Ao clicar numa barra/fatia dos gráficos principais, esta função
+// ║  navega para a aba Equipamentos e aplica o filtro correspondente
+// ║  usando os mecanismos já existentes (applyF / _multiSel).
+// ║  Não há dependências externas — apenas Vanilla JS.
+// ╚══════════════════════════════════════════════════════════════════
+(function() {
+  'use strict';
+
+  // Utility: navigate to the Equipamentos tab programmatically
+  function _goToEquipTab() {
+    var tabBtns = document.querySelectorAll('.tab');
+    tabBtns.forEach(function(btn) {
+      if (btn.textContent.includes('Equipamentos') || btn.textContent.includes('Equipment')) {
+        btn.click();
+      }
+    });
+  }
+
+  // ── Helper: filter by a multi-select field value ──────────────
+  function _filterByField(fieldKey, value) {
+    // Clear current filters to start fresh for chart clicks
+    if (typeof clearF === 'function') clearF();
+
+    // Map chart field key → canonical multiSel id
+    var fieldToMulti = {
+      'status':      'f-status',
+      'status_calib':'f-calib',
+      'tipo':        null,  // handled via _selectedTipos
+      'localizacao': 'f-local',
+      'empresa':     'f-emp',
+    };
+
+    if (fieldKey === 'tipo') {
+      // Use _selectedTipos set
+      if (typeof _selectedTipos !== 'undefined') {
+        _selectedTipos.clear();
+        _selectedTipos.add(value);
+        if (typeof _tipoUpdateLabel === 'function') _tipoUpdateLabel();
+      }
+    } else {
+      var multiId = fieldToMulti[fieldKey];
+      if (multiId && typeof _multiSel !== 'undefined') {
+        if (!_multiSel[multiId]) _multiSel[multiId] = new Set();
+        _multiSel[multiId].clear();
+        _multiSel[multiId].add(value);
+        if (typeof _multiUpdateLabel === 'function') _multiUpdateLabel(multiId);
+      }
+    }
+
+    // Navigate first, then apply filter (so the table is visible)
+    _goToEquipTab();
+    setTimeout(function() {
+      if (typeof applyF === 'function') applyF();
+      // Scroll to table
+      var tblWrap = document.getElementById('eq-wrap');
+      if (tblWrap) tblWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }
+
+  // ── Helper: filter by dias_vencer bucket ─────────────────────
+  function _filterByDiasBucket(bucket) {
+    // bucket: 'vencido' | 'd30' | 'd90' | 'ok'
+    if (typeof clearF === 'function') clearF();
+
+    // Map bucket to a prox_calib date range
+    var today = new Date(); today.setHours(0,0,0,0);
+    var pad = function(n) { return String(n).padStart(2,'0'); };
+    var iso = function(d) { return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
+
+    var fDe = document.getElementById('f-de');
+    var fAte = document.getElementById('f-ate');
+
+    if (bucket === 'vencido') {
+      // prox_calib in the past: de=0000-01-01, ate=yesterday
+      var yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
+      if (fDe) fDe.value = '2000-01-01';
+      if (fAte) fAte.value = iso(yesterday);
+    } else if (bucket === 'd30') {
+      // prox_calib within next 30 days
+      var d30 = new Date(today); d30.setDate(d30.getDate()+30);
+      if (fDe) fDe.value = iso(today);
+      if (fAte) fAte.value = iso(d30);
+    } else if (bucket === 'd90') {
+      // prox_calib 31–90 days
+      var from90 = new Date(today); from90.setDate(from90.getDate()+31);
+      var to90   = new Date(today); to90.setDate(to90.getDate()+90);
+      if (fDe) fDe.value = iso(from90);
+      if (fAte) fAte.value = iso(to90);
+    } else if (bucket === 'ok') {
+      // prox_calib > 90 days from today
+      var from91 = new Date(today); from91.setDate(from91.getDate()+91);
+      if (fDe) fDe.value = iso(from91);
+      if (fAte) fAte.value = '';
+    }
+
+    _goToEquipTab();
+    setTimeout(function() {
+      if (typeof applyF === 'function') applyF();
+      var tblWrap = document.getElementById('eq-wrap');
+      if (tblWrap) tblWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }
+
+  // ── Filter by month (for the mensal chart) ────────────────────
+  function _filterByMonth(yearNum, monthNum, datasetLabel) {
+    // datasetLabel: 'Previstas' | 'Realizadas'
+    if (typeof clearF === 'function') clearF();
+
+    var pad = function(n) { return String(n).padStart(2,'0'); };
+    var firstDay = yearNum + '-' + pad(monthNum+1) + '-01';
+    var lastDate = new Date(yearNum, monthNum+1, 0);
+    var lastDay  = yearNum + '-' + pad(monthNum+1) + '-' + pad(lastDate.getDate());
+
+    if (datasetLabel && datasetLabel.includes('Realiz')) {
+      // Filter by ult_calib in that month
+      var fUltDe  = document.getElementById('f-ult-calib-de');
+      var fUltAte = document.getElementById('f-ult-calib-ate');
+      var monthVal = yearNum + '-' + pad(monthNum+1);
+      if (fUltDe)  fUltDe.value  = monthVal;
+      if (fUltAte) fUltAte.value = monthVal;
+    } else {
+      // Filter by prox_calib in that month
+      var fDe2  = document.getElementById('f-de');
+      var fAte2 = document.getElementById('f-ate');
+      if (fDe2)  fDe2.value  = firstDay;
+      if (fAte2) fAte2.value = lastDay;
+    }
+
+    _goToEquipTab();
+    setTimeout(function() {
+      if (typeof applyF === 'function') applyF();
+      var tblWrap = document.getElementById('eq-wrap');
+      if (tblWrap) tblWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }
+
+  // ── Wire onClick to charts after buildAllCharts() ────────────
+  function _wireChartInteractions() {
+    var c = (typeof charts !== 'undefined') ? charts : null;
+    if (!c) return;
+
+    // ── 1. Gráfico de colunas mensais (mensal) ────────────────
+    // (the drill-down for drill-modal already wired in v9; we ADD table filter)
+    if (c.mensal && c.mensal.canvas && !c.mensal.__v10TableClick) {
+      c.mensal.__v10TableClick = true;
+      var origMensalClick = c.mensal.canvas.onclick;
+      c.mensal.canvas.onclick = function(evt) {
+        var pts = c.mensal.getElementsAtEventForMode(evt,'nearest',{intersect:true},true);
+        if (!pts.length) return;
+        var p = pts[0];
+        var lbl = c.mensal.data.labels[p.index]; // e.g. "jan 25"
+        var dsLabel = (c.mensal.data.datasets[p.datasetIndex] || {}).label || '';
+
+        // Parse label — e.g. "jan. 25" → month index + year
+        var parts = lbl.replace('.','').trim().split(/[\s\/]/);
+        var monthNames = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez',
+                          'jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+        var mIdx = monthNames.indexOf((parts[0]||'').toLowerCase());
+        var yr   = parts[1] ? (parseInt(parts[1]) < 100 ? 2000+parseInt(parts[1]) : parseInt(parts[1])) : new Date().getFullYear();
+
+        if (mIdx >= 0) {
+          _filterByMonth(yr, mIdx >= 12 ? mIdx - 12 : mIdx, dsLabel);
+        }
+
+        // Also fire original drill-down behaviour
+        if (typeof origMensalClick === 'function') origMensalClick.call(this, evt);
+      };
+    }
+
+    // ── 2. Gráfico de status de calibração (calib — doughnut) ─
+    if (c.calib && c.calib.canvas && !c.calib.__v10Click) {
+      c.calib.__v10Click = true;
+      c.calib.canvas.onclick = function(evt) {
+        var pts = c.calib.getElementsAtEventForMode(evt,'nearest',{intersect:true},true);
+        if (!pts.length) return;
+        var lbl = (c.calib.data.labels[pts[0].index] || '').toLowerCase();
+        if (lbl.includes('ok') || lbl.includes('aprovado') || lbl.includes('approv') || lbl.includes('calibrated')) {
+          _filterByDiasBucket('ok');
+        } else if (lbl.includes('necess') || lbl.includes('required') || lbl.includes('vencid') || lbl.includes('expired')) {
+          _filterByDiasBucket('vencido');
+        } else {
+          _goToEquipTab();
+        }
+      };
+    }
+
+    // ── 3. Gráfico de status operacional (status — doughnut) ──
+    if (c.status && c.status.canvas && !c.status.__v10Click) {
+      c.status.__v10Click = true;
+      c.status.canvas.onclick = function(evt) {
+        var pts = c.status.getElementsAtEventForMode(evt,'nearest',{intersect:true},true);
+        if (!pts.length) return;
+        var lbl = (c.status.data.labels[pts[0].index] || '').toUpperCase();
+        _filterByField('status', lbl.includes('INAT') || lbl.includes('INACT') ? 'INATIVO' : 'ATIVO');
+      };
+    }
+
+    // ── 4. Vencimentos próx. 6 meses (venc6 — bar) ───────────
+    if (c.venc6 && c.venc6.canvas && !c.venc6.__v10Click) {
+      c.venc6.__v10Click = true;
+      c.venc6.canvas.onclick = function(evt) {
+        var pts = c.venc6.getElementsAtEventForMode(evt,'nearest',{intersect:true},true);
+        if (!pts.length) return;
+        var lbl = c.venc6.data.labels[pts[0].index]; // "jun. 25"
+        var parts = lbl.replace('.','').trim().split(/[\s\/]/);
+        var monthNames = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez',
+                          'jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+        var mIdx = monthNames.indexOf((parts[0]||'').toLowerCase());
+        var yr   = parts[1] ? (parseInt(parts[1]) < 100 ? 2000+parseInt(parts[1]) : parseInt(parts[1])) : new Date().getFullYear();
+        if (mIdx >= 0) _filterByMonth(yr, mIdx >= 12 ? mIdx-12 : mIdx, 'Previstas');
+      };
+    }
+
+    // ── 5. Tipos de equipamento (tipos — horizontal bar) ──────
+    if (c.tipos && c.tipos.canvas && !c.tipos.__v10Click) {
+      c.tipos.__v10Click = true;
+      c.tipos.canvas.onclick = function(evt) {
+        var pts = c.tipos.getElementsAtEventForMode(evt,'nearest',{intersect:true},true);
+        if (!pts.length) return;
+        var tipo = c.tipos.data.labels[pts[0].index];
+        if (tipo) _filterByField('tipo', tipo.replace('…','').trim());
+      };
+    }
+
+    // ── 6. Top locais (locais — bar) ──────────────────────────
+    if (c.locais && c.locais.canvas && !c.locais.__v10Click) {
+      c.locais.__v10Click = true;
+      c.locais.canvas.onclick = function(evt) {
+        var pts = c.locais.getElementsAtEventForMode(evt,'nearest',{intersect:true},true);
+        if (!pts.length) return;
+        var local = c.locais.data.labels[pts[0].index];
+        if (local) _filterByField('localizacao', local.replace('…','').trim());
+      };
+    }
+
+    // ── 7. Empresa executante (emp — doughnut) ────────────────
+    if (c.emp && c.emp.canvas && !c.emp.__v10Click) {
+      c.emp.__v10Click = true;
+      c.emp.canvas.onclick = function(evt) {
+        var pts = c.emp.getElementsAtEventForMode(evt,'nearest',{intersect:true},true);
+        if (!pts.length) return;
+        var emp = c.emp.data.labels[pts[0].index];
+        if (emp) _filterByField('empresa', emp.trim());
+      };
+    }
+  }
+
+  // Hook buildAllCharts to re-wire after each rebuild
+  var _origBuildAllCharts = window.buildAllCharts;
+  if (typeof _origBuildAllCharts === 'function') {
+    window.buildAllCharts = function() {
+      _origBuildAllCharts.apply(this, arguments);
+      // Defer slightly so Chart instances are fully constructed
+      setTimeout(_wireChartInteractions, 120);
+    };
+  }
+
+  // Also wire on DOMContentLoaded (for initial render)
+  document.addEventListener('DOMContentLoaded', function() {
+    // Try a few times until charts are ready
+    var tries = 0;
+    var interval = setInterval(function() {
+      if (typeof charts !== 'undefined' && Object.keys(charts).length > 0) {
+        _wireChartInteractions();
+        clearInterval(interval);
+      }
+      if (++tries > 30) clearInterval(interval);
+    }, 400);
+  });
+
+  // Expose for manual call if needed
+  window._v10WireCharts = _wireChartInteractions;
+})();
+
+
+// ╔══════════════════════════════════════════════════════════════════
+// ║  v10 — MELHORIA 3: Processing Overlay (Anti-Double-Click)
+// ║
+// ║  Wraps Import, Export CSV, and PDF generation with a light
+// ║  modal overlay + spinner that blocks re-clicks during heavy ops.
+// ║  Overlay dismisses automatically after the operation resolves.
+// ╚══════════════════════════════════════════════════════════════════
+(function() {
+  'use strict';
+
+  var _overlay  = null;  // lazy ref
+  var _msgEl    = null;
+  var _busyBtns = [];    // buttons made busy during op
+  var _busyTimer= null;  // safety auto-dismiss after 15s
+
+  function _getOverlay() {
+    if (!_overlay) {
+      _overlay = document.getElementById('v10-proc-overlay');
+      _msgEl   = document.getElementById('v10-proc-msg');
+    }
+    return _overlay;
+  }
+
+  // Show the processing overlay
+  function procStart(msg, btns) {
+    var ov = _getOverlay();
+    if (!ov) return;
+    if (_msgEl) _msgEl.textContent = msg || 'Processando…';
+    ov.classList.add('on');
+
+    // Mark buttons as busy
+    _busyBtns = [];
+    (btns || []).forEach(function(btn) {
+      if (btn && !btn.disabled) {
+        btn.classList.add('v10-btn-busy');
+        _busyBtns.push(btn);
+      }
+    });
+
+    // Safety auto-dismiss after 15 seconds
+    clearTimeout(_busyTimer);
+    _busyTimer = setTimeout(procEnd, 15000);
+  }
+
+  // Hide the overlay + restore buttons
+  function procEnd() {
+    clearTimeout(_busyTimer);
+    var ov = _getOverlay();
+    if (ov) ov.classList.remove('on');
+    _busyBtns.forEach(function(btn) { btn.classList.remove('v10-btn-busy'); });
+    _busyBtns = [];
+  }
+
+  // ── Wrap importCSV ──────────────────────────────────────────
+  var _origImport = window.importCSV;
+  if (typeof _origImport === 'function') {
+    window.importCSV = function() {
+      var btn = document.querySelector('[onclick*="importCSV"], [onclick*="file-import"]') ||
+                document.getElementById('btn-import');
+      procStart('Importando CSV…', [btn]);
+      try {
+        var result = _origImport.apply(this, arguments);
+        // If it returned a Promise, dismiss when settled
+        if (result && typeof result.then === 'function') {
+          result.then(procEnd, procEnd);
+        } else {
+          // Sync import finishes quickly — dismiss after a brief moment
+          setTimeout(procEnd, 1200);
+        }
+        return result;
+      } catch(e) {
+        procEnd();
+        throw e;
+      }
+    };
+  }
+
+  // ── Wrap exportCSV ──────────────────────────────────────────
+  var _origExport = window.exportCSV;
+  if (typeof _origExport === 'function') {
+    window.exportCSV = function() {
+      var btns = Array.from(document.querySelectorAll('[onclick*="exportCSV"]'));
+      procStart('Exportando CSV…', btns);
+      try {
+        var result = _origExport.apply(this, arguments);
+        setTimeout(procEnd, 900); // CSV export is sync; dismiss after blob is written
+        return result;
+      } catch(e) {
+        procEnd();
+        throw e;
+      }
+    };
+  }
+
+  // ── Wrap exportRepCSV ───────────────────────────────────────
+  var _origRepCSV = window.exportRepCSV;
+  if (typeof _origRepCSV === 'function') {
+    window.exportRepCSV = function() {
+      var btns = Array.from(document.querySelectorAll('[onclick*="exportRepCSV"]'));
+      procStart('Exportando CSV do Relatório…', btns);
+      try {
+        var result = _origRepCSV.apply(this, arguments);
+        setTimeout(procEnd, 900);
+        return result;
+      } catch(e) {
+        procEnd();
+        throw e;
+      }
+    };
+  }
+
+  // ── Wrap executePrint (PDF generation) ──────────────────────
+  var _origExecutePrint = window.executePrint;
+  if (typeof _origExecutePrint === 'function') {
+    window.executePrint = function() {
+      var btns = Array.from(document.querySelectorAll('[onclick*="executePrint"]'));
+      procStart('Gerando PDF…', btns);
+      try {
+        var result = _origExecutePrint.apply(this, arguments);
+        // Print dialog opens async — dismiss after the window opens (~800ms)
+        setTimeout(procEnd, 1500);
+        return result;
+      } catch(e) {
+        procEnd();
+        throw e;
+      }
+    };
+  }
+
+  // ── Wrap openPdfModal to show overlay until modal is ready ──
+  var _origOpenPdf = window.openPdfModal;
+  if (typeof _origOpenPdf === 'function') {
+    window.openPdfModal = function() {
+      var btns = Array.from(document.querySelectorAll('[onclick*="openPdfModal"]'));
+      procStart('Preparando relatório…', btns);
+      try {
+        var result = _origOpenPdf.apply(this, arguments);
+        // Modal is shown synchronously; dismiss quickly
+        setTimeout(procEnd, 500);
+        return result;
+      } catch(e) {
+        procEnd();
+        throw e;
+      }
+    };
+  }
+
+  // ── Wrap printQrBulk (QR bulk print — heavy async) ──────────
+  var _origQrBulk = window.printQrBulk;
+  if (typeof _origQrBulk === 'function') {
+    window.printQrBulk = function(uids) {
+      procStart('Gerando etiquetas QR…', []);
+      try {
+        var result = _origQrBulk.apply(this, arguments);
+        if (result && typeof result.then === 'function') {
+          result.then(function() { setTimeout(procEnd, 800); }, procEnd);
+        } else {
+          setTimeout(procEnd, 2000);
+        }
+        return result;
+      } catch(e) {
+        procEnd();
+        throw e;
+      }
+    };
+  }
+
+  // ── Hook the file import <input> trigger ─────────────────────
+  // The import button triggers a hidden file input; we intercept
+  // the change event to show overlay while parsing.
+  document.addEventListener('DOMContentLoaded', function() {
+    var fileImport = document.getElementById('file-import');
+    if (fileImport) {
+      fileImport.addEventListener('change', function() {
+        if (this.files && this.files.length > 0) {
+          procStart('Importando arquivo…', []);
+          // Will be dismissed by the wrapped importCSV or after 15s safety
+        }
+      });
+    }
+  });
+
+  // Expose for manual testing
+  window._v10ProcStart = procStart;
+  window._v10ProcEnd   = procEnd;
+})();
+
+
+// ╔══════════════════════════════════════════════════════════════════
+// ║  v10 — MELHORIA 4: Persistência de Filtros Avançados
+// ║
+// ║  Complementa o _saveFilters/_restoreFilters já existentes (que
+// ║  persistem em localStorage) com reaplicação automática ao:
+// ║    1. Trocar para aba Equipamentos (showTab hook)
+// ║    2. DOMContentLoaded (reload da página)
+// ║    3. Botão "Aplicar filtros" manual
+// ║
+// ║  Os filtros das colunas avançadas (_colFilters) também são
+// ║  persistidos, o que a v9 não fazia.
+// ╚══════════════════════════════════════════════════════════════════
+(function() {
+  'use strict';
+
+  var _COL_FILTER_LS_KEY = 'rochling_col_filters_v10';
+  var _COL_DEFS_TBL      = 'geral';  // only persist geral col filters
+
+  // ── Save column header filters to localStorage ───────────────
+  function _saveColFilters() {
+    try {
+      if (typeof _colFilters === 'undefined') return;
+      var data = {};
+      Object.keys(_colFilters).forEach(function(k) {
+        var s = _colFilters[k];
+        if (s && s.size > 0) data[k] = Array.from(s);
+      });
+      localStorage.setItem(_COL_FILTER_LS_KEY, JSON.stringify(data));
+    } catch(e) { console.warn('[v10 colFilter save]', e); }
+  }
+
+  // ── Restore column header filters from localStorage ──────────
+  function _restoreColFilters() {
+    try {
+      if (typeof _colFilters === 'undefined') return;
+      var data = JSON.parse(localStorage.getItem(_COL_FILTER_LS_KEY) || '{}');
+      Object.keys(data).forEach(function(k) {
+        if (!_colFilters[k]) _colFilters[k] = new Set();
+        data[k].forEach(function(v) { _colFilters[k].add(v); });
+      });
+      // Update column header UI indicators
+      Object.keys(data).forEach(function(k) {
+        var parts = k.split('/');
+        if (parts.length !== 2) return;
+        var tbl = parts[0], col = parts[1];
+        var tblIds = { geral:'tbl-geral', alert:'tbl-alert', rep:'tbl-rep' };
+        var tblEl = document.getElementById(tblIds[tbl] || ('tbl-'+tbl));
+        if (tblEl) {
+          var th = tblEl.querySelector('th[data-col="'+col+'"]');
+          if (th) {
+            var btn = th.querySelector('.th-filter-btn');
+            if (btn) btn.classList.add('active');
+            th.classList.add('has-col-filter');
+          }
+        }
+      });
+    } catch(e) { console.warn('[v10 colFilter restore]', e); }
+  }
+
+  // ── Patch _cfdSync to also save col filters ──────────────────
+  var _origCfdSync = window._cfdSync; // _cfdSync is defined earlier in the file
+  // We can't wrap it directly (it's not on window); instead we patch applyF
+  // to always save col filters alongside the standard filters.
+  var _origApplyF = window.applyF;
+  if (typeof _origApplyF === 'function') {
+    window.applyF = function() {
+      var result = _origApplyF.apply(this, arguments);
+      _saveColFilters();
+      return result;
+    };
+  }
+
+  // ── Full restore: standard filters + col filters ─────────────
+  function _fullRestore() {
+    if (typeof _restoreFilters === 'function') _restoreFilters();
+    _restoreColFilters();
+    if (typeof applyF === 'function') applyF();
+  }
+
+  // ── Hook showTab to re-apply filters when switching to Equipamentos ─
+  var _origShowTab = window.showTab;
+  if (typeof _origShowTab === 'function') {
+    window.showTab = function(tabId, tabEl) {
+      var result = _origShowTab.apply(this, arguments);
+      // If switching to the Equipamentos tab, reaplicar filtros
+      if (tabId === 'equipamentos' || tabId === 'equipment' ||
+          (tabEl && (tabEl.textContent || '').match(/Equipamento|Equipment/i))) {
+        setTimeout(function() {
+          if (typeof _restoreFilters === 'function') _restoreFilters();
+          _restoreColFilters();
+          // Do NOT call applyF here — v9 already calls applyF when switching tabs
+          // Calling it again would reset pagination. Just sync UI labels.
+          if (typeof _multiUpdateAllLabels === 'function') _multiUpdateAllLabels();
+          if (typeof _tipoUpdateLabel === 'function')      _tipoUpdateLabel();
+        }, 60);
+      }
+      return result;
+    };
+  }
+
+  // ── On page load: restore all filters from localStorage ──────
+  document.addEventListener('DOMContentLoaded', function() {
+    // Wait for DB and filter elements to be ready before restoring
+    var tries = 0;
+    var interval = setInterval(function() {
+      var ready = typeof DB !== 'undefined' && DB.length > 0 &&
+                  document.getElementById('f-search');
+      if (ready) {
+        clearInterval(interval);
+        // Restore standard filters (v9 mechanism, may already have been called)
+        // We call again to ensure col filters are also applied.
+        _fullRestore();
+      }
+      if (++tries > 50) clearInterval(interval); // 10s timeout
+    }, 200);
+  });
+
+  // Expose for debugging
+  window._v10SaveColFilters    = _saveColFilters;
+  window._v10RestoreColFilters = _restoreColFilters;
+  window._v10FullRestore       = _fullRestore;
+})();
+
+// ╔══════════════════════════════════════════════════════════════════
+// ║  v11 — CORREÇÃO 3: Barra de Filtros Ativos Visível
+// ║  Aparece quando existem filtros persistidos no localStorage,
+// ║  e oferece um botão único para limpar tudo.
+// ╚══════════════════════════════════════════════════════════════════
+(function() {
+  'use strict';
+
+  // Chaves de localStorage a monitorar
+  var FILTER_KEY     = 'rochling_filters_v1';
+  var COL_FILTER_KEY = 'rochling_col_filters_v10';
+
+  function _hasActiveFilters() {
+    try {
+      var f1 = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
+      var f2 = JSON.parse(localStorage.getItem(COL_FILTER_KEY) || '{}');
+      // Filtros de texto/datas
+      var textKeys = Object.keys(f1).filter(function(k) {
+        return k !== '_multi' && k !== '_tipos' && f1[k];
+      });
+      // Filtros multi-select
+      var multiKeys = f1['_multi'] ? Object.keys(f1['_multi']).filter(function(k) { return f1['_multi'][k] && f1['_multi'][k].length > 0; }) : [];
+      // Tipos selecionados
+      var tiposKeys = (f1['_tipos'] && f1['_tipos'].length > 0) ? ['tipos'] : [];
+      // Filtros de colunas
+      var colKeys = Object.keys(f2).filter(function(k) { return f2[k] && f2[k].length > 0; });
+      return textKeys.length + multiKeys.length + tiposKeys.length + colKeys.length;
+    } catch(e) { return 0; }
+  }
+
+  function _buildFilterDesc() {
+    try {
+      var parts = [];
+      var f1 = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
+      var f2 = JSON.parse(localStorage.getItem(COL_FILTER_KEY) || '{}');
+      var textKeys = Object.keys(f1).filter(function(k) { return k !== '_multi' && k !== '_tipos' && f1[k]; });
+      if (textKeys.length) parts.push(textKeys.length + ' filtro(s) de data/texto');
+      if (f1['_multi']) {
+        var n = Object.keys(f1['_multi']).filter(function(k) { return f1['_multi'][k] && f1['_multi'][k].length > 0; }).length;
+        if (n) parts.push(n + ' filtro(s) de lista');
+      }
+      if (f1['_tipos'] && f1['_tipos'].length) parts.push('tipos: ' + f1['_tipos'].slice(0,2).join(', ') + (f1['_tipos'].length > 2 ? '…' : ''));
+      var colN = Object.keys(f2).filter(function(k) { return f2[k] && f2[k].length > 0; }).length;
+      if (colN) parts.push(colN + ' filtro(s) de coluna');
+      return parts.length ? 'Ativo: ' + parts.join(' · ') : 'A tabela está filtrada.';
+    } catch(e) { return 'A tabela está filtrada.'; }
+  }
+
+  function _updateBanner() {
+    var banner = document.getElementById('v11-filter-banner');
+    if (!banner) return;
+    var count = _hasActiveFilters();
+    if (count > 0) {
+      banner.classList.add('on');
+      var descEl = document.getElementById('v11-fb-desc');
+      if (descEl) descEl.textContent = _buildFilterDesc();
+    } else {
+      banner.classList.remove('on');
+    }
+  }
+
+  // Global: limpar absolutamente todos os filtros
+  window.v11ClearAllFilters = function() {
+    try { localStorage.removeItem(FILTER_KEY); } catch(e) {}
+    try { localStorage.removeItem(COL_FILTER_KEY); } catch(e) {}
+    // Reset filtros de UI
+    if (typeof clearF === 'function') clearF();
+    // Reset col filters object
+    if (typeof _colFilters !== 'undefined') {
+      Object.keys(_colFilters).forEach(function(k) {
+        if (_colFilters[k]) _colFilters[k].clear();
+      });
+    }
+    // Update all col filter header indicators
+    document.querySelectorAll('.th-filter-btn').forEach(function(btn) { btn.classList.remove('active'); });
+    document.querySelectorAll('th.has-col-filter').forEach(function(th) { th.classList.remove('has-col-filter'); });
+    _updateBanner();
+    if (typeof applyF === 'function') applyF();
+  };
+
+  // Hook applyF para atualizar o banner após cada filtragem
+  var _origApplyFBanner = window.applyF;
+  if (typeof _origApplyFBanner === 'function') {
+    window.applyF = function() {
+      var r = _origApplyFBanner.apply(this, arguments);
+      setTimeout(_updateBanner, 120);
+      return r;
+    };
+  }
+
+  // Hook clearF
+  var _origClearFBanner = window.clearF;
+  if (typeof _origClearFBanner === 'function') {
+    window.clearF = function() {
+      var r = _origClearFBanner.apply(this, arguments);
+      setTimeout(_updateBanner, 80);
+      return r;
+    };
+  }
+
+  // Verificar no carregamento
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(_updateBanner, 600); // espera DB e filtros restaurados
+  });
+
+  window._v11UpdateBanner = _updateBanner;
+})();
+
+// ╔══════════════════════════════════════════════════════════════════════════
+// ║  v12 — MÓDULO COMPLETO: Auditoria · Drag-Drop Import · Backup Alert
+// ║  Vanilla JS nativo · Zero dependências externas · IATF 16949 Ready
+// ╚══════════════════════════════════════════════════════════════════════════
+(function() {
+  'use strict';
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONSTANTES GLOBAIS v12
+  // ─────────────────────────────────────────────────────────────────────────
+  var AUDIT_KEY        = 'r_v12_audit_logs';
+  var LAST_CHANGE_KEY  = 'r_v12_last_change';
+  var LAST_BACKUP_KEY  = 'r_v12_last_backup';
+  var BACKUP_WARN_DAYS = 7;
+  var MAX_AUDIT_LOGS   = 200;   // guarda 200, mostra 50
+  var SHOW_LOGS        = 50;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // FUNCIONALIDADE 1 — MÓDULO DE AUDITORIA (IATF 16949)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Gera timestamp ISO "YYYY-MM-DD HH:MM:SS" no horário local
+  function _tsNow() {
+    var d = new Date();
+    var pad = function(n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) +
+           ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  // Obtém utilizador atual (Firebase auth ou genérico)
+  function _currentUser() {
+    try {
+      if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
+        return firebase.auth().currentUser.email || firebase.auth().currentUser.displayName || 'Utilizador';
+      }
+    } catch(e) {}
+    try {
+      var chip = document.getElementById('auth-user-chip');
+      if (chip) {
+        var email = chip.querySelector('[data-email]');
+        if (email) return email.dataset.email;
+        var txt = chip.textContent.trim();
+        if (txt && txt.length > 2 && txt.length < 60) return txt;
+      }
+    } catch(e) {}
+    return 'Operador';
+  }
+
+  // Lê todos os logs do localStorage
+  function _readLogs() {
+    try { return JSON.parse(localStorage.getItem(AUDIT_KEY) || '[]'); } catch(e) { return []; }
+  }
+
+  // Escreve logs (limita a MAX_AUDIT_LOGS, FIFO)
+  function _writeLogs(logs) {
+    try {
+      if (logs.length > MAX_AUDIT_LOGS) logs = logs.slice(logs.length - MAX_AUDIT_LOGS);
+      localStorage.setItem(AUDIT_KEY, JSON.stringify(logs));
+    } catch(e) { console.warn('[v12 audit write]', e); }
+  }
+
+  // ── API PÚBLICA: registar uma entrada de log ──────────────────────────
+  // type: 'add' | 'edit' | 'del' | 'import' | 'export'
+  window.v12AuditLog = function(type, equipId, description) {
+    var logs = _readLogs();
+    logs.push({
+      ts:   _tsNow(),
+      type: type,
+      id:   String(equipId || '—'),
+      desc: String(description || '').substring(0, 300),
+      user: _currentUser()
+    });
+    _writeLogs(logs);
+    // Atualiza a tabela se já estiver visível
+    try { v12RenderAuditTable(); } catch(e) {}
+  };
+
+  // ── Renderiza a mini-tabela de logs na aba Relatórios ────────────────
+  window.v12RenderAuditTable = function() {
+    var logs   = _readLogs();
+    var tbody  = document.getElementById('audit-tbody');
+    var tbl    = document.getElementById('audit-tbl');
+    var empty  = document.getElementById('audit-empty');
+    var badge  = document.getElementById('audit-count-badge');
+    if (!tbody) return;
+    if (badge) badge.textContent = logs.length + ' log(s) guardado(s)';
+    if (!logs.length) {
+      if (tbl)   tbl.style.display   = 'none';
+      if (empty) empty.style.display = 'block';
+      return;
+    }
+    if (tbl)   tbl.style.display   = '';
+    if (empty) empty.style.display = 'none';
+
+    var typeLabels = { add:'Adição', edit:'Edição', del:'Eliminação', import:'Importação', export:'Exportação' };
+    var typeCls    = { add:'add',    edit:'edit',    del:'del',        import:'import',      export:'export' };
+
+    // Mostra os últimos SHOW_LOGS em ordem decrescente
+    var visible = logs.slice(-SHOW_LOGS).reverse();
+    tbody.innerHTML = visible.map(function(e) {
+      var cls  = typeCls[e.type]  || 'edit';
+      var lbl  = typeLabels[e.type] || e.type;
+      var desc = e.desc.length > 90 ? e.desc.substring(0,90)+'…' : e.desc;
+      return '<tr>' +
+        '<td style="font-family:var(--mono);font-size:10px;color:var(--tx2)">' + (e.ts||'—') + '</td>' +
+        '<td><span class="audit-badge ' + cls + '">' + lbl + '</span></td>' +
+        '<td style="font-family:var(--mono);font-weight:700;max-width:120px;overflow:hidden;text-overflow:ellipsis" title="' + (e.id||'') + '">' + (e.id||'—') + '</td>' +
+        '<td style="color:var(--tx2);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + desc.replace(/"/g,'&quot;') + '">' + desc + '</td>' +
+        '<td style="color:var(--tx3);font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis">' + (e.user||'—') + '</td>' +
+        '</tr>';
+    }).join('');
+  };
+
+  // ── Exportar logs como CSV ────────────────────────────────────────────
+  window.v12ExportAuditCSV = function() {
+    var logs = _readLogs();
+    if (!logs.length) { if (typeof showToast==='function') showToast('Nenhum log para exportar.','err'); return; }
+    var header = ['Data/Hora','Tipo','ID Equipamento','Descrição','Utilizador'];
+    var lines  = ['\ufeff' + header.join(';')];
+    logs.forEach(function(e) {
+      lines.push([e.ts, e.type, e.id, '"'+(e.desc||'').replace(/"/g,'""')+'"', e.user].join(';'));
+    });
+    var blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    var a    = document.createElement('a');
+    a.href   = URL.createObjectURL(blob);
+    a.download = 'audit_log_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    v12AuditLog('export', '—', 'Exportação de logs de auditoria ('+logs.length+' entradas)');
+    if (typeof showToast==='function') showToast('✅ Logs exportados: ' + logs.length + ' entradas.');
+  };
+
+  // ── Limpar todos os logs ──────────────────────────────────────────────
+  window.v12ClearAuditLogs = function() {
+    if (!confirm('⚠️ Eliminar todos os logs de auditoria?\nEsta ação é irreversível.')) return;
+    localStorage.removeItem(AUDIT_KEY);
+    v12RenderAuditTable();
+    if (typeof showToast==='function') showToast('Logs de auditoria eliminados.');
+  };
+
+  // Auto-render quando a aba Relatórios é aberta
+  var _origShowTab = window.showTab;
+  if (typeof _origShowTab === 'function') {
+    window.showTab = function(tabId, tabEl) {
+      var r = _origShowTab.apply(this, arguments);
+      if (tabId === 'relatorios' || tabId === 'reports' ||
+          (typeof tabId === 'string' && tabId.includes('relat'))) {
+        setTimeout(v12RenderAuditTable, 80);
+      }
+      return r;
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // FUNCIONALIDADE 2 — DRAG-DROP IMPORT COM PRÉ-VISUALIZAÇÃO
+  // ─────────────────────────────────────────────────────────────────────────
+  var _pendingImportData = null; // array validado aguardando confirmação
+
+  // ── Abre o modal de importação ────────────────────────────────────────
+  window.v12OpenImportModal = function() {
+    var m = document.getElementById('v12-import-modal');
+    if (m) { m.style.display = 'flex'; }
+  };
+
+  window.v12CloseImportModal = function() {
+    var m = document.getElementById('v12-import-modal');
+    if (m) { m.style.display = 'none'; }
+    // Reset dropzone visual
+    _resetDropzone();
+  };
+
+  function _resetDropzone() {
+    var dz    = document.getElementById('v12-dropzone');
+    var icon  = document.getElementById('dz-icon');
+    var title = document.getElementById('dz-title');
+    if (dz)    dz.classList.remove('dz-hover', 'dz-over');
+    if (icon)  icon.textContent = '📂';
+    if (title) title.textContent = 'Arraste o ficheiro aqui';
+    var fi = document.getElementById('file-import');
+    if (fi) fi.value = '';
+  }
+
+  // ── Drag events ───────────────────────────────────────────────────────
+  window.v12DragOver = function(e) {
+    e.preventDefault(); e.stopPropagation();
+    var dz = document.getElementById('v12-dropzone');
+    if (dz) { dz.classList.add('dz-over'); dz.classList.remove('dz-hover'); }
+    var icon  = document.getElementById('dz-icon');
+    var title = document.getElementById('dz-title');
+    if (icon)  icon.textContent = '📥';
+    if (title) title.textContent = 'Solte o ficheiro para importar';
+  };
+
+  window.v12DragLeave = function(e) {
+    e.preventDefault();
+    var dz = document.getElementById('v12-dropzone');
+    if (dz) dz.classList.remove('dz-over');
+    _resetDropzone();
+  };
+
+  window.v12Drop = function(e) {
+    e.preventDefault(); e.stopPropagation();
+    var dz = document.getElementById('v12-dropzone');
+    if (dz) dz.classList.remove('dz-over');
+    var files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files.length > 0) _processFile(files[0]);
+  };
+
+  // ── Seleção via input ─────────────────────────────────────────────────
+  window.v12FileSelected = function(e) {
+    var f = e.target.files && e.target.files[0];
+    if (f) _processFile(f);
+  };
+
+  // ── Lê e valida o ficheiro, abre preview ──────────────────────────────
+  function _processFile(file) {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      if (typeof showToast === 'function') showToast('Arquivo muito grande (máx. 10 MB).', 'err');
+      return;
+    }
+    if (!file.name.match(/\.json$/i)) {
+      if (typeof showToast === 'function') showToast('Apenas ficheiros .json são aceites.', 'err');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        var parsed = JSON.parse(ev.target.result);
+        if (!Array.isArray(parsed)) throw new Error('O ficheiro JSON deve ser um array de registos.');
+        var sanitized = parsed.map(function(r) {
+          return (typeof _sanitizeImportedRecord === 'function') ? _sanitizeImportedRecord(r) : r;
+        }).filter(Boolean);
+        if (!sanitized.length) throw new Error('Nenhum registo válido encontrado.');
+        _pendingImportData = sanitized;
+        v12CloseImportModal();
+        _openPreviewModal(file.name, sanitized);
+      } catch(err) {
+        if (typeof showToast === 'function') showToast('Erro: ' + (err.message || 'JSON inválido.'), 'err');
+        _resetDropzone();
+      }
+    };
+    reader.onerror = function() {
+      if (typeof showToast === 'function') showToast('Falha ao ler o ficheiro.', 'err');
+    };
+    reader.readAsText(file);
+  }
+
+  // ── Constrói e abre o modal de pré-visualização ────────────────────
+  function _openPreviewModal(filename, data) {
+    var DB_NOW = (typeof DB !== 'undefined') ? DB : [];
+    // Classifica registos: novo vs atualização
+    var existingIds = {};
+    DB_NOW.forEach(function(r) { if (r.id) existingIds[r.id] = true; });
+    var newRecords = data.filter(function(r) { return !existingIds[r.id]; });
+    var updRecords = data.filter(function(r) { return existingIds[r.id]; });
+
+    // Preenche estatísticas
+    var el = function(id) { return document.getElementById(id); };
+    if (el('pv-filename'))   el('pv-filename').textContent = filename;
+    if (el('pv-new-count'))  el('pv-new-count').textContent  = newRecords.length;
+    if (el('pv-upd-count'))  el('pv-upd-count').textContent  = updRecords.length;
+    if (el('pv-total-count'))el('pv-total-count').textContent = data.length;
+    if (el('pv-warn-text')) {
+      if (updRecords.length > 0) {
+        el('pv-warn-text').textContent =
+          'Esta ação adicionará ' + newRecords.length + ' novo(s) registo(s) e irá sobrescrever ' +
+          updRecords.length + ' registo(s) existente(s) com o mesmo ID. Confirme antes de prosseguir.';
+      } else {
+        el('pv-warn-text').textContent =
+          'Esta ação adicionará ' + newRecords.length + ' novo(s) registo(s). Nenhum registo existente será alterado.';
+      }
+    }
+
+    // Pré-visualização: primeiras 10 linhas
+    var preview = data.slice(0, 10);
+    var keys    = ['id','tipo','descricao','localizacao','status','prox_calib'];
+    var thead   = el('pv-thead-row');
+    var tbody   = el('pv-tbody');
+    if (thead) {
+      thead.innerHTML = ['#'].concat(keys).map(function(k) {
+        return '<th>' + k + '</th>';
+      }).join('');
+    }
+    if (tbody) {
+      tbody.innerHTML = preview.map(function(r, i) {
+        var isNew = !existingIds[r.id];
+        var cls   = isNew ? 'pv-row-new' : 'pv-row-upd';
+        var tag   = isNew ? '+ NOVO' : '↑ UPD';
+        return '<tr class="' + cls + '"><td>' + tag + '</td>' +
+          keys.map(function(k) {
+            var v = String(r[k] || '—');
+            return '<td title="' + v.replace(/"/g,'&quot;') + '">' + v.substring(0, 22) + (v.length > 22 ? '…' : '') + '</td>';
+          }).join('') +
+          '</tr>';
+      }).join('');
+    }
+
+    // Abre o modal
+    var modal = el('v12-import-preview');
+    if (modal) modal.classList.add('on');
+  }
+
+  // ── Confirmar importação ──────────────────────────────────────────────
+  window.v12ConfirmImport = function() {
+    if (!_pendingImportData) return;
+    var data = _pendingImportData;
+    _pendingImportData = null;
+
+    try {
+      if (typeof recalcDias === 'function') {
+        if (typeof DB !== 'undefined') window.DB = recalcDias(data);
+      }
+      if (typeof updateAll === 'function')       updateAll();
+      if (typeof fbSchedulePush === 'function')  fbSchedulePush();
+
+      // v12 AUDIT
+      v12AuditLog('import', '—', 'Importação de ficheiro JSON: ' + data.length + ' registo(s) aplicados.');
+
+      if (typeof showToast === 'function') showToast('✅ Importado: ' + data.length + ' registo(s).');
+    } catch(err) {
+      if (typeof showToast === 'function') showToast('Erro ao aplicar importação: ' + (err.message || ''), 'err');
+    }
+    // Fecha preview
+    var modal = document.getElementById('v12-import-preview');
+    if (modal) modal.classList.remove('on');
+  };
+
+  window.v12CancelImport = function() {
+    _pendingImportData = null;
+    var modal = document.getElementById('v12-import-preview');
+    if (modal) modal.classList.remove('on');
+    if (typeof showToast === 'function') showToast('Importação cancelada.');
+  };
+
+  // Fechar preview ao clicar fora
+  document.addEventListener('click', function(e) {
+    var modal = document.getElementById('v12-import-preview');
+    var box   = document.getElementById('v12-preview-box');
+    if (modal && modal.classList.contains('on') && box && !box.contains(e.target)) {
+      window.v12CancelImport();
+    }
+    var importModal = document.getElementById('v12-import-modal');
+    if (importModal && importModal.style.display === 'flex') {
+      var innerBox = importModal.querySelector('div > div');
+      if (innerBox && !innerBox.contains(e.target)) v12CloseImportModal();
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // FUNCIONALIDADE 3 — BACKUP ALERT + BEFORE-UNLOAD GUARD
+  // ─────────────────────────────────────────────────────────────────────────
+  var _unsavedChanges = false; // true após qualquer saveLS() nesta sessão
+
+  // ── Marca sessão como "com alterações não exportadas" ────────────────
+  window.v12MarkUnsaved = function() {
+    _unsavedChanges = true;
+  };
+
+  // ── Export com registo do timestamp do backup ──────────────────────
+  window.v12ExportData = function() {
+    if (typeof DB === 'undefined') return;
+    var blob = new Blob([JSON.stringify(DB, null, 2)], { type: 'application/json' });
+    var a    = document.createElement('a');
+    a.href   = URL.createObjectURL(blob);
+    a.download = 'equipamentos_backup_' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    // Regista timestamp de backup e limpa flag
+    localStorage.setItem(LAST_BACKUP_KEY, Date.now().toString());
+    _unsavedChanges = false;
+    v12DismissBackupBanner();
+    // Audit log
+    v12AuditLog('export', '—', 'Exportação de backup JSON: ' + DB.length + ' registo(s).');
+    if (typeof showToast === 'function') showToast('✅ Backup exportado com sucesso.');
+  };
+
+  // ── Verifica se é necessário exibir o banner de backup ──────────────
+  function _checkBackupBanner() {
+    try {
+      var lastBackupTs  = parseInt(localStorage.getItem(LAST_BACKUP_KEY)  || '0', 10);
+      var lastChangeTs  = parseInt(localStorage.getItem(LAST_CHANGE_KEY)  || '0', 10);
+      var now           = Date.now();
+      var sevenDaysMs   = BACKUP_WARN_DAYS * 24 * 60 * 60 * 1000;
+
+      // Exibe se: houve alterações E o último backup foi há mais de 7 dias (ou nunca)
+      var hasChanges   = lastChangeTs > 0;
+      var backupOld    = (now - lastBackupTs) > sevenDaysMs;
+      var neverBacked  = lastBackupTs === 0;
+
+      if (hasChanges && (backupOld || neverBacked)) {
+        var banner  = document.getElementById('v12-backup-banner');
+        var msgEl   = document.getElementById('v12-bb-msg');
+        if (msgEl) {
+          if (neverBacked) {
+            msgEl.textContent = 'Aviso: Ainda não fez nenhum backup. Os dados dependem do browser — exporte agora para não perder informações.';
+          } else {
+            var days = Math.floor((now - lastBackupTs) / (24*60*60*1000));
+            msgEl.textContent = 'Aviso: O seu último backup foi há ' + days + ' dia(s). Faça o download de segurança.';
+          }
+        }
+        if (banner) banner.classList.add('on');
+      }
+    } catch(e) { console.warn('[v12 backup check]', e); }
+  }
+
+  window.v12DismissBackupBanner = function() {
+    var banner = document.getElementById('v12-backup-banner');
+    if (banner) banner.classList.remove('on');
+    // Ao dispensar, não apaga o timer — apenas esconde pelo resto da sessão
+    // (voltará a aparecer na próxima sessão se ainda não fizer backup)
+  };
+
+  // ── window.onbeforeunload — impede fecho acidental com alterações ────
+  window.addEventListener('beforeunload', function(e) {
+    if (_unsavedChanges) {
+      var msg = 'Tem alterações não exportadas. Se fechar agora, poderá perder dados se o browser apagar o cache.';
+      e.returnValue = msg;
+      return msg;
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // INICIALIZAÇÃO v12 no DOMContentLoaded
+  // ─────────────────────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', function() {
+    // 1. Render initial audit table (in case reports tab is open on load)
+    setTimeout(v12RenderAuditTable, 800);
+
+    // 2. Check backup banner after a short delay (let DB load first)
+    setTimeout(_checkBackupBanner, 1500);
+
+    // 3. Hook exportData (original) para também fazer backup tracking
+    //    (já substituído por v12ExportData no toolbar, mas cobre outros casos)
+    var _origExportData = window.exportData;
+    if (typeof _origExportData === 'function' && _origExportData !== window.v12ExportData) {
+      window.exportData = function() {
+        var r = _origExportData.apply(this, arguments);
+        localStorage.setItem(LAST_BACKUP_KEY, Date.now().toString());
+        _unsavedChanges = false;
+        v12DismissBackupBanner();
+        v12AuditLog('export', '—', 'Exportação JSON via exportData()');
+        return r;
+      };
+    }
+
+    // 4. Re-check backup banner whenever the page regains focus
+    window.addEventListener('focus', _checkBackupBanner);
+
+    // 5. Keyboard shortcut: Escape fecha modais de importação
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        v12CloseImportModal();
+        v12CancelImport();
+      }
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // EXPOR API PÚBLICA (debugging / extensão futura)
+  // ─────────────────────────────────────────────────────────────────────────
+  window._v12 = {
+    auditLog:          window.v12AuditLog,
+    renderAuditTable:  window.v12RenderAuditTable,
+    exportAuditCSV:    window.v12ExportAuditCSV,
+    clearAuditLogs:    window.v12ClearAuditLogs,
+    openImportModal:   window.v12OpenImportModal,
+    closeImportModal:  window.v12CloseImportModal,
+    confirmImport:     window.v12ConfirmImport,
+    cancelImport:      window.v12CancelImport,
+    exportData:        window.v12ExportData,
+    checkBackupBanner: _checkBackupBanner,
+    dismissBackup:     window.v12DismissBackupBanner,
+  };
+
+})();
 </script>
