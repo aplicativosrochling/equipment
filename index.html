@@ -7,11 +7,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0064b3">
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v13)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v15)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição.">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com; frame-src 'self' https://*.firebaseapp.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.io; frame-src 'none';">
 
 <!-- ── POLYFILLS: Element.closest, Optional Chaining safety, Object.fromEntries ── -->
 <script>
@@ -1678,9 +1678,8 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 </style>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- ── SUPABASE SDK ── -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 /* ══════════════════════════════════════════════
@@ -1952,7 +1951,7 @@ input[type="checkbox"], input[type="radio"] {
     <button class="btn-g" onclick="v12OpenImportModal()" title="Import JSON — Drag &amp; Drop" id="btn-import-v12">↓ <span data-i18n="btn_import_lbl">Import</span></button>
     <button class="btn-g" onclick="v12ExportData()" title="Export JSON (Backup)">↑ <span data-i18n="btn_export_lbl">Export</span></button>
     <button class="btn-g" onclick="openFontPicker()" id="btn-font-picker" title="Trocar fonte" aria-label="Trocar fonte" style="font-size:11px">𝐀 Fonte</button>
-    <button class="btn-g" onclick="openGsConfig()" id="btn-gs-cfg" title="Firebase config" aria-label="Configurar Firebase" style="font-size:11px">🔥</button>
+    <button class="btn-g" onclick="openGsConfig()" id="btn-gs-cfg" title="Supabase config" aria-label="Configurar Supabase" style="font-size:11px">☁</button>
     <button class="btn-g" onclick="resetDB()" title="Reset to original data" aria-label="Resetar para dados originais" style="font-size:11px">↺</button>
 
     <!-- Divider -->
@@ -2908,15 +2907,15 @@ const T = {
     t_imported:     'Importado',
     t_records:      'registros',
     t_reset:        'Dados resetados',
-    t_saved_fb:     'Salvo no Firebase!',
-    t_fb_connected: 'Firebase conectado!',
+    t_saved_fb:     'Salvo no Supabase!',
+    t_fb_connected: 'Supabase conectado!',
     t_fb_loaded:    'registros carregados.',
-    sync_loading:   'Loading from Firebase…',
-    sync_saving:    'Saving to Firebase…',
+    sync_loading:   'Carregando do Supabase…',
+    sync_saving:    'Salvando no Supabase…',
     sync_saved:     'Salvo',
-    sync_pending:   '⏸ Saving…',
-    sync_offline:   '⚠️ Firebase offline — using local cache',
-    sync_fail:      '⚠️ Failed — retrying in 30s',
+    sync_pending:   '⏸ Aguardando sync…',
+    sync_offline:   '⚠️ Supabase offline — usando cache local',
+    sync_fail:      '⚠️ Falha — nova tentativa em 30s',
   },
   en: {
     title:          'Measurement Equipment Control',
@@ -3058,14 +3057,14 @@ const T = {
     t_imported:     'Imported',
     t_records:      'records',
     t_reset:        'Data reset',
-    t_saved_fb:     'Saved to Firebase!',
-    t_fb_connected: 'Firebase connected!',
+    t_saved_fb:     'Saved to Supabase!',
+    t_fb_connected: 'Supabase connected!',
     t_fb_loaded:    'records loaded.',
-    sync_loading:   'Loading from Firebase…',
-    sync_saving:    'Saving to Firebase…',
+    sync_loading:   'Loading from Supabase…',
+    sync_saving:    'Saving to Supabase…',
     sync_saved:     'Saved',
-    sync_pending:   '⏸ Saving…',
-    sync_offline:   '⚠️ Firebase offline — using local cache',
+    sync_pending:   '⏸ Pending sync…',
+    sync_offline:   '⚠️ Supabase offline — using local cache',
     sync_fail:      '⚠️ Failed — retrying in 30s',
   }
 };
@@ -3726,16 +3725,40 @@ function recalcDias(records) {
 
 // ═══════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════
-// PERSISTÊNCIA — Firebase Firestore (tempo real) + localStorage (cache)
+// ═══════════════════════════════════════════════════════════════════
+// PERSISTÊNCIA — Supabase (tabela única 'equipamentos') + localStorage (cache)
 // ═══════════════════════════════════════════════════════════════════
 const LS_KEY    = 'rochling_db_v1';
-const LS_FB_CFG = 'rochling_fb_cfg';
-let   _db       = null;   // Firestore instance
-let   _colRef   = null;   // collection reference
-let   _unsub    = null;   // realtime listener unsubscribe
-let   _pending  = false;
-let   _pushTimer= null;
-let   _fbActive = false;
+const LS_SB_CFG = 'rochling_sb_cfg'; // Supabase config key (URL + anon key)
+
+// ── Credenciais Supabase — preencha após criar o projeto ──────────
+// Podem ser sobrescritas via modal de configuração (openGsConfig).
+let _supabaseUrl = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co';
+let _supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw';
+let _sb          = null;   // Supabase client instance
+let _sbActive    = false;
+let _pending     = false;
+let _pushTimer   = null;
+let _sbInitialized = false; // [v15 FIX] evita double-init pelo onAuthStateChange que dispara SIGNED_IN imediatamente
+
+// Inicializa o cliente Supabase (lê config do localStorage se disponível)
+function _initSupabaseClient() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_SB_CFG) || '{}');
+    if (saved.url && saved.key) {
+      _supabaseUrl = saved.url;
+      _supabaseKey = saved.key;
+    }
+    if (!_supabaseUrl || _supabaseUrl === 'SUA_SUPABASE_URL') return false;
+    _sb = supabase.createClient(_supabaseUrl, _supabaseKey);
+    _sbActive = true;
+    return true;
+  } catch (e) {
+    console.error('[Supabase] Erro ao inicializar cliente:', e);
+    _sbActive = false;
+    return false;
+  }
+}
 
 // ── Indicador de sync ─────────────────────────────────────────────
 function setSyncInd(text, color, spin) {
@@ -3747,12 +3770,15 @@ function setSyncInd(text, color, spin) {
 }
 
 // ── localStorage (cache offline) ─────────────────────────────────
-function saveLS() {
+function saveLS(skipUnsaved) {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(DB.map(r=>{const{dias_vencer,...rest}=r;return rest;})));
     // v12: track last change time for backup alert
-    localStorage.setItem('r_v12_last_change', Date.now().toString());
-    v12MarkUnsaved();
+    // skipUnsaved=true quando é só cache de dados vindos do cloud (pull/realtime) — não conta como mudança local
+    if (!skipUnsaved) {
+      localStorage.setItem('r_v12_last_change', Date.now().toString());
+      v12MarkUnsaved();
+    }
   } catch(e){ console.warn('[saveLS]', e); }
 }
 function loadLS() {
@@ -3760,63 +3786,40 @@ function loadLS() {
   return false;
 }
 
-// ── Firebase helpers ──────────────────────────────────────────────
-function fbActive() { return _fbActive && !!_db; }
+// ── Supabase helpers ──────────────────────────────────────────────
+function fbActive() { return _sbActive && !!_sb; } // alias mantido para compatibilidade
 
-// Inicializa Firestore a partir de um app já existente
-async function fbInitFirestore(app) {
-  try {
-    _db     = firebase.firestore(app);
-    _colRef = _db.collection('equipamentos');
-    _fbActive = true;
-    return true;
-  } catch(e) {
-    console.error('fbInitFirestore error:', e);
-    _fbActive = false;
-    return false;
-  }
-}
-
-// Mantida para compatibilidade com fbConnect (reconfiguração manual)
-async function fbInit(cfg) {
-  try {
-    try { await firebase.app().delete(); } catch(e){ console.warn('[fbDisconnect] delete app:', e); }
-    const app = firebase.initializeApp(cfg);
-    _auth   = firebase.auth(app);
-    _db     = firebase.firestore(app);
-    _colRef = _db.collection('equipamentos');
-    _fbActive = true;
-    return true;
-  } catch(e) {
-    console.error('fbInit error:', e);
-    _fbActive = false;
-    return false;
-  }
-}
-
-// LEITURA única — só sobrescreve DB se não houver mudanças locais pendentes
+// LEITURA — carrega todos os registros da tabela 'equipamentos'
 async function fbPull() {
   if(!fbActive()) return false;
   setSyncInd(t('sync_loading'), 'var(--accent2)', true);
   try {
-    const snap = await _colRef.doc('dados').get();
-    if(snap.exists) {
-      if(_pending) {
-        // Há mudanças locais não salvas — envia para o Firebase em vez de sobrescrever
-        console.log('fbPull: mudanças locais pendentes, enviando ao invés de sobrescrever');
+    const { data, error } = await _sb
+      .from('equipamentos')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      if (_pending) {
+        console.log('[Supabase] fbPull: mudanças locais pendentes, enviando ao invés de sobrescrever');
         setSyncInd('⬆ Sincronizando mudanças locais…', 'var(--orange)');
         await fbPush(false);
         return true;
       }
-      const data = snap.data().records || [];
-      DB = recalcDias(data);
-      saveLS();
+      // Mapeia as colunas do Supabase para os campos internos do DB
+      DB = recalcDias(data.map(r => ({
+        ...r,
+        _uid: r._uid || r.id_interno || Date.now() + Math.random(),
+      })));
+      saveLS(true); // [v15 FIX] silent=true: pull do cloud não é mudança local, não marcar como unsaved
     }
-    setSyncInd('🔥 Sync ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
+    setSyncInd('☁ Sync ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
     return true;
   } catch(e) {
     setSyncInd(t('sync_offline'), 'var(--orange)');
-    console.warn('fbPull error:', e);
+    console.warn('[Supabase] fbPull error:', e.message || e);
     return false;
   }
 }
@@ -3829,255 +3832,242 @@ function fbSchedulePush() {
   if(btn) btn.style.display = 'inline-block';
   setSyncInd(t('sync_pending'), 'var(--orange)');
   if(_pushTimer) clearTimeout(_pushTimer);
-  // Se Firebase ainda não conectou, agenda retentativas até conectar
   _pushTimer = setTimeout(() => fbPushOrRetry(), 1500);
 }
 
-// Tenta enviar; se Firebase não está pronto, reagenda
+// Tenta enviar; se Supabase não está pronto, reagenda
 async function fbPushOrRetry() {
   if(!fbActive()) {
-    // Firebase ainda não conectou — reagenda em 2 segundos
     _pushTimer = setTimeout(() => fbPushOrRetry(), 2000);
     return;
   }
   await fbPush(false);
 }
 
+// ESCRITA — faz upsert de todos os registros na tabela 'equipamentos'
 async function fbPush(manual) {
   if(!fbActive()) { saveLS(); return; }
   if(_pushTimer) { clearTimeout(_pushTimer); _pushTimer = null; }
   setSyncInd(t('sync_saving'), 'var(--accent2)', true);
   try {
-    const payload = DB.map(r=>{const{dias_vencer,...rest}=r;return rest;});
+    // [v15 FIX] captura timestamp único para este push
+    const _pushTs = new Date().toISOString();
+    // Prepara payload: remove dias_vencer (campo calculado) e garante campos obrigatórios
+    const payload = DB.map(r => {
+      const { dias_vencer, ...rest } = r;
+      return {
+        ...rest,
+        _updated: _pushTs,
+      };
+    });
 
-    // FIX v13: save principal é aguardado — sync pública roda em paralelo (fire-and-forget)
-    await _colRef.doc('dados').set({ records: payload, updated: new Date().toISOString() });
+    // Upsert em lotes de 200 registros (evita timeout em bases grandes)
+    const CHUNK = 200;
+    for (let i = 0; i < payload.length; i += CHUNK) {
+      const chunk = payload.slice(i, i + CHUNK);
+      const { error } = await _sb
+        .from('equipamentos')
+        .upsert(chunk, { onConflict: 'id' });
+      if (error) throw error;
+    }
 
-    // ── Sincroniza coleção pública (QR) — desacoplada do save principal ──
-    // Não bloqueia o indicador de "Salvo"; falhas não afetam o fluxo principal.
-    setTimeout(() => _syncPublicCollection(), 0);
-    // ────────────────────────────────────────────────────────────────────
-
-    saveLS();
+    // [v15 FIX] sincroniza _updated no DB local para evitar diff falso no listener realtime
+    DB.forEach(r => { r._updated = _pushTs; });
+    saveLS(true); // silent: já está no cloud, não marcar como unsaved
     _pending = false;
     const btn = document.getElementById('btn-sync-now');
     if(btn) btn.style.display = 'none';
-    setSyncInd(t('sync_saved') + ' ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
-    if(manual) showToast('🔥 Salvo no Firebase!');
+    setSyncInd('☁ Salvo ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
+    if(manual) showToast('☁ Salvo no Supabase!');
   } catch(e) {
     setSyncInd(t('sync_fail'), 'var(--red)');
+    console.error('[Supabase] fbPush error:', e.message || e);
     _pushTimer = setTimeout(() => fbPush(false), 30000);
     saveLS();
-    if(manual) showToast('Falha Firebase. Salvo localmente.', 'err');
+    if(manual) showToast('Falha Supabase. Salvo localmente. Erro: ' + (e.message || e), 'err');
+    // [v15 FIX] removido alert() — bloqueava o browser; erro já visível no indicador e toast
   } finally {
     if(!_pushTimer) _pending = false;
   }
 }
 
-// FIX v13: sync pública separada — batches em paralelo (Promise.all) em vez de serial
-async function _syncPublicCollection() {
+// EXCLUSÃO de um registro específico pelo campo 'id' (código do equipamento)
+async function sbDeleteRecord(codigoEquipamento) {
   if(!fbActive()) return;
   try {
-    const pubColRef = _db.collection('equipamentos_publicos');
-    const CHUNK = 499;
-    const now = new Date().toISOString();
-    const pubDocs = [];
-    DB.forEach(r => {
-      const safeId = String(r.id || r._uid || '').replace(/[^a-zA-Z0-9_\-]/g, '_');
-      if (!safeId) return;
-      pubDocs.push({ safeId, doc: {
-        id:           r.id          || null,
-        descricao:    r.descricao   || null,
-        tipo:         r.tipo        || null,
-        fabricante:   r.fabricante  || null,
-        localizacao:  r.localizacao || null,
-        responsavel:  r.responsavel || null,
-        status:       r.status      || null,
-        status_calib: r.status_calib|| null,
-        empresa:      r.empresa     || null,
-        cod_lab:      r.cod_lab     || null,
-        ult_calib:    r.ult_calib   || null,
-        prox_calib:   r.prox_calib  || null,
-        freq_dias:    r.freq_dias   || null,
-        dias_vencer:  r.dias_vencer !== undefined ? r.dias_vencer : null,
-        observacoes:  r.observacoes || null,
-        _uid:         r._uid        || null,
-        _updated:     now,
-      }});
-    });
-    // FIX: todos os chunks disparam simultaneamente em vez de esperar um a um
-    const batchPromises = [];
-    for (let i = 0; i < pubDocs.length; i += CHUNK) {
-      const chunk = pubDocs.slice(i, i + CHUNK);
-      const batch = _db.batch();
-      chunk.forEach(({ safeId, doc }) => batch.set(pubColRef.doc(safeId), doc));
-      batchPromises.push(batch.commit());
-    }
-    await Promise.all(batchPromises);
-  } catch(pubErr) {
-    console.warn('[fbPush] sync equipamentos_publicos falhou:', pubErr.message);
+    const { error } = await _sb
+      .from('equipamentos')
+      .delete()
+      .eq('id', codigoEquipamento);
+    if (error) throw error;
+  } catch(e) {
+    console.error('[Supabase] sbDeleteRecord error:', e.message || e);
+    alert('[Supabase] Erro ao excluir registro: ' + (e.message || e));
   }
 }
 
-// LISTENER em tempo real — atualiza todos os usuários instantaneamente
+// LISTENER em tempo real via Supabase Realtime
+let _realtimeChannel = null;
 function fbStartListen() {
   if(!fbActive()) return;
-  if(_unsub) _unsub(); // cancela listener anterior
-  _unsub = _colRef.doc('dados').onSnapshot(snap => {
-    if(!snap.exists || _pending) return; // ignora enquanto está salvando
-    const data = snap.data().records || [];
-    const newDB = recalcDias(data);
-    // Compara o DB completo para detectar qualquer alteração de campo (fix: não bloquear após 4 edições)
-    const stripDias = arr => arr.map(r => { const {dias_vencer, ...rest} = r; return rest; });
-    if(JSON.stringify(stripDias(newDB)) !== JSON.stringify(stripDias(DB))) {
-      DB = newDB;
-      saveLS();
-      // Preserve active filters when receiving live updates
-      updateKPIs(); buildAllCharts(); populateFilters();
-      const hasFilter = _selectedTipos.size > 0 ||
-        Object.values(_multiSel).some(function(s){return s.size>0;}) ||
-        ['f-de','f-ate','f-ult-calib-de','f-ult-calib-ate','f-prox-calib-de','f-prox-calib-ate','f-search']
-      renderAlerts();
-      setSyncInd('🔥 Atualizado ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
-    }
-  }, err => {
-    console.warn('fbListen error:', err);
-    setSyncInd('⚠️ Listener desconectado', 'var(--orange)');
-  });
+  // Cancela canal anterior, se houver
+  if (_realtimeChannel) {
+    _sb.removeChannel(_realtimeChannel);
+    _realtimeChannel = null;
+  }
+  _realtimeChannel = _sb
+    .channel('equipamentos-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'equipamentos' },
+      async (payload) => {
+        if (_pending) return; // ignora enquanto está salvando
+        // Recarrega tudo ao receber qualquer mudança
+        const { data, error } = await _sb.from('equipamentos').select('*').order('id', { ascending: true });
+        if (error) { console.warn('[Supabase] realtime fetch error:', error.message); return; }
+        if (!data) return;
+        const newDB = recalcDias(data.map(r => ({ ...r, _uid: r._uid || r.id_interno || Date.now() + Math.random() })));
+        // [v15 FIX] exclui _updated do diff — evita loop: fbPush grava _updated novo → realtime detecta diff → loop
+        const stripDias = arr => arr.map(r => { const {dias_vencer, _updated, ...rest} = r; return rest; });
+        if (JSON.stringify(stripDias(newDB)) !== JSON.stringify(stripDias(DB))) {
+          DB = newDB;
+          saveLS(true); // [v15 FIX] silent: dado vem do cloud, não é mudança local
+          updateKPIs(); buildAllCharts(); populateFilters();
+          renderAlerts();
+          setSyncInd('☁ Atualizado ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
+        }
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        setSyncInd('☁ Realtime ativo', 'var(--green)');
+      } else if (status === 'CHANNEL_ERROR') {
+        setSyncInd('⚠️ Listener desconectado', 'var(--orange)');
+        console.warn('[Supabase] Realtime channel error');
+      }
+    });
 }
 
-// ── Modal de configuração ─────────────────────────────────────────
+// ── Modal de configuração Supabase ────────────────────────────────
 function openGsConfig() {
   let saved = {};
-  try { saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}'); } catch(e){ console.warn('[openGsConfig] parse LS_FB_CFG:', e); }
+  try { saved = JSON.parse(localStorage.getItem(LS_SB_CFG) || '{}'); } catch(e){ console.warn('[openGsConfig] parse LS_SB_CFG:', e); }
   const html = `
-  <div style="position:fixed;top:0;right:0;bottom:0;left:0;inset:0;background:rgba(0,0,0,.75);z-index:600;display:flex;align-items:center;justify-content:center" id="fb-ov" onclick="if(event.target===this)this.remove()">
-    <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;width:min(600px,96vw);padding:24px;box-shadow:0 24px 64px rgba(0,0,0,.6);max-height:90vh;overflow-y:auto">
-      <div style="font-size:15px;font-weight:800;margin-bottom:4px">🔥 Firebase — Configuração</div>
-      <div style="font-size:12px;color:var(--tx3);margin-bottom:16px">Banco de dados em tempo real. Todos os usuários veem as alterações instantaneamente de qualquer lugar.</div>
+  <div style="position:fixed;top:0;right:0;bottom:0;left:0;inset:0;background:rgba(0,0,0,.75);z-index:600;display:flex;align-items:center;justify-content:center" id="sb-ov" onclick="if(event.target===this)this.remove()">
+    <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;width:min(620px,96vw);padding:24px;box-shadow:0 24px 64px rgba(0,0,0,.6);max-height:90vh;overflow-y:auto">
+      <div style="font-size:15px;font-weight:800;margin-bottom:4px">☁ Supabase — Configuração</div>
+      <div style="font-size:12px;color:var(--tx3);margin-bottom:16px">Banco de dados PostgreSQL. Todos os usuários veem as alterações instantaneamente.</div>
 
       <div style="background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;padding:14px;margin-bottom:16px;font-size:12px;line-height:1.9">
-        <strong style="color:var(--accent)">Passo 1</strong> — Acesse <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent2)">console.firebase.google.com</a><br>
-        <strong style="color:var(--accent)">Passo 2</strong> — Clique em <strong>"Criar projeto"</strong> → dê um nome (ex: rochling-dashboard) → Continuar<br>
-        <strong style="color:var(--accent)">Passo 3</strong> — No menu lateral: <strong>Firestore Database</strong> → Criar banco de dados → Modo produção → Próximo → Ativar<br>
-        <strong style="color:var(--accent)">Passo 4</strong> — Em <strong>Authentication → Sign-in method</strong> → ative <strong>E-mail/senha</strong> → em <strong>Users</strong> → Adicionar usuário (cadastre os e-mails autorizados)<br>
-        <strong style="color:var(--accent)">Passo 5</strong> — Em <strong>Firestore → Regras</strong>, substitua o conteúdo por:<br>
+        <strong style="color:var(--accent)">Passo 1</strong> — Acesse <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--accent2)">supabase.com/dashboard</a> → Criar novo projeto<br>
+        <strong style="color:var(--accent)">Passo 2</strong> — Em <strong>Table Editor</strong> → New Table → nome: <code style="background:var(--bg);padding:1px 5px;border-radius:3px">equipamentos</code> (RLS: desabilitado por ora)<br>
+        <strong style="color:var(--accent)">Passo 3</strong> — Crie as colunas (ou use o SQL abaixo):<br>
         <div style="position:relative;margin:4px 0 8px">
-          <code id="fb-rules" style="display:block;background:var(--bg);border:1px solid var(--bdr2);border-radius:4px;padding:8px 40px 8px 10px;font-family:var(--mono);font-size:10px;color:var(--accent2);white-space:pre">rules_version = '2';
-service cloud.firestore {
-  match /databases/{db}/documents {
-    // Coleção principal — só usuários autenticados (não anônimos)
-    match /equipamentos/{doc} {
-      allow read:  if request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous';
-      allow write: if request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous';
-    }
-    // Ficha pública (QR) — leitura aberta SOMENTE em subcoleção dedicada
-    match /equipamentos_publicos/{doc} {
-      allow read:  if true;
-      allow write: if request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous';
-    }
-    // Bloqueia o resto por padrão
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}</code>
-          <button onclick="navigator.clipboard.writeText(document.getElementById('fb-rules').textContent).then(()=>showToast('Regras copiadas!'))" style="position:absolute;top:5px;right:6px;font-size:10px;background:var(--accent2);color:#fff;border:none;border-radius:3px;padding:2px 7px;cursor:pointer">Copiar</button>
+          <code id="sb-sql" style="display:block;background:var(--bg);border:1px solid var(--bdr2);border-radius:4px;padding:8px 40px 8px 10px;font-family:var(--mono);font-size:10px;color:var(--accent2);white-space:pre">CREATE TABLE equipamentos (
+  id           TEXT PRIMARY KEY,
+  tipo         TEXT, cliente      TEXT, fabricante  TEXT,
+  descricao    TEXT, localizacao  TEXT, responsavel TEXT,
+  empresa      TEXT, cod_lab      TEXT, ult_calib   TEXT,
+  prox_calib   TEXT, freq_dias    INTEGER, status   TEXT,
+  status_calib TEXT, notes        TEXT, link        TEXT,
+  link_data    TEXT, observacoes  TEXT, sheet       TEXT,
+  _uid         BIGINT, _updated  TEXT
+);</code>
+          <button onclick="navigator.clipboard.writeText(document.getElementById('sb-sql').textContent).then(()=>showToast('SQL copiado!'))" style="position:absolute;top:5px;right:6px;font-size:10px;background:var(--accent2);color:#fff;border:none;border-radius:3px;padding:2px 7px;cursor:pointer">Copiar</button>
         </div>
-        <strong style="color:var(--accent)">Passo 6</strong> — Em <strong>Configurações do Projeto ⚙️ → Seus apps</strong> → clique em <strong>&lt;/&gt;</strong> (Web) → Registrar app<br>
-        <strong style="color:var(--accent)">Passo 7</strong> — Copie os valores do <code style="background:var(--bg);padding:1px 5px;border-radius:3px">firebaseConfig</code> e cole nos campos abaixo:
+        <strong style="color:var(--accent)">Passo 4</strong> — Em <strong>Authentication → Users</strong> → Add User (cadastre os e-mails autorizados)<br>
+        <strong style="color:var(--accent)">Passo 5</strong> — Em <strong>Project Settings → API</strong>, copie a <strong>Project URL</strong> e a <strong>anon public key</strong> nos campos abaixo:
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-        ${['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'].map(k=>`
+      <div style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:16px">
         <div style="display:flex;flex-direction:column;gap:3px">
-          <label style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;font-weight:700">${k}</label>
-          <input id="fb-${k}" type="text" value="${saved[k]||''}" placeholder="${k}"
+          <label style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;font-weight:700">Project URL</label>
+          <input id="sb-url" type="text" value="${saved.url||''}" placeholder="https://xxxxxxxxxxxx.supabase.co"
             style="background:var(--bg);border:1px solid var(--bdr2);color:var(--tx);border-radius:4px;padding:6px 10px;font-size:11px;font-family:var(--mono);outline:none;width:100%">
-        </div>`).join('')}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;font-weight:700">Anon Public Key</label>
+          <input id="sb-key" type="text" value="${saved.key||''}" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            style="background:var(--bg);border:1px solid var(--bdr2);color:var(--tx);border-radius:4px;padding:6px 10px;font-size:11px;font-family:var(--mono);outline:none;width:100%">
+        </div>
       </div>
 
-      <div id="fb-test-result" style="font-size:11px;min-height:16px;margin-bottom:12px"></div>
+      <div id="sb-test-result" style="font-size:11px;min-height:16px;margin-bottom:12px"></div>
 
       <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
-        <button onclick="document.getElementById('fb-ov').remove()" style="background:transparent;color:var(--tx2);border:1px solid var(--bdr2);padding:6px 14px;border-radius:5px;font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>
-        <button onclick="fbDisconnect()" style="background:transparent;color:var(--red);border:1px solid var(--red);padding:6px 14px;border-radius:5px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar</button>
-        <button onclick="fbConnect()" style="background:var(--green);color:#fff;border:none;padding:6px 18px;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">🔥 Conectar Firebase</button>
+        <button onclick="document.getElementById('sb-ov').remove()" style="background:transparent;color:var(--tx2);border:1px solid var(--bdr2);padding:6px 14px;border-radius:5px;font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>
+        <button onclick="sbDisconnect()" style="background:transparent;color:var(--red);border:1px solid var(--red);padding:6px 14px;border-radius:5px;font-size:12px;cursor:pointer;font-family:var(--font)">Desconectar</button>
+        <button onclick="sbConnect()" style="background:var(--green);color:#fff;border:none;padding:6px 18px;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">☁ Conectar Supabase</button>
       </div>
     </div>
   </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
-async function fbConnect() {
-  const keys = ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'];
-  const cfg  = Object.fromEntries(keys.map(k => [k, document.getElementById('fb-'+k)?.value.trim()||'']));
-  const res_el = document.getElementById('fb-test-result');
-  if(!cfg.apiKey || !cfg.projectId) {
-    if(res_el) { res_el.textContent = '❌ Preencha pelo menos apiKey e projectId.'; res_el.style.color='var(--red)'; }
+async function sbConnect() {
+  const url = (document.getElementById('sb-url')?.value || '').trim();
+  const key = (document.getElementById('sb-key')?.value || '').trim();
+  const res_el = document.getElementById('sb-test-result');
+
+  if(!url || !key) {
+    if(res_el) { res_el.textContent = '❌ Preencha a Project URL e a Anon Key.'; res_el.style.color='var(--red)'; }
     return;
   }
-  if(res_el) { res_el.textContent = '⏳ Conectando ao Firebase…'; res_el.style.color='var(--accent2)'; }
+  if(res_el) { res_el.textContent = '⏳ Conectando ao Supabase…'; res_el.style.color='var(--accent2)'; }
 
-  // Para listener anterior
-  if(_unsub) { _unsub(); _unsub = null; }
-  _fbActive = false; _db = null; _colRef = null;
+  // Para canal realtime anterior
+  if (_realtimeChannel) { _sb && _sb.removeChannel(_realtimeChannel); _realtimeChannel = null; }
+  _sbActive = false; _sb = null;
+  _sbInitialized = false; // [v15 FIX] reset para permitir init completo com nova configuração
 
-  // Tenta reutilizar o app existente; se config diferente, precisa recriar tudo
-  let ok = false;
   try {
-    const currentApp = firebase.app();
-    // Verifica se é o mesmo projeto
-    if(currentApp.options.projectId === cfg.projectId) {
-      ok = await fbInitFirestore(currentApp);
-    } else {
-      // Projeto diferente — reinicializa tudo (requer reload para auth)
-      ok = await fbInit(cfg);
-      // Reanexar auth listener
-      if(ok) {
-        _auth = firebase.auth(firebase.app());
-        _auth.onAuthStateChanged(user => { if(!user) showLoginScreen(); });
-      }
-    }
+    _supabaseUrl = url; _supabaseKey = key;
+    _sb = supabase.createClient(url, key);
+    // Testa a conexão com uma query simples
+    const { error } = await _sb.from('equipamentos').select('id').limit(1);
+    if (error) throw error;
+    _sbActive = true;
   } catch(e) {
-    ok = await fbInit(cfg);
-  }
-
-  if(!ok) {
-    if(res_el) { res_el.textContent = '❌ Erro ao conectar. Verifique os valores.'; res_el.style.color='var(--red)'; }
+    if(res_el) { res_el.textContent = '❌ Erro: ' + (e.message || e); res_el.style.color='var(--red)'; }
+    console.error('[Supabase] sbConnect test failed:', e);
+    alert('[Supabase] Erro ao conectar: ' + (e.message || e));
     return;
   }
-  localStorage.setItem(LS_FB_CFG, JSON.stringify(cfg));
-  document.getElementById('fb-ov')?.remove();
+
+  localStorage.setItem(LS_SB_CFG, JSON.stringify({ url, key }));
+  document.getElementById('sb-ov')?.remove();
   updateGsCfgBtn();
   const pulled = await fbPull();
   if(pulled && DB.length > 0) {
     updateAll(); filterAlerts('vencido');
-    showToast('🔥 Firebase conectado! ' + DB.length + ' registros carregados.');
+    showToast('☁ Supabase conectado! ' + DB.length + ' registros carregados.');
   } else {
     await fbPush(false);
-    showToast('🔥 Firebase conectado! Dados enviados.');
+    showToast('☁ Supabase conectado! Dados enviados.');
   }
   fbStartListen();
 }
 
-function fbDisconnect() {
-  if(_unsub) { _unsub(); _unsub = null; }
-  _fbActive = false; _db = null; _colRef = null;
-  localStorage.removeItem(LS_FB_CFG);
-  document.getElementById('fb-ov')?.remove();
+// Alias para compatibilidade com o botão antigo fbConnect()
+window.fbConnect = sbConnect;
+
+function sbDisconnect() {
+  if (_realtimeChannel) { _sb && _sb.removeChannel(_realtimeChannel); _realtimeChannel = null; }
+  _sbActive = false; _sb = null;
+  _sbInitialized = false; // [v15 FIX] permite reconectar do zero
+  localStorage.removeItem(LS_SB_CFG);
+  document.getElementById('sb-ov')?.remove();
   updateGsCfgBtn(); setSyncInd('','');
-  showToast('Firebase desconectado');
+  showToast('Supabase desconectado');
 }
+window.fbDisconnect = sbDisconnect;
 
 function updateGsCfgBtn() {
   const btn = document.getElementById('btn-gs-cfg'); if(!btn) return;
   if(fbActive()) {
-    btn.textContent = '🔥 Firebase ✓'; btn.style.borderColor='var(--orange)'; btn.style.color='var(--orange)';
+    btn.textContent = '☁ Supabase ✓'; btn.style.borderColor='var(--green)'; btn.style.color='var(--green)';
     document.getElementById('sync-indicator').style.display = 'inline';
     document.getElementById('btn-sync-now').style.display = 'none';
   } else {
-    btn.textContent = '🔥 Firebase'; btn.style.borderColor=''; btn.style.color='';
+    btn.textContent = '☁ Supabase'; btn.style.borderColor=''; btn.style.color='';
     setSyncInd('','');
   }
 }
@@ -4087,47 +4077,25 @@ function initDB() {
   if(!loadLS()) { DB = recalcDias(RAW); saveLS(); }
 }
 
-// ── Configuração Firebase — credenciais nunca fixas no código ──────────────────
-// As chaves são lidas exclusivamente do localStorage (LS_FB_CFG), que o usuário
-// preenche via modal administrativo. O objeto abaixo é apenas a forma/schema vazio.
-// SEGURANÇA: não comitar/expor chaves reais em repositórios. Configurar via UI.
-const FB_CONFIG_SCHEMA = ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'];
-
-function _loadFbCfg() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(LS_FB_CFG) || '{}');
-    if(saved.apiKey && saved.projectId) return saved;
-  } catch(e) { console.warn('[Firebase] Erro ao ler config do localStorage:', e); }
-  return null;
-}
-
-function _fbCfgIsValid(cfg) {
-  return cfg && typeof cfg.apiKey === 'string' && cfg.apiKey.length > 0
-             && typeof cfg.projectId === 'string' && cfg.projectId.length > 0;
-}
-
-async function initFirebase() {
-  // Chamada a partir de showApp — Firestore já tem app inicializado, só conecta
-  const cfg = _loadFbCfg();
-  if(!_fbCfgIsValid(cfg)) {
-    console.warn('[Firebase] Configuração ausente. Configure via ⚙ Configurações > Firebase.');
+// ── initSupabase — chamada após login bem-sucedido ─────────────────
+async function initSupabase() {
+  if (!_initSupabaseClient()) {
+    console.warn('[Supabase] Configuração ausente. Configure via ⚙ Configurações > Supabase.');
     updateGsCfgBtn();
     return;
   }
-  try {
-    const app = firebase.app(); // app já existe, criado por initFirebaseAndAuth
-    await fbInitFirestore(app);
-  } catch(e) {
-    console.error('[initFirebase] Falha ao conectar Firestore:', e);
-    showToast('Erro ao conectar Firebase: ' + (e.message || e), 'err');
-    _fbActive = false;
-  }
   updateGsCfgBtn();
-  // Só sobrescreve UI com dados do Firebase se não houver mudanças locais pendentes
+  // [v15 FIX] onAuthStateChange (Supabase JS v2) dispara SIGNED_IN imediatamente ao ser registrado
+  // se já há sessão ativa — e getSession() já chamou showApp() um momento antes.
+  // Resultado: initSupabase() era invocado 2× em rápida sucessão → fbPull duplo + realtime duplo → travado.
+  if (_sbInitialized) return;
+  _sbInitialized = true;
   const pulled = await fbPull();
   if(pulled && !_pending) { updateAll(); filterAlerts('vencido'); }
   fbStartListen();
 }
+// Alias para compatibilidade interna
+const initFirebase = initSupabase;
 
 // ══════════════════════════════════════════════════════
 // MODO PÚBLICO — Ficha de equipamento via QR (?view=ID)
@@ -4263,109 +4231,120 @@ async function initFirebase() {
     buildPublicView(r);
   }
 
-  // Oculta o login, lê equipamentos_publicos (allow read: if true) e renderiza a ficha pública
-  // CORREÇÃO: usa equipamentos_publicos — leitura aberta, sem signInAnonymously necessário.
-  // Auth Anônima NÃO precisa estar habilitada no Firebase Console para QR funcionar.
+  // Oculta o login, lê a tabela 'equipamentos' no Supabase (anon key = leitura pública via RLS) e renderiza a ficha.
+  // No Supabase: certifique-se de habilitar RLS com uma policy "allow SELECT for anon" na tabela 'equipamentos'.
   window.addEventListener('DOMContentLoaded', () => {
     // Esconde o login overlay — modo somente-leitura público
     const lo = document.getElementById('login-overlay');
     if (lo) lo.style.display = 'none';
-    // Inicializa DB local (sem Firebase/auth)
+    // Inicializa DB local (sem auth)
     if (typeof initDB === 'function') initDB();
     (async () => {
       try {
-        const cfg = _loadFbCfg();
-        if(!cfg) { console.warn('[público] Firebase não configurado — modo offline.'); waitAndRender(); return; }
-        let app;
-        try { app = firebase.app(); } catch(e) { app = firebase.initializeApp(cfg); }
+        const saved = JSON.parse(localStorage.getItem('rochling_sb_cfg') || '{}');
+        if (!saved.url || !saved.key) {
+          console.warn('[público] Supabase não configurado — modo offline (cache local).');
+          waitAndRender();
+          return;
+        }
+        // Cria cliente anônimo para leitura pública
+        const sbPub = supabase.createClient(saved.url, saved.key);
+        const { data, error } = await sbPub
+          .from('equipamentos')
+          .select('*')
+          .order('id', { ascending: true });
 
-        // ── Lê equipamentos_publicos — allow read: if true (sem auth) ──
-        const db = firebase.firestore(app);
-        const snap = await db.collection('equipamentos_publicos').get();
-        if (!snap.empty) {
-          const rows = [];
-          snap.forEach(doc => {
-            const data = doc.data();
-            // _uid after spread so existing _uid in data is preserved;
-            // _docId captures the Firestore document ID (safeId) for fallback search
-            rows.push({ ...data, _uid: data._uid ?? (rows.length + 1), _docId: doc.id });
-          });
-          if (rows.length) {
-            DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
-          }
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          const rows = data.map((r, i) => ({ ...r, _uid: r._uid || (i + 1) }));
+          DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
         } else {
-          console.warn('[público] equipamentos_publicos vazia — realize um Save no sistema para sincronizar os dados públicos.');
+          console.warn('[público] Tabela equipamentos vazia ou sem permissão de leitura anônima.');
         }
       } catch(e) {
-        console.error('[público] erro Firestore:', e.code, e.message);
+        console.error('[público] erro Supabase:', e.message || e);
       }
       waitAndRender();
     })();
   });
 })();
-let _auth = null;
+
+// ══════════════════════════════════════════════════════
+// AUTENTICAÇÃO — Supabase Auth
+// ══════════════════════════════════════════════════════
+let _auth = null; // alias mantido; não usado diretamente com Supabase (usa _sb.auth)
 
 async function initFirebaseAndAuth() {
-  // ── GUARD: Firebase CDN pode ter sido bloqueado (proxy corporativo, ad-blocker, offline) ──
-  // Sem este guard, `firebase` seria um ReferenceError catastrófico no console.
-  if (typeof firebase === 'undefined') {
-    console.warn('[Firebase] SDK não carregou — CDN bloqueada, proxy corporativo ou ausência de rede.');
-    const errEl  = document.getElementById('login-error');
+  // ── GUARD: SDK Supabase deve ter carregado ──
+  if (typeof supabase === 'undefined' || typeof supabase.createClient !== 'function') {
+    console.warn('[Supabase] SDK não carregou — CDN bloqueada ou ausência de rede.');
+    const errEl   = document.getElementById('login-error');
+    const errMsg  = document.getElementById('login-error-msg');
+    const loginBtn= document.getElementById('login-btn');
+    if (errMsg)   errMsg.textContent = 'Serviço de autenticação indisponível. A CDN do Supabase está inacessível. Verifique sua conexão.';
+    if (errEl)    errEl.classList.add('on');
+    if (loginBtn) { loginBtn.disabled = true; loginBtn.style.opacity = '0.5'; loginBtn.title = 'Supabase indisponível'; }
+    showLoginScreen();
+    return;
+  }
+
+  // Inicializa o cliente (lê config do localStorage)
+  if (!_initSupabaseClient()) {
+    console.warn('[Supabase] Configuração ausente — exibindo tela de setup.');
+    showLoginScreen();
     const errMsg = document.getElementById('login-error-msg');
-    const loginBtn = document.getElementById('login-btn');
-    if (errMsg) errMsg.textContent = 'Serviço de autenticação indisponível. A CDN do Firebase está bloqueada ou inacessível. Contate o administrador de TI.';
+    const errEl  = document.getElementById('login-error');
+    if (errMsg) errMsg.textContent = 'Supabase não configurado. Clique em ⚙ Configurações para inserir as credenciais do projeto.';
     if (errEl)  errEl.classList.add('on');
-    if (loginBtn) { loginBtn.disabled = true; loginBtn.style.opacity = '0.5'; loginBtn.title = 'Firebase indisponível'; }
-    showLoginScreen();
-    return;
-  }
-  // ── /GUARD ──
-  let cfg = _loadFbCfg();
-  // Se não há config no localStorage, mostra o modal de configuração Firebase
-  if(!_fbCfgIsValid(cfg)) {
-    console.warn('[Firebase] Configuração ausente — exibindo tela de setup.');
-    showLoginScreen();
-    // Exibe aviso gentil no painel de login para guiar o usuário
-    const errMsg = document.getElementById('login-error-msg');
-    const errEl  = document.getElementById('login-error');
-    if(errMsg) errMsg.textContent = 'Firebase não configurado. Clique em ⚙ Configurações para inserir as credenciais do projeto.';
-    if(errEl)  errEl.classList.add('on');
     return;
   }
 
-  let app;
+  // Verifica sessão existente e escuta mudanças de estado de autenticação
   try {
-    // Reuse existing app if present (idempotent); only initialize once
-    try { app = firebase.app(); } catch(_) { app = firebase.initializeApp(cfg); }
-    _auth = firebase.auth(app);
-    // Firestore é inicializado DEPOIS do login (em showApp → initFirebase)
-  } catch(e) {
-    console.error('[initFirebaseAndAuth] Falha ao inicializar app:', e);
-    showToast('Erro ao inicializar Firebase: ' + (e.message || e), 'err');
-    showLoginScreen();
-    return;
-  }
-
-  // Escuta estado de autenticação — dispara imediatamente com sessão existente
-  _auth.onAuthStateChanged(async user => {
-    if (user) {
-      showApp(user);
+    const { data: { session } } = await _sb.auth.getSession();
+    if (session && session.user) {
+      showApp(session.user);
     } else {
       showLoginScreen();
     }
-  });
+
+    // Listener de mudanças de auth (login/logout em outra aba, expiração de token)
+    _sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session && session.user) {
+        showApp(session.user);
+      } else if (event === 'SIGNED_OUT') {
+        showLoginScreen();
+      }
+    });
+  } catch(e) {
+    console.error('[initFirebaseAndAuth] Falha ao verificar sessão Supabase:', e);
+    showToast('Erro ao verificar sessão: ' + (e.message || e), 'err');
+    showLoginScreen();
+  }
 }
 
+let _appInitialized = false; // [v15b FIX] evita double-init do updateAll/buildAllCharts pelo onAuthStateChange
+
 function showApp(user) {
+  // Atualiza UI de auth (sempre permitido: nome do utilizador, overlay de login)
   document.getElementById('login-overlay').classList.add('hidden');
   document.getElementById('app-wrapper').classList.add('authed');
   const chip    = document.getElementById('auth-user-chip');
   const emailEl = document.getElementById('auth-user-email');
   if(chip)    chip.style.display = 'flex';
   if(emailEl) emailEl.textContent = user.email;
-  // Inicializa tabelas e então conecta ao Firestore
+
+  // Inicialização de dados: só uma vez por sessão
+  // onAuthStateChange (Supabase JS v2) dispara SIGNED_IN imediatamente ao ser registrado,
+  // causando um segundo showApp() ~0ms após o primeiro (vindo de getSession).
+  // Sem esta guarda, updateAll() + buildAllCharts() rodam 2× → charts destruídos e
+  // recriados antes da animação terminar → loop visual infinito nos gráficos.
+  if (_appInitialized) return;
+  _appInitialized = true;
+  // Inicializa tabelas e depois conecta ao Supabase
   updateAll();
-  initFirebase();
+  initSupabase();
 }
 
 function showLoginScreen() {
@@ -4373,13 +4352,13 @@ function showLoginScreen() {
   document.getElementById('app-wrapper').classList.remove('authed');
   const chip = document.getElementById('auth-user-chip');
   if(chip) chip.style.display = 'none';
+  _appInitialized = false; // [v15b FIX] permite re-init completo após logout/re-login
 }
 
-
-// Password reset flow (added by security audit)
+// Recuperação de senha via Supabase Auth
 async function doForgotPassword(ev) {
   if (ev && ev.preventDefault) ev.preventDefault();
-  if (!_auth) { alert('Serviço indisponível. Recarregue a página.'); return; }
+  if (!_sb) { alert('Supabase não configurado. Configure as credenciais primeiro.'); return; }
   const emailField = document.getElementById('login-email');
   const email = (emailField && emailField.value || '').trim();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -4388,11 +4367,13 @@ async function doForgotPassword(ev) {
     return;
   }
   try {
-    await _auth.sendPasswordResetEmail(email);
+    const { error } = await _sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname,
+    });
+    if (error) throw error;
     alert('Enviamos um link de redefinição de senha para ' + email + '. Verifique sua caixa de entrada (e o spam).');
   } catch (e) {
     console.warn('[forgotPassword]', e);
-    // Don't leak whether email exists — generic message
     alert('Se o e-mail estiver cadastrado, você receberá um link em instantes.');
   }
 }
@@ -4413,19 +4394,23 @@ async function doLogin() {
     errEl.classList.add('on');
     return;
   }
-  if(!_auth) {
-    errMsg.textContent = 'Serviço de autenticação não disponível. Recarregue a página.';
-    errEl.classList.add('on');
-    return;
+
+  // Verifica se o cliente Supabase está inicializado
+  if (!_sb) {
+    // Tenta inicializar a partir do localStorage
+    if (!_initSupabaseClient()) {
+      errMsg.textContent = 'Supabase não configurado. Clique em ⚙ Configurações para inserir as credenciais.';
+      errEl.classList.add('on');
+      return;
+    }
   }
 
-  // Input validation (defense in depth — Firebase also validates)
+  // Validações básicas
   if(email.length > 254 || password.length > 128) {
     errMsg.textContent = 'Credenciais com tamanho inválido.';
     errEl.classList.add('on');
     return;
   }
-  // Basic email shape check
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     errMsg.textContent = 'Endereço de e-mail inválido.';
     errEl.classList.add('on');
@@ -4437,42 +4422,37 @@ async function doLogin() {
   errEl.classList.remove('on');
 
   try {
-    // Set persistence BEFORE sign-in for predictable session behavior
-    try { await _auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch(pe){ console.warn('[setPersistence]', pe); }
-    await _auth.signInWithEmailAndPassword(email, password);
-    // onAuthStateChanged → showApp cuida do resto
+    const { data, error } = await _sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    // onAuthStateChange → showApp cuida do resto
   } catch(err) {
     btn.disabled = false;
     btn.classList.remove('loading');
     errEl.classList.add('on');
-    const code = err.code || '';
-    if(['auth/user-not-found','auth/wrong-password','auth/invalid-credential'].includes(code)) {
+    const msg = (err.message || '').toLowerCase();
+    if (msg.includes('invalid login') || msg.includes('invalid credentials') || msg.includes('email not confirmed')) {
       errMsg.textContent = 'E-mail ou senha incorretos. Verifique seus dados.';
-    } else if(code === 'auth/invalid-email') {
-      errMsg.textContent = 'Endereço de e-mail inválido.';
-    } else if(code === 'auth/user-disabled') {
-      errMsg.textContent = 'Esta conta foi desabilitada. Contate o administrador.';
-    } else if(code === 'auth/too-many-requests') {
+    } else if (msg.includes('too many requests') || msg.includes('rate limit')) {
       errMsg.textContent = 'Muitas tentativas incorretas. Aguarde alguns minutos.';
-    } else if(code === 'auth/network-request-failed') {
+    } else if (msg.includes('network') || msg.includes('fetch')) {
       errMsg.textContent = 'Falha de conexão. Verifique sua internet.';
     } else {
-      errMsg.textContent = 'Erro ao fazer login: ' + (err.message || code);
+      errMsg.textContent = 'Erro ao fazer login: ' + (err.message || '');
     }
+    console.error('[doLogin] Supabase auth error:', err);
   }
 }
 
 async function doLogout() {
-  if(!_auth) return;
   if(!confirm('Deseja sair do sistema?')) return;
-  // Para o listener do Firestore
-  if(_unsub) { _unsub(); _unsub = null; }
-  _fbActive = false; _db = null; _colRef = null;
+  // Para o canal realtime
+  if (_realtimeChannel && _sb) { _sb.removeChannel(_realtimeChannel); _realtimeChannel = null; }
+  _sbActive = false;
   try {
-    await _auth.signOut();
-    // onAuthStateChanged → showLoginScreen
+    if (_sb) await _sb.auth.signOut();
+    // onAuthStateChange → showLoginScreen
   } catch(e) {
-    showToast('Erro ao sair: ' + e.message, 'err');
+    showToast('Erro ao sair: ' + (e.message || e), 'err');
   }
 }
 
@@ -4510,6 +4490,7 @@ const FONT = "'DM Sans', system-ui, sans-serif";
 const MONO_F = "'DM Mono', monospace";
 const donutOpts = () => ({
   responsive:true, maintainAspectRatio:false, cutout:'62%',
+  animation: false, // [v15b FIX] sem animação → charts aparecem instantâneos, sem loop visual ao ser recriados
   plugins:{
     legend:{position:'bottom',labels:{color:tc(),font:{size:11,family:FONT},boxWidth:10,padding:10,usePointStyle:true,pointStyle:'circle'}},
     tooltip:{callbacks:{label:ctx=>' '+ctx.label+': '+ctx.parsed}}
@@ -4517,6 +4498,7 @@ const donutOpts = () => ({
 });
 const barY = (extra) => ({
   responsive:true, maintainAspectRatio:false, indexAxis:'y',
+  animation: false, // [v15b FIX]
   plugins:{legend:{display:false}},
   scales:{
     x:{ticks:{color:tc(),font:{size:10.5,family:FONT}},grid:{color:gc()},border:{display:false}},
@@ -4525,6 +4507,7 @@ const barY = (extra) => ({
 });
 const barX = (extra) => ({
   responsive:true, maintainAspectRatio:false,
+  animation: false, // [v15b FIX]
   plugins:{legend:{display:false}},
   scales:{
     x:{ticks:{color:tc(),font:{size:10.5,family:FONT}},grid:{display:false},border:{display:false}},
@@ -4609,7 +4592,7 @@ function buildAllCharts() {
   dc('gauge');
   const gEl = document.getElementById('ch-gauge');
   if(gEl){
-    charts.gauge = new Chart(gEl,{type:'doughnut',data:{datasets:[{data:[pct,100-pct],backgroundColor:[gc2,'rgba(128,128,128,.06)'],borderWidth:0,circumference:180,rotation:-90}]},options:{responsive:true,maintainAspectRatio:false,cutout:'74%',plugins:{legend:{display:false},tooltip:{enabled:false}}}});
+    charts.gauge = new Chart(gEl,{type:'doughnut',data:{datasets:[{data:[pct,100-pct],backgroundColor:[gc2,'rgba(128,128,128,.06)'],borderWidth:0,circumference:180,rotation:-90}]},options:{responsive:true,maintainAspectRatio:false,cutout:'74%',animation:false,plugins:{legend:{display:false},tooltip:{enabled:false}}}});
     const gp=document.getElementById('gauge-pct'); if(gp){gp.textContent=pct+'%';gp.style.color=gc2;}
   }
 
@@ -7948,7 +7931,10 @@ function applyBulkEdit(tbl) {
 
   // Persist
   saveLS();
-  if(fbActive()) fbSchedulePush();
+  // Deleta do Supabase pelo campo 'id' (código do equipamento)
+  if(fbActive() && r.id) {
+    sbDeleteRecord(r.id).catch(e => console.warn('[Supabase] delete record:', r.id, e));
+  }
 
   // Re-render only the changed rows — don't jump page or re-filter
   uids.forEach(uid => rerenderRow(uid, tbl));
@@ -7964,12 +7950,12 @@ function bulkDelete(tbl) {
   if(uids.size === 0) return;
   if(!confirm(`Excluir ${uids.size} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`)) return;
 
-  // Firestore delete
+  // Supabase: deleta cada registro pelo campo 'id' (código do equipamento)
   if(fbActive()) {
     uids.forEach(uid => {
       const r = DB.find(x => x._uid === uid);
-      if(r?.fbId) {
-        try { _colRef.doc(r.fbId).delete(); } catch(e){ console.warn('[fbPush] delete doc:', r.fbId, e); }
+      if(r && r.id) {
+        sbDeleteRecord(r.id).catch(e => console.warn('[Supabase] bulkDelete:', r.id, e));
       }
     });
   }
@@ -10941,11 +10927,17 @@ function toggleColFilterDd(tbl, col, event) {
            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
   }
 
-  // Obtém utilizador atual (Firebase auth ou genérico)
+  // Obtém utilizador atual (Supabase auth ou genérico)
   function _currentUser() {
     try {
-      if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
-        return firebase.auth().currentUser.email || firebase.auth().currentUser.displayName || 'Utilizador';
+      // Supabase: tenta obter sessão em cache (síncrono via localStorage interno)
+      if (typeof _sb !== 'undefined' && _sb && _sb.auth) {
+        const stored = localStorage.getItem('sb-' + (_supabaseUrl || '').replace(/https?:\/\//, '').split('.')[0] + '-auth-token');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const email = parsed?.user?.email || parsed?.email;
+          if (email) return email;
+        }
       }
     } catch(e) {}
     try {
@@ -10953,8 +10945,8 @@ function toggleColFilterDd(tbl, col, event) {
       if (chip) {
         var email = chip.querySelector('[data-email]');
         if (email) return email.dataset.email;
-        var txt = chip.textContent.trim();
-        if (txt && txt.length > 2 && txt.length < 60) return txt;
+        var emailEl = document.getElementById('auth-user-email');
+        if (emailEl && emailEl.textContent.trim()) return emailEl.textContent.trim();
       }
     } catch(e) {}
     return 'Operador';
