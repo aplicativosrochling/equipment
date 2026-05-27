@@ -9271,13 +9271,21 @@ let _qrInstance = null;
 function openQrModal(uid) {
   _qrUID = uid;
   
-  // ✅ Busca dados FRESCOS do DB antes de qualquer operação
+  // 🔥 ADICIONAR ESTA LINHA - Limpa QR antigo
+  if (_qrInstance) { _qrInstance = null; }
+  
+  // Busca dados FRESCOS do DB antes de qualquer operação
   const r = DB.find(x => x._uid === uid);
   if (!r) { 
     if(typeof showToast === 'function') showToast('Instrumento não encontrado', 'err');
     else alert('Instrumento não encontrado');
     return; 
   }
+
+  // 🔥 ADICIONAR ESTAS LINHAS - Para ver no console se está funcionando
+  console.log('[QR] Gerando QR para:', r.id);
+  console.log('[QR] Status Calibração:', r.status_calib);
+  console.log('[QR] Dias para vencer:', r.dias_vencer);
 
   // Remove stale modal if present then re-inject fresh
   const old = document.getElementById('qr-modal-ov');
@@ -9292,7 +9300,11 @@ function openQrModal(uid) {
   const qrBox = document.getElementById('qr-canvas-box');
   qrBox.innerHTML = '';
   _qrInstance = null;
-  const payload = _buildQrPayload(r);  // ✅ r contém dados mais recentes do DB
+  const payload = _buildQrPayload(r);
+  
+  // 🔥 ADICIONAR ESTA LINHA - Para ver a URL do QR
+  console.log('[QR] URL gerada:', payload);
+  
   try {
     _qrInstance = new QRCode(qrBox, {
       text: payload,
@@ -9301,6 +9313,7 @@ function openQrModal(uid) {
       correctLevel: QRCode.CorrectLevel.M
     });
   } catch(e) {
+    console.error('[QR] Erro:', e);
     qrBox.innerHTML = '<div style="padding:20px;color:red;font-size:11px">Erro ao gerar QR: '+e.message+'</div>';
   }
 
@@ -9310,6 +9323,7 @@ function openQrModal(uid) {
   ov.style.opacity = '1';
   ov.style.pointerEvents = 'all';
   document.body.style.overflow = 'hidden';
+
 }
 
 function closeQrModal() {
@@ -12545,3 +12559,46 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 
 </script>
+});
+</script>
+
+<!-- ================================================== -->
+<!-- CÓDIGO PARA ATUALIZAR QR AUTOMATICAMENTE          -->
+<!-- ================================================== -->
+<script>
+// FORÇA ATUALIZAÇÃO DO QR APÓS EDITAR OU IMPORTAR
+function refreshQrIfOpen() {
+  var ov = document.getElementById('qr-modal-ov');
+  if (ov && ov.classList.contains('on') && typeof _qrUID !== 'undefined' && _qrUID) {
+    console.log('[QR] Modal aberto, regenerando com dados frescos...');
+    if (typeof openQrModal === 'function') {
+      openQrModal(_qrUID);
+    }
+  }
+}
+
+if (typeof window.saveRecord === 'function') {
+  var _origSaveRecord = window.saveRecord;
+  window.saveRecord = function() {
+    var result = _origSaveRecord.apply(this, arguments);
+    setTimeout(refreshQrIfOpen, 500);
+    return result;
+  };
+  console.log('[QR] Hook saveRecord instalado');
+}
+
+if (typeof window.v12ConfirmImport === 'function') {
+  var _origV12ConfirmImport = window.v12ConfirmImport;
+  window.v12ConfirmImport = function() {
+    var result = _origV12ConfirmImport.apply(this, arguments);
+    setTimeout(refreshQrIfOpen, 500);
+    return result;
+  };
+  console.log('[QR] Hook v12ConfirmImport instalado');
+}
+
+console.log('[QR] Sistema de atualização automática ativado!');
+</script>
+
+</body>
+</html>
