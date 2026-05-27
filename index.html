@@ -4757,7 +4757,7 @@ const initFirebase = initSupabase;
   // A Anon Key é PÚBLICA por design (leitura via RLS apenas).
   // Sem isso, o QR não funciona em celulares que não fizeram login.
   // ══════════════════════════════════════════════════════════════
-  const _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co'; // ← Cole aqui: https://xxxxxx.supabase.co
+  const _QR_PUBLIC_SB_URL = 'https://aplicativosrochling.github.io/equipment/'; // ← Cole aqui: https://xxxxxx.supabase.co
   const _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw'; // ← Cole aqui: eyJhbGciOi... (anon/public key)
 
   // Oculta o login, lê a tabela 'equipamentos' no Supabase (anon key = leitura pública via RLS) e renderiza a ficha.
