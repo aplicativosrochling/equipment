@@ -5650,44 +5650,47 @@ function startInlineEdit(uid, k, td) {
 
 // Recalcula próxima calib, dias_vencer e status_calib de um registro
 function recalcRecord(r) {
-  _statsCache = null;
-  const today = new Date(); today.setHours(0,0,0,0);
-
-  // 1. Se tem Última Calib + Frequência → calcula Próxima automaticamente
-  if(r.ult_calib && r.freq_dias) {
-    try {
-      const ult  = new Date(r.ult_calib + 'T00:00:00');
-      const prox = new Date(ult);
-      prox.setDate(prox.getDate() + parseInt(r.freq_dias));
-      r.prox_calib = prox.toISOString().slice(0, 10);
-    } catch(e) {}
-  }
-
-  // 2. Recalcula dias_vencer a partir da Próxima Calibração
-  if(r.prox_calib) {
-    try {
-      r.dias_vencer = Math.round(
-        (new Date(r.prox_calib + 'T00:00:00') - today) / 86400000
-      );
-    } catch(e) { r.dias_vencer = null; }
-  } else {
-    r.dias_vencer = null;
-  }
-
-  // 3. Atualiza status_calib automaticamente baseado nos dias restantes
-  //    (só atualiza se não for Descartado ou Não Encontrado)
-  const sc = r.status_calib || '';
-  const isSpecial = sc.includes('DESCARTADO') || sc.includes('encontrado')
-                 || sc.includes('Discarded') || sc.includes('Found');
-  if(!isSpecial) {
-    if(r.dias_vencer === null) {
-      // Sem data → não altera
-    } else if(r.dias_vencer < 0) {
-      r.status_calib = 'Calibração Necessária';
-    } else {
-      r.status_calib = 'Instrumento Calibrado e aprovado';
+    _statsCache = null;
+    const today = new Date(); today.setHours(0,0,0,0);
+    
+    if(r.ult_calib && r.freq_dias) {
+        try {
+            const ult = new Date(r.ult_calib + 'T00:00:00');
+            const prox = new Date(ult);
+            prox.setDate(prox.getDate() + parseInt(r.freq_dias));
+            r.prox_calib = prox.toISOString().slice(0, 10);
+        } catch(e) {}
     }
-  }
+    
+    if(r.prox_calib) {
+        try {
+            r.dias_vencer = Math.round(
+                (new Date(r.prox_calib + 'T00:00:00') - today) / 86400000
+            );
+        } catch(e) { r.dias_vencer = null; }
+    } else {
+        r.dias_vencer = null;
+    }
+    
+    // CORREÇÃO: Só atualiza status_calib se for "Necessária" e estiver vencido
+    // Preserva "Calibrado e aprovado" quando em dia
+    const sc = r.status_calib || '';
+    const isSpecial = sc.includes('DESCARTADO') || sc.includes('encontrado')
+                   || sc.includes('Discarded') || sc.includes('Found');
+    
+    if(!isSpecial) {
+        if(r.dias_vencer === null) {
+            // Não altera
+        } else if(r.dias_vencer < 0) {
+            r.status_calib = 'Calibração Necessária';
+        } else {
+            // SÓ MUDA se estiver como "Necessária" erroneamente
+            if (sc === 'Calibração Necessária') {
+                r.status_calib = 'Instrumento Calibrado e aprovado';
+            }
+            // Caso contrário, mantém o valor original
+        }
+    }
 }
 
 function _origCommitInlineEdit(silent) {
@@ -9258,11 +9261,12 @@ window.openPdfModalBulk = function(tbl) {
 // ═══════════════════════════════════════════════════════
 
 function _buildQrPayload(r) {
-  // Aponta para a mesma página com ?view=ID
-  // Ao carregar com este parâmetro, exibe a ficha pública sem login
-  const id = encodeURIComponent(r.id || r._uid || '');
-  const base = window.location.href.split('?')[0];
-  return base + '?view=' + id;
+    const id = encodeURIComponent(r.id || r._uid || '');
+    // Usar o nome correto do arquivo
+    const base = window.location.href.split('?')[0];
+    // Remove qualquer espaçamento problemático
+    const cleanBase = base.replace(/\\/g, '/').replace(/\s/g, '%20');
+    return cleanBase + '?view=' + id;
 }
 
 let _qrUID = null;
