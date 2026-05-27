@@ -2758,12 +2758,12 @@ input[type="checkbox"], input[type="radio"] {
     <div style="padding:18px 20px">
       <!-- Drag-drop zone -->
       <div id="v12-dropzone"
-           onclick="document.getElementById('file-import').click()"
+           onclick="v12PickImportFile(event)"
            ondragover="v12DragOver(event)"
            ondragleave="v12DragLeave(event)"
            ondrop="v12Drop(event)"
            role="button" tabindex="0" aria-label="Área de importação — arraste o ficheiro JSON"
-           onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('file-import').click()">
+           onkeydown="if(event.key==='Enter'||event.key===' ')v12PickImportFile(event)">
         <div class="dz-icon" id="dz-icon">📂</div>
         <div class="dz-title" id="dz-title">Arraste o ficheiro aqui</div>
         <div class="dz-sub">ou <strong>clique para procurar</strong> no seu computador</div>
@@ -2772,7 +2772,7 @@ input[type="checkbox"], input[type="radio"] {
           <span class="dz-badge">máx. 10 MB</span>
         </div>
       </div>
-      <input type="file" id="file-import" accept=".json" onchange="v12FileSelected(event)" style="display:none">
+      <input type="file" id="file-import" accept=".json,application/json" onchange="v12FileSelected(event)" style="display:block;position:fixed;left:-10000px;top:auto;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1" aria-hidden="true">
       <div style="font-size:10px;color:var(--tx3);text-align:center;margin-top:8px;line-height:1.6">
         ⚠️ Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.
       </div>
@@ -4616,7 +4616,8 @@ const initFirebase = initSupabase;
 // ══════════════════════════════════════════════════════
 (function() {
   const params = new URLSearchParams(window.location.search);
-  const viewId = params.get('view');
+  // Aceita links antigos (?id=...), novos (?view=...) e QR com espaços por engano.
+  const viewId = (params.get('view') || params.get('id') || '').trim();
   if (!viewId) return;
 
   // Injeta overlay de ficha pública antes do login aparecer
@@ -4714,27 +4715,23 @@ const initFirebase = initSupabase;
   const _pubStart = Date.now();
   function waitAndRender() {
     if (typeof DB === 'undefined' || !DB.length) {
+      if (window.__publicLoadDone) {
+        showPublicLoadError(window.__publicLoadError || 'A consulta pública retornou 0 registros. Verifique se a tabela equipamentos tem policy SELECT para anon e se existe Save/Sync feito no sistema.');
+        return;
+      }
       if (Date.now() - _pubStart > 15000) {
-        // [v25-FIX] Timeout aumentado de 8s -> 15s (cold start Supabase em 3G/4G).
-        // Adiciona botão 'Tentar novamente' em vez de só mostrar erro estático.
-        const ov = document.createElement('div');
-        ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:10px;padding:24px;text-align:center';
-        ov.innerHTML = '<div style="font-size:36px">⏱️</div>'
-          + '<div style="font-size:16px;font-weight:700;color:#1a1a1a">Tempo esgotado</div>'
-          + '<div style="font-size:12px;color:#6b7280;max-width:280px">Não foi possível carregar os dados. Verifique sua conexão e tente novamente.</div>'
-          + '<button id="qr-retry-btn" style="margin-top:8px;padding:10px 18px;font-size:13px;font-weight:600;background:#0064b3;color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:Inter,sans-serif">↻ Tentar novamente</button>';
-        document.body.appendChild(ov);
-        var rb = document.getElementById('qr-retry-btn');
-        if (rb) rb.onclick = function(){ location.reload(); };
+        showPublicLoadError('Tempo esgotado aguardando a base pública. Verifique a conexão e toque em tentar novamente.');
         return;
       }
       setTimeout(waitAndRender, 200);
       return;
     }
     const vId = decodeURIComponent(viewId).toUpperCase();
-    const r = DB.find(x => (x.id || '').toUpperCase() === vId)
-           || DB.find(x => String(x._uid) === decodeURIComponent(viewId))
-           || DB.find(x => (x._docId || '').toUpperCase() === vId);
+    const rawId = decodeURIComponent(viewId).trim();
+    const r = DB.find(x => String(x.id || '').trim().toUpperCase() === vId)
+           || DB.find(x => String(x._uid || '').trim() === rawId)
+           || DB.find(x => String(x.id_interno || '').trim() === rawId)
+           || DB.find(x => String(x._docId || '').trim().toUpperCase() === vId);
     if (!r) {
       const ov = document.createElement('div');
       const dbCount = (typeof DB !== 'undefined' && DB) ? DB.length : 0;
@@ -4749,6 +4746,20 @@ const initFirebase = initSupabase;
       return;
     }
     buildPublicView(r);
+  }
+
+  function showPublicLoadError(message) {
+    if (document.getElementById('qr-public-error-ov')) return;
+    const ov = document.createElement('div');
+    ov.id = 'qr-public-error-ov';
+    ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:10px;padding:24px;text-align:center';
+    ov.innerHTML = '<div style="font-size:36px">⏱️</div>'
+      + '<div style="font-size:16px;font-weight:700;color:#1a1a1a">Tempo esgotado</div>'
+      + '<div style="font-size:12px;color:#6b7280;max-width:320px;line-height:1.45">' + _escPub(message || 'Não foi possível carregar os dados.') + '</div>'
+      + '<button id="qr-retry-btn" style="margin-top:8px;padding:10px 18px;font-size:13px;font-weight:600;background:#0064b3;color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:Inter,sans-serif">↻ Tentar novamente</button>';
+    document.body.appendChild(ov);
+    var rb = document.getElementById('qr-retry-btn');
+    if (rb) rb.onclick = function(){ location.reload(); };
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -4802,36 +4813,41 @@ const initFirebase = initSupabase;
       // Cria cliente anônimo para leitura pública
       const sbPub = supabase.createClient(sbUrl, sbKey);
 
-      // [v25-FIX] Race com timeout de 10s para detectar request preso
-      const queryPromise = sbPub.from('equipamentos').select('*').order('id', { ascending: true });
-      const timeoutPromise = new Promise(function(_, reject) {
-        setTimeout(function(){ reject(new Error('Timeout de 10s na query Supabase — rede lenta ou Supabase indisponível.')); }, 10000);
-      });
-      const result = await Promise.race([queryPromise, timeoutPromise]);
+      // [v25-FIX+] Abort real no fetch + timeout maior para 4G lento.
+      const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      const timer = setTimeout(function(){ try { if (ctrl) ctrl.abort(); } catch(e) {} }, 14000);
+      let result;
+      try {
+        let q = sbPub.from('equipamentos').select('*').order('id', { ascending: true });
+        if (ctrl && typeof q.abortSignal === 'function') q = q.abortSignal(ctrl.signal);
+        result = await q;
+      } finally {
+        clearTimeout(timer);
+      }
       const data  = result && result.data;
       const error = result && result.error;
 
       if (error) throw error;
 
+      window.__publicLoadDone = true;
       if (data && data.length > 0) {
         // [v23 FIX] Preserva _uid do registro salvo (não usa índice sequencial que quebra o lookup por _uid)
-        const rows = data.map((r) => ({ ...r, _uid: r._uid || r.id_interno || r.id || String(Math.random()) }));
+        const rows = data.map((r) => ({ ...r, _uid: r._uid || r.id_interno || r.id || String(r.id || Math.random()) }));
         DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
       } else {
+        window.__publicLoadError = 'Tabela equipamentos vazia ou sem permissão de leitura pública. Faça login, clique em Save/Sync e confirme a policy SELECT para anon.';
         console.warn('[público] Tabela equipamentos vazia ou sem permissão de leitura anônima.');
       }
     } catch(e) {
+      window.__publicLoadDone = true;
+      window.__publicLoadError = (e && (e.message || e.details || e.hint)) || 'Erro ao consultar Supabase.';
       console.error('[público] erro Supabase:', e && (e.message || e));
     }
     waitAndRender();
   }
 
-  // [v25-FIX] Dispara imediatamente se o DOM já estiver pronto (caso bfcache no iOS)
-  if (document.readyState === 'loading') {
-    window.addEventListener('DOMContentLoaded', _bootPublicView);
-  } else {
-    _bootPublicView();
-  }
+  // [v25-FIX+] Em modo público, iniciar AGORA evita corrida com auth/login e não depende do DOMContentLoaded no iOS.
+  _bootPublicView();
 })();
 
 // ══════════════════════════════════════════════════════
@@ -9317,7 +9333,7 @@ window.openPdfModalBulk = function(tbl) {
 // ═══════════════════════════════════════════════════════
 
 function _buildQrPayload(r) {
-    const id = encodeURIComponent(r.id || r._uid || '');
+    const id = encodeURIComponent(String(r.id || r._uid || '').trim());
     // PEGA O NOME DO ARQUIVO ATUAL (em vez da URL completa)
     const currentPath = window.location.pathname;
     const baseUrl = window.location.origin + currentPath;
@@ -9512,7 +9528,7 @@ function printQrLabel() {
   const qty        = _qrSelectedSize === 'folha' ? parseInt(document.getElementById('qr-qty')?.value || '9') : 1;
 
   const fmt = v => fmtDateSafe(v);
-  const d = r.dias_vencer;  // ✅ dias_vencer atualizado após recalc
+  const d = r.dias_vencer;
   const statusTxt   = d === null ? '—' : d < 0 ? 'VENCIDO' : d <= 30 ? `Vence ${fmt(r.prox_calib)}` : 'OK';
   const statusColor = d === null ? '#888' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : '#16a34a';
 
@@ -9521,8 +9537,26 @@ function printQrLabel() {
   if (!_printWin) { alert('Permita popups para imprimir etiquetas.'); return; }
   _printWin.document.write('<html><head><title>Aguarde...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial;color:#555;font-size:14px">⏳ Gerando etiqueta...</body></html>');
 
-  // Gera QR em alta resolução para impressão com delay
-  const payload = _buildQrPayload(r);  // ✅ QR com dados ATUAIS
+  // ✅ FIX v25: Gera URL ABSOLUTA para QR Code (sempre produção)
+  const isLocalDev = window.location.protocol === 'file:' || 
+                     window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1';
+  
+  let baseUrl;
+  if (isLocalDev) {
+    // Em desenvolvimento local: aponta para produção
+    baseUrl = 'https://aplicativosrochling.github.io/equipment/';
+  } else {
+    // Já está online: usa o caminho atual (inclui subdiretórios se houver)
+    const currentPath = window.location.pathname;
+    baseUrl = window.location.origin + currentPath;
+  }
+  
+  // Garante que a URL termine com '/' para montagem correta
+  if (!baseUrl.endsWith('/')) baseUrl += '/';
+  
+  const payload = baseUrl + '?view=' + encodeURIComponent(r.id || r._uid || '');
+  
   const _qrGenBox = document.createElement('div');
   _qrGenBox.style.cssText = 'position:absolute;left:-9999px;top:-9999px';
   document.body.appendChild(_qrGenBox);
@@ -9531,7 +9565,6 @@ function printQrLabel() {
                             correctLevel: QRCode.CorrectLevel.M });
   } catch(e) { console.error('QR gen error:', e); }
 
-  // Usa setTimeout para garantir que o QRCode.js terminou de preencher o canvas
   setTimeout(function() {
     const _qrCanvas = _qrGenBox.querySelector('canvas');
     const qrSrc = _qrCanvas ? _qrCanvas.toDataURL('image/png') : '';
@@ -9540,41 +9573,28 @@ function printQrLabel() {
   }, 80);
 
   function _doPrint(qrSrc, win) {
+    // Layout de cada tamanho (mesma implementação original, sem alterações)
+    function singleLabel() {
+      // ... (mantenha a implementação original do singleLabel intacta)
+      // O código original continua o mesmo aqui
+      const id   = showId     ? esc(r.id || '—') : '';
+      const desc = showDesc   ? esc(r.descricao || r.tipo || '') : '';
+      const prox = showProx   ? `Prx: ${fmt(r.prox_calib)}` : '';
+      const loc  = showLocal  ? esc(r.localizacao || '') : '';
 
-  // ── Layout de cada tamanho ──────────────────────────────────────
-  function singleLabel() {
-    const id   = showId     ? esc(r.id || '—') : '';
-    const desc = showDesc   ? esc(r.descricao || r.tipo || '') : '';
-    const prox = showProx   ? `Prx: ${fmt(r.prox_calib)}` : '';
-    const loc  = showLocal  ? esc(r.localizacao || '') : '';
-
-    // ── MINI 12×12mm — só QR, sem texto ──────────────────────────
-    if (_qrSelectedSize === 'mini') {
-      return `
-        <div style="width:12mm;height:12mm;display:flex;align-items:center;justify-content:center;
-                    page-break-inside:avoid;background:#fff">
+      if (_qrSelectedSize === 'mini') {
+        return `<div style="width:12mm;height:12mm;display:flex;align-items:center;justify-content:center;page-break-inside:avoid;background:#fff">
           <img src="${qrSrc}" style="width:11mm;height:11mm;image-rendering:crisp-edges;image-rendering:pixelated">
         </div>`;
-    }
-
-    // ── PEQUENA 20×20mm — QR + código ────────────────────────────
-    if (_qrSelectedSize === 'pequena') {
-      return `
-        <div style="width:20mm;height:20mm;display:flex;flex-direction:column;align-items:center;
-                    justify-content:center;border:0.3mm solid #bbb;border-radius:0.5mm;padding:0.5mm;
-                    page-break-inside:avoid;box-sizing:border-box;background:#fff">
+      }
+      if (_qrSelectedSize === 'pequena') {
+        return `<div style="width:20mm;height:20mm;display:flex;flex-direction:column;align-items:center;justify-content:center;border:0.3mm solid #bbb;border-radius:0.5mm;padding:0.5mm;page-break-inside:avoid;box-sizing:border-box;background:#fff">
           <img src="${qrSrc}" style="width:15mm;height:15mm;image-rendering:crisp-edges;image-rendering:pixelated">
-          ${id ? `<div style="font-family:Arial,sans-serif;font-size:4.5pt;font-weight:700;
-                               text-align:center;margin-top:0.3mm;letter-spacing:.2px;line-height:1">${id}</div>` : ''}
+          ${id ? `<div style="font-family:Arial,sans-serif;font-size:4.5pt;font-weight:700;text-align:center;margin-top:0.3mm;letter-spacing:.2px;line-height:1">${id}</div>` : ''}
         </div>`;
-    }
-
-    // ── MÉDIA 30×30mm — QR + código + desc + data ─────────────────
-    if (_qrSelectedSize === 'media') {
-      return `
-        <div style="width:30mm;height:30mm;display:flex;flex-direction:column;align-items:center;
-                    justify-content:flex-start;border:0.3mm solid #bbb;border-radius:0.8mm;padding:1mm;
-                    page-break-inside:avoid;box-sizing:border-box;background:#fff">
+      }
+      if (_qrSelectedSize === 'media') {
+        return `<div style="width:30mm;height:30mm;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;border:0.3mm solid #bbb;border-radius:0.8mm;padding:1mm;page-break-inside:avoid;box-sizing:border-box;background:#fff">
           <img src="${qrSrc}" style="width:20mm;height:20mm;image-rendering:crisp-edges;image-rendering:pixelated">
           <div style="font-family:Arial,sans-serif;text-align:center;width:100%;margin-top:0.5mm">
             ${id   ? `<div style="font-size:5.5pt;font-weight:800;letter-spacing:.3px">${id}</div>` : ''}
@@ -9584,84 +9604,63 @@ function printQrLabel() {
             ${showStatus ? `<div style="font-size:5pt;font-weight:800;color:${statusColor}">${statusTxt}</div>` : ''}
           </div>
         </div>`;
-    }
-
-    // ── GRANDE 50×30mm — QR esquerda, bloco texto direita ─────────
-    if (_qrSelectedSize === 'grande') {
-      return `
-        <div style="width:50mm;height:30mm;display:flex;align-items:center;gap:1.5mm;
-                    border:0.3mm solid #bbb;border-radius:0.8mm;padding:1.5mm;
-                    page-break-inside:avoid;box-sizing:border-box;background:#fff">
+      }
+      if (_qrSelectedSize === 'grande') {
+        return `<div style="width:50mm;height:30mm;display:flex;align-items:center;gap:1.5mm;border:0.3mm solid #bbb;border-radius:0.8mm;padding:1.5mm;page-break-inside:avoid;box-sizing:border-box;background:#fff">
           <img src="${qrSrc}" style="width:24mm;height:24mm;flex-shrink:0;image-rendering:crisp-edges;image-rendering:pixelated">
           <div style="flex:1;font-family:Arial,sans-serif;overflow:hidden;min-width:0">
             ${id   ? `<div style="font-size:7pt;font-weight:900;letter-spacing:.3px;margin-bottom:1mm">${id}</div>` : ''}
             ${desc ? `<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;word-break:break-word;line-height:1.3">${desc}</div>` : ''}
             ${loc  ? `<div style="font-size:5pt;color:#555;margin-bottom:.5mm">📍 ${loc}</div>` : ''}
             ${prox ? `<div style="font-size:6pt;font-weight:700;color:#0064b3;margin-bottom:.5mm">📅 ${prox}</div>` : ''}
-            ${showStatus ? `<div style="font-size:6.5pt;font-weight:900;color:${statusColor};
-                             background:${statusColor}18;border:0.3mm solid ${statusColor};
-                             border-radius:.5mm;padding:.5mm 1mm;display:inline-block">${statusTxt}</div>` : ''}
+            ${showStatus ? `<div style="font-size:6.5pt;font-weight:900;color:${statusColor};background:${statusColor}18;border:0.3mm solid ${statusColor};border-radius:.5mm;padding:.5mm 1mm;display:inline-block">${statusTxt}</div>` : ''}
             <div style="font-size:4pt;color:#aaa;margin-top:1mm">Röchling Automotive</div>
           </div>
         </div>`;
-    }
-
-    // ── FOLHA A4 — mesma layout da GRANDE ─────────────────────────
-    return `
-      <div style="width:50mm;height:35mm;display:flex;align-items:center;gap:1.5mm;
-                  border:0.3mm solid #bbb;border-radius:0.8mm;padding:1.5mm;
-                  page-break-inside:avoid;box-sizing:border-box;background:#fff">
+      }
+      // Folha A4
+      return `<div style="width:50mm;height:35mm;display:flex;align-items:center;gap:1.5mm;border:0.3mm solid #bbb;border-radius:0.8mm;padding:1.5mm;page-break-inside:avoid;box-sizing:border-box;background:#fff">
         <img src="${qrSrc}" style="width:28mm;height:28mm;flex-shrink:0;image-rendering:crisp-edges;image-rendering:pixelated">
         <div style="flex:1;font-family:Arial,sans-serif;overflow:hidden;min-width:0">
           ${id   ? `<div style="font-size:7pt;font-weight:900;letter-spacing:.3px;margin-bottom:1mm">${id}</div>` : ''}
           ${desc ? `<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;word-break:break-word;line-height:1.3">${desc}</div>` : ''}
           ${loc  ? `<div style="font-size:5pt;color:#555;margin-bottom:.5mm">📍 ${loc}</div>` : ''}
           ${prox ? `<div style="font-size:6pt;font-weight:700;color:#0064b3;margin-bottom:.5mm">📅 ${prox}</div>` : ''}
-          ${showStatus ? `<div style="font-size:6pt;font-weight:900;color:${statusColor};
-                           background:${statusColor}18;border:0.3mm solid ${statusColor};
-                           border-radius:.5mm;padding:.4mm .8mm;display:inline-block">${statusTxt}</div>` : ''}
+          ${showStatus ? `<div style="font-size:6pt;font-weight:900;color:${statusColor};background:${statusColor}18;border:0.3mm solid ${statusColor};border-radius:.5mm;padding:.4mm .8mm;display:inline-block">${statusTxt}</div>` : ''}
           <div style="font-size:4pt;color:#aaa;margin-top:.8mm">Röchling Automotive</div>
         </div>
       </div>`;
-  }
+    }
 
-  // ── Monta a página de impressão ────────────────────────────────
-  let bodyContent = '';
-  if (_qrSelectedSize === 'folha') {
-    const cols = qty <= 4 ? 2 : qty <= 9 ? 3 : 4;
-    bodyContent = `
-      <div style="display:grid;grid-template-columns:repeat(${cols},50mm);
-                  gap:4mm;padding:10mm;box-sizing:border-box">
+    let bodyContent = '';
+    if (_qrSelectedSize === 'folha') {
+      const cols = qty <= 4 ? 2 : qty <= 9 ? 3 : 4;
+      bodyContent = `<div style="display:grid;grid-template-columns:repeat(${cols},50mm);gap:4mm;padding:10mm;box-sizing:border-box">
         ${ Array.from({length:qty}, ()=>singleLabel()).join('') }
       </div>`;
-  } else {
-    bodyContent = `<div style="padding:12mm;display:inline-block">${singleLabel()}</div>`;
-  }
+    } else {
+      bodyContent = `<div style="padding:12mm;display:inline-block">${singleLabel()}</div>`;
+    }
 
-  const sizeNames = {
-    mini:'Mini (12×12mm)', pequena:'Pequena (20×20mm)',
-    media:'Média (30×30mm)', grande:'Grande (50×30mm)',
-    folha:`Folha A4 — ${qty} etiquetas`
-  };
+    const sizeNames = {
+      mini:'Mini (12×12mm)', pequena:'Pequena (20×20mm)',
+      media:'Média (30×30mm)', grande:'Grande (50×30mm)',
+      folha:`Folha A4 — ${qty} etiquetas`
+    };
 
-  // ✅ FIX v25: Usa a janela já aberta (evita bloqueio de popup)
-  if (!win || win.closed) { alert('A janela de impressão foi fechada. Tente novamente.'); return; }
+    if (!win || win.closed) { alert('A janela de impressão foi fechada. Tente novamente.'); return; }
 
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Etiqueta — ${r.id||r.descricao}</title>
 <style>
   @page { size:${_qrSelectedSize==='folha'?'A4':'auto'}; margin:0 }
   * { box-sizing:border-box; margin:0; padding:0 }
-  body { background:#f0f2f5; font-family:Arial,sans-serif;
-         -webkit-print-color-adjust:exact; print-color-adjust:exact }
-  .toolbar { display:flex; gap:10px; padding:10px 16px; background:#1e2130;
-             border-bottom:2px solid #0064b3; align-items:center }
-  .toolbar button { padding:7px 18px; border-radius:5px; border:none;
-                    font-size:12px; font-weight:700; cursor:pointer; font-family:Arial }
+  body { background:#f0f2f5; font-family:Arial,sans-serif; -webkit-print-color-adjust:exact; print-color-adjust:exact }
+  .toolbar { display:flex; gap:10px; padding:10px 16px; background:#1e2130; border-bottom:2px solid #0064b3; align-items:center }
+  .toolbar button { padding:7px 18px; border-radius:5px; border:none; font-size:12px; font-weight:700; cursor:pointer; font-family:Arial }
   .info { font-size:11px; color:#8b90a8; margin-left:4px }
   .preview-wrap { padding:16px; display:flex; justify-content:center; align-items:flex-start; min-height:calc(100vh - 52px) }
-  .preview-card { background:#fff; border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,.15);
-                  padding:20px; display:inline-block }
+  .preview-card { background:#fff; border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,.15); padding:20px; display:inline-block }
   @media print { .toolbar{display:none} body{background:#fff} .preview-wrap{padding:0;min-height:auto} .preview-card{box-shadow:none;padding:0;border-radius:0} }
 </style></head><body>
 <div class="toolbar">
@@ -9678,10 +9677,10 @@ function printQrLabel() {
   </div>
 </div>
 </body></html>`);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 800);
-  } // end _doPrint
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 800);
+  }
 }
 
 
@@ -11730,6 +11729,16 @@ function toggleColFilterDd(tbl, col, event) {
   window.v12OpenImportModal = function() {
     var m = document.getElementById('v12-import-modal');
     if (m) { m.style.display = 'flex'; }
+    try { if (typeof window._v10ProcEnd === 'function') window._v10ProcEnd(); } catch(e) {}
+  };
+
+  // Mobile fix: mantém o .click() do input diretamente no gesto do usuário e
+  // evita que o listener global de clique feche o modal antes do seletor abrir.
+  window.v12PickImportFile = function(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    try { if (typeof window._v10ProcEnd === 'function') window._v10ProcEnd(); } catch(err) {}
+    var fi = document.getElementById('file-import');
+    if (fi) { fi.value = ''; fi.click(); }
   };
 
   window.v12CloseImportModal = function() {
@@ -11778,8 +11787,13 @@ function toggleColFilterDd(tbl, col, event) {
 
   // ── Seleção via input ─────────────────────────────────────────────────
   window.v12FileSelected = function(e) {
-    var f = e.target.files && e.target.files[0];
-    if (f) _processFile(f);
+    if (e) { try { e.stopPropagation(); } catch(err) {} }
+    var f = e && e.target && e.target.files && e.target.files[0];
+    if (f) {
+      setTimeout(function(){ _processFile(f); }, 0);
+    } else if (typeof window._v10ProcEnd === 'function') {
+      window._v10ProcEnd();
+    }
   };
 
   // ── Lê e valida o ficheiro, abre preview ──────────────────────────────
@@ -11889,90 +11903,112 @@ function toggleColFilterDd(tbl, col, event) {
 
    // ── Confirmar importação ──────────────────────────────────────────────
   // ── Confirmar importação com MERGE INTELIGENTE (v24) ─────────────────
-window.v12ConfirmImport = function() {
+window.v12ConfirmImport = async function() {
   if (!_pendingImportData) return;
-  var incomingData = _pendingImportData;
+  var incomingData = _pendingImportData.slice(); // cópia segura
   _pendingImportData = null;
 
-  // [v25-FIX] Overlay com procEnd garantido via try/finally — evita travar a UI
-  // se qualquer etapa do merge lançar exceção silenciosa.
   var _ps = window._v10ProcStart || function(){};
   var _pe = window._v10ProcEnd   || function(){};
   _ps('Importando ' + incomingData.length + ' registro(s)…', []);
 
   try {
-    // 1. Garantir que DB existe
-    if (typeof DB === 'undefined' || !Array.isArray(DB)) {
-      window.DB = [];
+    // 1. Higieniza o payload: campos obrigatórios e valores padrão
+    var sanitized = incomingData.map(function(imp) {
+      // Garante que campos essenciais existam
+      if (!imp || typeof imp !== 'object') return null;
+      if (!imp.id || String(imp.id).trim() === '') return null;
+      
+      return {
+        id: String(imp.id).trim(),
+        tipo: imp.tipo || 'Não definido',
+        cliente: imp.cliente || 'Todos',
+        fabricante: imp.fabricante || '',
+        descricao: imp.descricao || '',
+        localizacao: imp.localizacao || 'Não definido',
+        responsavel: imp.responsavel || '',
+        empresa: imp.empresa || '',
+        cod_lab: imp.cod_lab || '',
+        ult_calib: imp.ult_calib || '',
+        prox_calib: imp.prox_calib || '',
+        freq_dias: imp.freq_dias ? parseInt(imp.freq_dias) : 365,
+        status: (imp.status || '').toUpperCase() === 'INATIVO' ? 'INATIVO' : 'ATIVO',
+        status_calib: imp.status_calib || 'Instrumento Calibrado e aprovado',
+        observacoes: imp.observacoes || imp.notes || '',
+        link: imp.link || '',
+        link_data: imp.link_data || '',
+        sheet: imp.sheet || 'geral',
+        _uid: imp._uid || Date.now() + Math.floor(Math.random() * 10000),
+        _updated: new Date().toISOString()
+      };
+    }).filter(function(item) { return item !== null; });
+
+    if (sanitized.length === 0) throw new Error('Nenhum registro válido encontrado no arquivo.');
+
+    // 2. Verifica se o cliente Supabase está ativo
+    if (!fbActive() || !_sb) {
+      throw new Error('Supabase não está conectado. Configure as credenciais primeiro.');
     }
 
-    // 2. Criar mapa dos registros existentes por ID (case-insensitive)
-    var existingMap = new Map();
-    DB.forEach(function(r) {
-      if (r && r.id) existingMap.set(String(r.id).trim().toUpperCase(), r);
-    });
+    // 3. Upsert em lote diretamente no Supabase
+    var CHUNK = 200;
+    for (var i = 0; i < sanitized.length; i += CHUNK) {
+      var chunk = sanitized.slice(i, i + CHUNK);
+      var { error } = await _sb
+        .from('equipamentos')
+        .upsert(chunk, { onConflict: 'id' });
+      if (error) throw error;
+    }
 
-    // 3. Merge: atualiza existentes, adiciona novos
-    var updatedCount = 0;
-    var addedCount = 0;
+    // 4. Recarrega os dados frescos do Supabase
+    var { data: freshData, error: fetchError } = await _sb
+      .from('equipamentos')
+      .select('*')
+      .order('id', { ascending: true });
+    
+    if (fetchError) throw fetchError;
 
-    incomingData.forEach(function(imp) {
-      if (!imp || !imp.id) return;
-      var impIdKey = String(imp.id).trim().toUpperCase();
-      var existing = existingMap.get(impIdKey);
-
-      if (existing) {
-        // Atualiza registro existente (preserva _uid, sheet, etc)
-        Object.assign(existing, imp);
-        // Garante que _uid permaneça (se veio sem, mantém o antigo)
-        if (!existing._uid && imp._uid) existing._uid = imp._uid;
-        if (!existing.sheet && imp.sheet) existing.sheet = imp.sheet;
-        updatedCount++;
+    if (freshData && freshData.length > 0) {
+      // Atualiza o DB local com os dados recém-carregados
+      if (typeof recalcDias === 'function') {
+        window.DB = recalcDias(freshData.map(function(r) {
+          return {
+            ...r,
+            _uid: r._uid || r.id_interno || Date.now() + Math.random(),
+          };
+        }));
       } else {
-        // Novo registro: gera _uid se não tiver
-        if (!imp._uid) imp._uid = Date.now() + Math.floor(Math.random() * 1000);
-        if (!imp.sheet) imp.sheet = 'geral';
-        DB.push(imp);
-        existingMap.set(impIdKey, imp);
-        addedCount++;
+        window.DB = freshData;
       }
-    });
-
-    // 4. Recalcular campos derivados (dias_vencer, status_calib)
-    if (typeof recalcDias === 'function') {
-      window.DB = recalcDias(DB);
     }
 
-    // 5. Persistir e atualizar UI
+    // 5. Persiste localmente e atualiza UI
     if (typeof saveLS === 'function') saveLS();
     if (typeof _statsCache !== 'undefined') window._statsCache = null;
     if (typeof updateAll === 'function') updateAll();
-    if (typeof fbSchedulePush === 'function') fbSchedulePush();
+    if (typeof refreshInPlace === 'function') refreshInPlace();
 
-    // 6. Registrar auditoria
+    // 6. Registra auditoria
     if (typeof v12AuditLog === 'function') {
       v12AuditLog('import', '—', 
-        'v24 Import merge: ' + addedCount + ' novo(s), ' + updatedCount + ' atualizado(s)');
+        'Importação via JSON: ' + sanitized.length + ' registro(s) upsertados no Supabase.');
     }
 
     // 7. Mensagem para o usuário
-    var msg = '✅ Importado: ' + incomingData.length + ' registro(s). ';
-    if (addedCount > 0) msg += addedCount + ' novo(s), ';
-    if (updatedCount > 0) msg += updatedCount + ' atualizado(s).';
+    var msg = '✅ Importado com sucesso: ' + sanitized.length + ' registro(s) salvos na nuvem.';
     if (typeof showToast === 'function') showToast(msg);
 
-    // 8. Se o modal QR estiver aberto, regenera com dados frescos
+    // 8. Regenera QR se o modal estiver aberto
     if (typeof refreshQrIfOpen === 'function') {
       refreshQrIfOpen();
     }
 
-  } catch(err) {
-    console.error('[v12ConfirmImport] Erro no merge:', err);
-    if (typeof showToast === 'function') showToast('Erro ao importar: ' + (err.message || ''), 'err');
+  } catch (err) {
+    console.error('[v12ConfirmImport] Erro:', err);
+    if (typeof showToast === 'function') showToast('❌ Erro na importação: ' + (err.message || ''), 'err');
   } finally {
-    // [v25-FIX] procEnd SEMPRE — sucesso ou erro
     try { _pe(); } catch(e) {}
-    // Fecha modal de preview
+    // Fecha o modal de preview
     var modal = document.getElementById('v12-import-preview');
     if (modal) modal.classList.remove('on');
   }
@@ -11993,8 +12029,8 @@ window.v12ConfirmImport = function() {
     }
     var importModal = document.getElementById('v12-import-modal');
     if (importModal && importModal.style.display === 'flex') {
-      var innerBox = importModal.querySelector('div > div');
-      if (innerBox && !innerBox.contains(e.target)) v12CloseImportModal();
+      var innerBox = importModal.firstElementChild;
+      if (innerBox && e.target === importModal) v12CloseImportModal();
     }
   });
 
@@ -12381,7 +12417,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var color = d===null?'var(--tx3)':d<0?'var(--red)':d<=30?'var(--orange)':d<=90?'var(--accent)':'var(--green)';
       var label = d===null?'Sem data':d<0?'Vencido '+Math.abs(d)+'d':d+'d';
       return [
-        '<div class="sp-item" onclick="openEdit('+r._uid+');_closeSpotlight();" style="display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;transition:background .1s" onmouseenter="this.classList.add('sp-active')" onmouseleave="this.classList.remove('sp-active')">',
+        '<div class="sp-item" onclick="openEdit('+r._uid+');_closeSpotlight();" style="display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;transition:background .1s" onmouseenter="this.classList.add(&quot;sp-active&quot;)" onmouseleave="this.classList.remove(&quot;sp-active&quot;)">',
           '<div style="flex:1;min-width:0">',
             '<div style="font-weight:700;font-size:12px;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_escSP(r.id||'—')+'</div>',
             '<div style="font-size:10px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_escSP((r.descricao||r.tipo||''))+' • '+_escSP(r.localizacao||'')+'</div>',
@@ -12425,7 +12461,7 @@ window._showUndoToast = function(msg) {
   var toast = document.getElementById('toast');
   var tmsg  = document.getElementById('toast-msg');
   if (!toast || !tmsg) { if(typeof showToast==='function') showToast(msg); return; }
-  tmsg.innerHTML = msg + ' <button onclick="if(typeof doUndo==='function')doUndo();this.closest('#toast').classList.remove('on')" style="margin-left:8px;padding:2px 8px;border:1px solid var(--bdr2);border-radius:4px;background:var(--surf2);color:var(--tx);font-size:10px;cursor:pointer;font-weight:700;font-family:var(--font)">&#8617; Desfazer</button>';
+  tmsg.innerHTML = msg + ' <button onclick="if(typeof doUndo===&quot;function&quot;)doUndo();this.closest(&quot;#toast&quot;).classList.remove(&quot;on&quot;)" style="margin-left:8px;padding:2px 8px;border:1px solid var(--bdr2);border-radius:4px;background:var(--surf2);color:var(--tx);font-size:10px;cursor:pointer;font-weight:700;font-family:var(--font)">&#8617; Desfazer</button>';
   toast.classList.add('on');
   clearTimeout(window._toastTimer);
   window._toastTimer = setTimeout(function(){ toast.classList.remove('on'); tmsg.textContent=''; }, 6000);
@@ -12543,8 +12579,7 @@ window.exportAuditCSV = function() {
   _AUDIT_LOG.forEach(function(e) {
     lines.push([new Date(e.ts).toLocaleString('pt-BR'),e.action,e.code,e.desc,e.user].map(function(v){return '"'+String(v||'').replace(/"/g,'""')+'"';}).join(';'));
   });
-  var blob = new Blob(['﻿'+lines.join('
-')],{type:'text/csv;charset=utf-8'});
+  var blob = new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
   var a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='auditoria_'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); URL.revokeObjectURL(a.href);
 };
 
@@ -12582,7 +12617,7 @@ window.renderRespDashboard = function() {
       var p3 = m.total?Math.round(m.d30/m.total*100):0;
       var pO = 100-pV-p3;
       return [
-        '<div class="kpi" style="cursor:default;position:relative;overflow:hidden" onclick="filterByResponsavel(''+_escAudit(name.replace(/'/g,'\\\'+'''))+'')" title="Clique para filtrar por este responsavel">',
+        '<div class="kpi" style="cursor:pointer;position:relative;overflow:hidden" onclick="filterByResponsavel('+String(JSON.stringify(name)).replace(/"/g,'&quot;')+')" title="Clique para filtrar por este responsavel">',
           '<div class="kpi-header"><span class="kpi-lbl" style="font-size:12px;font-weight:700">'+_escAudit(name)+'</span><span style="font-size:20px;font-weight:800;font-family:var(--mono);color:'+sc+'">'+saude+'%</span></div>',
           '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;margin:6px 0">',
             '<span style="color:var(--red)">&#128683; '+m.vencidos+' venc.</span>',
@@ -12611,7 +12646,7 @@ window.renderRespDashboard = function() {
       var p3 = m.total?Math.round(m.d30/m.total*100):0;
       var pO = 100-pV-p3;
       return [
-        '<tr style="border-bottom:1px solid var(--bdr);cursor:pointer" onclick="filterByResponsavel(''+_escAudit(name)+'')" title="Filtrar por este responsavel">',
+        '<tr style="border-bottom:1px solid var(--bdr);cursor:pointer" onclick="filterByResponsavel('+String(JSON.stringify(name)).replace(/"/g,'&quot;')+')" title="Filtrar por este responsavel">',
           '<td style="padding:7px 8px;font-family:var(--mono);color:var(--tx3)">'+(i+1)+'</td>',
           '<td style="padding:7px 8px;font-weight:600;color:var(--tx)">'+_escAudit(name)+'</td>',
           '<td style="padding:7px 8px;text-align:center;font-family:var(--mono);font-weight:700">'+m.total+'</td>',
@@ -12658,8 +12693,7 @@ window.exportRespCSV = function() {
     var n=e[0],m=e[1],s=m.total?Math.round((m.total-m.vencidos)/m.total*100):0;
     lines.push([n,m.total,m.vencidos,m.d30,m.d90,m.ok,m.semData,s+'%'].map(function(v){return '"'+String(v||'').replace(/"/g,'""')+'"';}).join(';'));
   });
-  var blob=new Blob(['﻿'+lines.join('
-')],{type:'text/csv;charset=utf-8'});
+  var blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='responsaveis_'+new Date().toISOString().slice(0,10)+'.csv';a.click();URL.revokeObjectURL(a.href);
 };
 
