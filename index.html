@@ -13,7 +13,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v23)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v24)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição.">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -189,7 +189,7 @@ window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancel
   --teal:      #0d9488;
   --pink:      #db2777;
   --font:    'Inter', sans-serif;
-  --mono:    'JetBrains Mono', 'JetBrains Mono', monospace;
+  --mono:    'JetBrains Mono', monospace;
   /* [v18 FIX] aliases para compatibilidade com formulários que referenciavam --bg2/--tx1 */
   --bg2: var(--surf);
   --tx1: var(--tx);
@@ -8276,7 +8276,7 @@ async function printQrBulk(uids) {
   const showStatus = document.getElementById('qrb-opt-status')?.checked ?? true;
   document.getElementById('qr-bulk-ov')?.remove();
 
-  const rows = DB.filter(r => uids.includes(r._uid));
+  const rows = DB.filter(r => uids.has(r._uid));
   if (!rows.length) return;
 
   // Config por tamanho: [widthMM, heightMM, colsA4, rowsA4, qrPxSize]
@@ -9273,8 +9273,7 @@ function _buildQrPayload(r) {
     const currentPath = window.location.pathname;
     const baseUrl = window.location.origin + currentPath;
     const cleanBase = baseUrl.replace(/\\/g, '/').replace(/\s/g, '%20');
-    const version = Date.now();
-    return cleanBase + '?view=' + id + '&v=' + version;
+    return cleanBase + '?view=' + id + '&v=v24';
 }
 
 let _qrUID = null;
@@ -9352,15 +9351,6 @@ function refreshQrIfOpen() {
 }
 
 // Depois continua com a próxima função (geralmente closeQrModal)
-function closeQrModal() {
-  const ov = document.getElementById('qr-modal-ov');
-  if (!ov) return;
-  ov.classList.remove('on');
-  ov.style.opacity = '0';
-  ov.style.pointerEvents = 'none';
-  document.body.style.overflow = '';
-}
-
 function closeQrModal() {
   const ov = document.getElementById('qr-modal-ov');
   if (!ov) return;
@@ -9641,8 +9631,12 @@ function printQrLabel() {
 }
 
 
-// Keyboard nav for equip-view modal
+// Keyboard nav for equip-view modal + fechar QR modal com Escape
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const qrOv = document.getElementById('qr-modal-ov');
+    if (qrOv && qrOv.classList.contains('on')) { closeQrModal(); return; }
+  }
   if(!document.getElementById('equip-view-ov')?.classList.contains('on')) return;
   if(e.key === 'Escape')                                  { closeEquipView(); return; }
   if(e.key === 'ArrowRight' || e.key === 'ArrowDown')     navEquipView(1);
@@ -11862,7 +11856,7 @@ window.v12ConfirmImport = function() {
         updatedCount++;
       } else {
         // Novo registro: gera _uid se não tiver
-        if (!imp._uid) imp._uid = Date.now() + Math.random();
+        if (!imp._uid) imp._uid = Date.now() + Math.floor(Math.random() * 1000);
         if (!imp.sheet) imp.sheet = 'geral';
         DB.push(imp);
         existingMap.set(impIdKey, imp);
@@ -12638,45 +12632,37 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 
 </script>
-});
-</script>
-
 <!-- ================================================== -->
 <!-- CÓDIGO PARA ATUALIZAR QR AUTOMATICAMENTE          -->
 <!-- ================================================== -->
 <script>
 // FORÇA ATUALIZAÇÃO DO QR APÓS EDITAR OU IMPORTAR
-function refreshQrIfOpen() {
-  var ov = document.getElementById('qr-modal-ov');
-  if (ov && ov.classList.contains('on') && typeof _qrUID !== 'undefined' && _qrUID) {
-    console.log('[QR] Modal aberto, regenerando com dados frescos...');
-    if (typeof openQrModal === 'function') {
-      openQrModal(_qrUID);
-    }
+// BUG 3 FIX: Definição única de refreshQrIfOpen (a versão anterior em linha ~9344 foi mantida;
+// esta substitui a duplicata que ficava no segundo <script> separado)
+
+document.addEventListener('DOMContentLoaded', function() {
+  if (typeof window.saveRecord === 'function') {
+    var _origSaveRecord = window.saveRecord;
+    window.saveRecord = function() {
+      var result = _origSaveRecord.apply(this, arguments);
+      setTimeout(refreshQrIfOpen, 500);
+      return result;
+    };
+    console.log('[QR] Hook saveRecord instalado');
   }
-}
 
-if (typeof window.saveRecord === 'function') {
-  var _origSaveRecord = window.saveRecord;
-  window.saveRecord = function() {
-    var result = _origSaveRecord.apply(this, arguments);
-    setTimeout(refreshQrIfOpen, 500);
-    return result;
-  };
-  console.log('[QR] Hook saveRecord instalado');
-}
+  if (typeof window.v12ConfirmImport === 'function') {
+    var _origV12ConfirmImport = window.v12ConfirmImport;
+    window.v12ConfirmImport = function() {
+      var result = _origV12ConfirmImport.apply(this, arguments);
+      setTimeout(refreshQrIfOpen, 500);
+      return result;
+    };
+    console.log('[QR] Hook v12ConfirmImport instalado');
+  }
 
-if (typeof window.v12ConfirmImport === 'function') {
-  var _origV12ConfirmImport = window.v12ConfirmImport;
-  window.v12ConfirmImport = function() {
-    var result = _origV12ConfirmImport.apply(this, arguments);
-    setTimeout(refreshQrIfOpen, 500);
-    return result;
-  };
-  console.log('[QR] Hook v12ConfirmImport instalado');
-}
-
-console.log('[QR] Sistema de atualização automática ativado!');
+  console.log('[QR] Sistema de atualização automática ativado!');
+});
 </script>
 
 </body>
