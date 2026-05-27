@@ -4714,18 +4714,12 @@ const initFirebase = initSupabase;
   const _pubStart = Date.now();
   function waitAndRender() {
     if (typeof DB === 'undefined' || !DB.length) {
-      if (Date.now() - _pubStart > 15000) {
-        // [v25-FIX] Timeout aumentado de 8s -> 15s (cold start Supabase em 3G/4G).
-        // Adiciona botão 'Tentar novamente' em vez de só mostrar erro estático.
+      if (Date.now() - _pubStart > 8000) {
+        // Timeout: mostra erro em vez de girar para sempre
         const ov = document.createElement('div');
-        ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:10px;padding:24px;text-align:center';
-        ov.innerHTML = '<div style="font-size:36px">⏱️</div>'
-          + '<div style="font-size:16px;font-weight:700;color:#1a1a1a">Tempo esgotado</div>'
-          + '<div style="font-size:12px;color:#6b7280;max-width:280px">Não foi possível carregar os dados. Verifique sua conexão e tente novamente.</div>'
-          + '<button id="qr-retry-btn" style="margin-top:8px;padding:10px 18px;font-size:13px;font-weight:600;background:#0064b3;color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:Inter,sans-serif">↻ Tentar novamente</button>';
+        ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:8px';
+        ov.innerHTML = `<div style="font-size:36px">⏱️</div><div style="font-size:16px;font-weight:700;color:#1a1a1a">Tempo esgotado</div><div style="font-size:12px;color:#6b7280">Não foi possível carregar os dados. Verifique sua conexão.</div>`;
         document.body.appendChild(ov);
-        var rb = document.getElementById('qr-retry-btn');
-        if (rb) rb.onclick = function(){ location.reload(); };
         return;
       }
       setTimeout(waitAndRender, 200);
@@ -4762,76 +4756,45 @@ const initFirebase = initSupabase;
 
   // Oculta o login, lê a tabela 'equipamentos' no Supabase (anon key = leitura pública via RLS) e renderiza a ficha.
   // No Supabase: certifique-se de habilitar RLS com uma policy "allow SELECT for anon" na tabela 'equipamentos'.
-  // ════════════════════════════════════════════════════════════════════
-  // [v25-FIX] Bootstrap robusto para celular (Safari/Chrome iOS+Android):
-  //   1. Espera o SDK Supabase ficar disponível (defer em 3G/4G atrasa)
-  //   2. AbortController de 10s na query (evita request preso indefinidamente)
-  //   3. Não depende do DOMContentLoaded se o DOM já estiver pronto (bfcache iOS)
-  // ════════════════════════════════════════════════════════════════════
-  function _waitForSupabaseSDK(maxMs) {
-    return new Promise(function(resolve, reject) {
-      var start = Date.now();
-      (function poll() {
-        if (typeof supabase !== 'undefined' && typeof supabase.createClient === 'function') return resolve();
-        if (Date.now() - start > (maxMs || 5000)) return reject(new Error('Supabase SDK não carregou (CDN bloqueada ou rede lenta).'));
-        setTimeout(poll, 100);
-      })();
-    });
-  }
-
-  async function _bootPublicView() {
+  window.addEventListener('DOMContentLoaded', () => {
     // Esconde o login overlay — modo somente-leitura público
     const lo = document.getElementById('login-overlay');
     if (lo) lo.style.display = 'none';
     // Inicializa DB local (sem auth)
     if (typeof initDB === 'function') initDB();
-    try {
-      const saved = JSON.parse(localStorage.getItem('rochling_sb_cfg') || '{}');
-      // ✅ FIX v25: Usa credenciais hardcoded como fallback quando localStorage está vazio (ex: celular)
-      const sbUrl = saved.url || _QR_PUBLIC_SB_URL;
-      const sbKey = saved.key || _QR_PUBLIC_SB_KEY;
-      if (!sbUrl || !sbKey) {
-        console.warn('[público] Supabase não configurado — adicione _QR_PUBLIC_SB_URL e _QR_PUBLIC_SB_KEY no código para acesso via QR em celulares.');
-        waitAndRender();
-        return;
+    (async () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem('rochling_sb_cfg') || '{}');
+        // ✅ FIX v25: Usa credenciais hardcoded como fallback quando localStorage está vazio (ex: celular)
+        const sbUrl = saved.url || _QR_PUBLIC_SB_URL;
+        const sbKey = saved.key || _QR_PUBLIC_SB_KEY;
+        if (!sbUrl || !sbKey) {
+          console.warn('[público] Supabase não configurado — adicione _QR_PUBLIC_SB_URL e _QR_PUBLIC_SB_KEY no código para acesso via QR em celulares.');
+          waitAndRender();
+          return;
+        }
+        // Cria cliente anônimo para leitura pública
+        const sbPub = supabase.createClient(sbUrl, sbKey);
+        const { data, error } = await sbPub
+          .from('equipamentos')
+          .select('*')
+          .order('id', { ascending: true });
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          // [v23 FIX] Preserva _uid do registro salvo (não usa índice sequencial que quebra o lookup por _uid)
+          const rows = data.map((r) => ({ ...r, _uid: r._uid || r.id_interno || r.id || String(Math.random()) }));
+          DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
+        } else {
+          console.warn('[público] Tabela equipamentos vazia ou sem permissão de leitura anônima.');
+        }
+      } catch(e) {
+        console.error('[público] erro Supabase:', e.message || e);
       }
-
-      // [v25-FIX] Espera o SDK (defer pode demorar em mobile)
-      await _waitForSupabaseSDK(5000);
-
-      // Cria cliente anônimo para leitura pública
-      const sbPub = supabase.createClient(sbUrl, sbKey);
-
-      // [v25-FIX] Race com timeout de 10s para detectar request preso
-      const queryPromise = sbPub.from('equipamentos').select('*').order('id', { ascending: true });
-      const timeoutPromise = new Promise(function(_, reject) {
-        setTimeout(function(){ reject(new Error('Timeout de 10s na query Supabase — rede lenta ou Supabase indisponível.')); }, 10000);
-      });
-      const result = await Promise.race([queryPromise, timeoutPromise]);
-      const data  = result && result.data;
-      const error = result && result.error;
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        // [v23 FIX] Preserva _uid do registro salvo (não usa índice sequencial que quebra o lookup por _uid)
-        const rows = data.map((r) => ({ ...r, _uid: r._uid || r.id_interno || r.id || String(Math.random()) }));
-        DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
-      } else {
-        console.warn('[público] Tabela equipamentos vazia ou sem permissão de leitura anônima.');
-      }
-    } catch(e) {
-      console.error('[público] erro Supabase:', e && (e.message || e));
-    }
-    waitAndRender();
-  }
-
-  // [v25-FIX] Dispara imediatamente se o DOM já estiver pronto (caso bfcache no iOS)
-  if (document.readyState === 'loading') {
-    window.addEventListener('DOMContentLoaded', _bootPublicView);
-  } else {
-    _bootPublicView();
-  }
+      waitAndRender();
+    })();
+  });
 })();
 
 // ══════════════════════════════════════════════════════
@@ -7126,7 +7089,7 @@ function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'app
 // ── CAMPOS PERMITIDOS EM IMPORTAÇÃO — whitelist defensiva ─────────────────────
 const _IMPORT_STR_FIELDS = ['id','tipo','cliente','fabricante','descricao','localizacao',
   'responsavel','empresa','cod_lab','ult_calib','prox_calib','status','status_calib',
-  'notes','observacoes','link','link_data','sheet','_docId'];
+  'notes','observacoes','link','link_data','sheet'];
 
 function _sanitizeImportedRecord(raw) {
   if(!raw || typeof raw !== 'object') return null;
@@ -11179,23 +11142,17 @@ function toggleColFilterDd(tbl, col, event) {
       }
     });
 
-    // Safety auto-dismiss after 8 seconds (era 15s — muito longo bloqueia UX se algo travar)
+    // Safety auto-dismiss after 15 seconds
     clearTimeout(_busyTimer);
-    _busyTimer = setTimeout(procEnd, 8000);
+    _busyTimer = setTimeout(procEnd, 15000);
   }
 
-  // Hide the overlay + restore buttons (idempotente — pode ser chamado n vezes sem efeito colateral)
+  // Hide the overlay + restore buttons
   function procEnd() {
     clearTimeout(_busyTimer);
-    _busyTimer = null;
     var ov = _getOverlay();
     if (ov) ov.classList.remove('on');
-    // Limpa overlays órfãos eventuais (defesa extra contra duplicação por hot-reload)
-    try {
-      var all = document.querySelectorAll('.v10-proc-overlay.on, [data-v10-overlay].on');
-      all.forEach(function(o){ o.classList.remove('on'); });
-    } catch(e) {}
-    (_busyBtns || []).forEach(function(btn) { try { btn.classList.remove('v10-btn-busy'); } catch(e) {} });
+    _busyBtns.forEach(function(btn) { btn.classList.remove('v10-btn-busy'); });
     _busyBtns = [];
   }
 
@@ -11314,11 +11271,19 @@ function toggleColFilterDd(tbl, col, event) {
   }
 
   // ── Hook the file import <input> trigger ─────────────────────
-  // [v25-FIX] O fluxo v12 (JSON) abre um modal de PRÉ-VISUALIZAÇÃO antes de
-  // importar — disparar procStart aqui criava um overlay que cobria o botão
-  // 'Confirmar Importação' no celular. O overlay agora é gerenciado dentro de
-  // _processFile e v12ConfirmImport, garantindo procEnd() em todos os caminhos.
-  // (Nada a fazer aqui — listener removido intencionalmente.)
+  // The import button triggers a hidden file input; we intercept
+  // the change event to show overlay while parsing.
+  document.addEventListener('DOMContentLoaded', function() {
+    var fileImport = document.getElementById('file-import');
+    if (fileImport) {
+      fileImport.addEventListener('change', function() {
+        if (this.files && this.files.length > 0) {
+          procStart('Importando arquivo…', []);
+          // Will be dismissed by the wrapped importCSV or after 15s safety
+        }
+      });
+    }
+  });
 
   // Expose for manual testing
   window._v10ProcStart = procStart;
@@ -11793,17 +11758,7 @@ function toggleColFilterDd(tbl, col, event) {
       if (typeof showToast === 'function') showToast('Apenas ficheiros .json são aceites.', 'err');
       return;
     }
-    // [v25-FIX] Overlay async — procEnd() é chamado em TODOS os caminhos
-    // (sucesso, JSON inválido, falha de leitura) para não bloquear o modal
-    // de pré-visualização no celular.
-    var _ps = window._v10ProcStart || function(){};
-    var _pe = window._v10ProcEnd   || function(){};
-    _ps('Lendo ' + file.name + '…', []);
-
     var reader = new FileReader();
-    var _done = false;
-    var _finish = function() { if (!_done) { _done = true; try { _pe(); } catch(e) {} } };
-
     reader.onload = function(ev) {
       try {
         var parsed = JSON.parse(ev.target.result);
@@ -11813,22 +11768,16 @@ function toggleColFilterDd(tbl, col, event) {
         }).filter(Boolean);
         if (!sanitized.length) throw new Error('Nenhum registo válido encontrado.');
         _pendingImportData = sanitized;
-        _finish(); // [v25-FIX] fecha overlay ANTES de abrir o modal de preview
         v12CloseImportModal();
         _openPreviewModal(file.name, sanitized);
       } catch(err) {
-        _finish();
         if (typeof showToast === 'function') showToast('Erro: ' + (err.message || 'JSON inválido.'), 'err');
         _resetDropzone();
       }
     };
     reader.onerror = function() {
-      _finish();
       if (typeof showToast === 'function') showToast('Falha ao ler o ficheiro.', 'err');
     };
-    reader.onabort = _finish;
-    // Safety: garante procEnd mesmo se o FileReader travar (raro, mas acontece em iOS)
-    setTimeout(_finish, 10000);
     reader.readAsText(file);
   }
 
@@ -11893,12 +11842,6 @@ window.v12ConfirmImport = function() {
   if (!_pendingImportData) return;
   var incomingData = _pendingImportData;
   _pendingImportData = null;
-
-  // [v25-FIX] Overlay com procEnd garantido via try/finally — evita travar a UI
-  // se qualquer etapa do merge lançar exceção silenciosa.
-  var _ps = window._v10ProcStart || function(){};
-  var _pe = window._v10ProcEnd   || function(){};
-  _ps('Importando ' + incomingData.length + ' registro(s)…', []);
 
   try {
     // 1. Garantir que DB existe
@@ -11969,13 +11912,11 @@ window.v12ConfirmImport = function() {
   } catch(err) {
     console.error('[v12ConfirmImport] Erro no merge:', err);
     if (typeof showToast === 'function') showToast('Erro ao importar: ' + (err.message || ''), 'err');
-  } finally {
-    // [v25-FIX] procEnd SEMPRE — sucesso ou erro
-    try { _pe(); } catch(e) {}
-    // Fecha modal de preview
-    var modal = document.getElementById('v12-import-preview');
-    if (modal) modal.classList.remove('on');
   }
+
+  // Fecha modal de preview
+  var modal = document.getElementById('v12-import-preview');
+  if (modal) modal.classList.remove('on');
 };
   window.v12CancelImport = function() {
     _pendingImportData = null;
