@@ -1,60 +1,4 @@
-  // ── [FIX] INTERCEPTADOR DE QR DEEP LINK (executa primeiro) ──
-  const urlParams = new URLSearchParams(window.location.search);
-  const viewId = urlParams.get('view') || urlParams.get('id');
-  
-  if (viewId) {
-    console.log('[DeepLink] QR Code detectado, ID:', viewId);
-    
-    async function fetchAndOpenEquipment(id) {
-      try {
-        if (!_sb && typeof _initSupabaseClient === 'function') {
-          _initSupabaseClient();
-        }
-        
-        if (!_sb) {
-          console.warn('[DeepLink] Supabase não disponível');
-          return;
-        }
-        
-        const { data, error } = await _sb
-          .from('equipamentos')
-          .select('*')
-          .eq('id', id)
-          .limit(1);
-        
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          const record = data[0];
-          console.log('[DeepLink] Equipamento encontrado:', record.id);
-          
-          const waitForDB = setInterval(() => {
-            if (typeof DB !== 'undefined' && DB.length > 0) {
-              clearInterval(waitForDB);
-              const localRecord = DB.find(r => r.id === record.id);
-              if (localRecord && typeof openEquipView === 'function') {
-                openEquipView(localRecord._uid);
-              }
-            }
-          }, 200);
-          
-          setTimeout(() => clearInterval(waitForDB), 8000);
-        } else {
-          console.warn('[DeepLink] Equipamento não encontrado:', id);
-          if (typeof showToast === 'function') {
-            showToast('⚠️ Equipamento "' + id + '" não encontrado.', 'err');
-          }
-        }
-      } catch (e) {
-        console.error('[DeepLink] Erro:', e);
-      }
-    }
-    
-    await fetchAndOpenEquipment(viewId);
-    
-    const cleanUrl = window.location.origin + window.location.pathname;
-    window.history.replaceState({}, '', cleanUrl);
-  }<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR" data-theme="light">
 <head>
 <meta charset="UTF-8">
@@ -4824,7 +4768,7 @@ const initFirebase = initSupabase;
   // A Anon Key é PÚBLICA por design (leitura via RLS apenas).
   // Sem isso, o QR não funciona em celulares que não fizeram login.
   // ══════════════════════════════════════════════════════════════
-  const _QR_PUBLIC_SB_URL = 'https://aplicativosrochling.github.io/equipment/'; // ← Cole aqui: https://xxxxxx.supabase.co
+  const _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co'; // ← Cole aqui: https://xxxxxx.supabase.co
   const _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw'; // ← Cole aqui: eyJhbGciOi... (anon/public key)
 
   // Oculta o login, lê a tabela 'equipamentos' no Supabase (anon key = leitura pública via RLS) e renderiza a ficha.
@@ -7582,7 +7526,63 @@ function updateAll(){
 }
 
 
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', async () => {  // ── [FIX] INTERCEPTADOR DE QR DEEP LINK (executa primeiro) ──
+  const urlParams = new URLSearchParams(window.location.search);
+  const viewId = urlParams.get('view') || urlParams.get('id');
+  
+  if (viewId) {
+    console.log('[DeepLink] QR Code detectado, ID:', viewId);
+    
+    async function fetchAndOpenEquipment(id) {
+      try {
+        if (!_sb && typeof _initSupabaseClient === 'function') {
+          _initSupabaseClient();
+        }
+        
+        if (!_sb) {
+          console.warn('[DeepLink] Supabase não disponível');
+          return;
+        }
+        
+        const { data, error } = await _sb
+          .from('equipamentos')
+          .select('*')
+          .eq('id', id)
+          .limit(1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          const record = data[0];
+          console.log('[DeepLink] Equipamento encontrado:', record.id);
+          
+          const waitForDB = setInterval(() => {
+            if (typeof DB !== 'undefined' && DB.length > 0) {
+              clearInterval(waitForDB);
+              const localRecord = DB.find(r => r.id === record.id);
+              if (localRecord && typeof openEquipView === 'function') {
+                openEquipView(localRecord._uid);
+              }
+            }
+          }, 200);
+          
+          setTimeout(() => clearInterval(waitForDB), 8000);
+        } else {
+          console.warn('[DeepLink] Equipamento não encontrado:', id);
+          if (typeof showToast === 'function') {
+            showToast('⚠️ Equipamento "' + id + '" não encontrado.', 'err');
+          }
+        }
+      } catch (e) {
+        console.error('[DeepLink] Erro:', e);
+      }
+    }
+    
+    await fetchAndOpenEquipment(viewId);
+    
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, '', cleanUrl);
+  }
   initDB();
   initColVis(); initColWidths();
   filterAlerts('vencido');
@@ -9399,6 +9399,7 @@ function _buildQrPayload(r) {
 
 let _qrUID = null;
 let _qrInstance = null;
+let _qrSelectedSize = 'mini';
 
 function openQrModal(uid) {
   _qrUID = uid;
