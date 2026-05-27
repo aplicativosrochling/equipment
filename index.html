@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0064b3">
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v21)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v23)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição.">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -4158,8 +4158,12 @@ function recalcDias(records) {
     const isSpecial = sc.includes('DESCARTADO') || sc.includes('encontrado')
                    || sc.includes('Discarded')  || sc.includes('Found');
     if(!isSpecial && dv !== null) {
-      if(dv < 0)  sc = 'Calibração Necessária';
-      else        sc = 'Instrumento Calibrado e aprovado';
+      // [v23 FIX] Só força "Calibração Necessária" quando realmente vencido (dv < 0).
+      // Quando em dia (dv >= 0), preserva o status_calib salvo manualmente (ex: "Calibrado e Aprovado")
+      // para evitar que o QR card mostre status desatualizado após edição.
+      if(dv < 0) sc = 'Calibração Necessária';
+      else if(!sc || sc === 'Calibração Necessária') sc = 'Instrumento Calibrado e aprovado';
+      // else: mantém o valor salvo (ex: "Calibrado e Aprovado", "Em análise", etc.)
     }
     return { ...r, dias_vencer: dv, status_calib: sc,
              link: r.link||'', link_data: r.link_data||'', notes: r.notes||'' };
@@ -4723,7 +4727,8 @@ const initFirebase = initSupabase;
         if (error) throw error;
 
         if (data && data.length > 0) {
-          const rows = data.map((r, i) => ({ ...r, _uid: r._uid || (i + 1) }));
+          // [v23 FIX] Preserva _uid do registro salvo (não usa índice sequencial que quebra o lookup por _uid)
+          const rows = data.map((r) => ({ ...r, _uid: r._uid || r.id_interno || r.id || String(Math.random()) }));
           DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
         } else {
           console.warn('[público] Tabela equipamentos vazia ou sem permissão de leitura anônima.');
@@ -11722,20 +11727,37 @@ function toggleColFilterDd(tbl, col, event) {
   }
 
   // ── Confirmar importação ──────────────────────────────────────────────
+  // ── Confirmar importação ──────────────────────────────────────────────
   window.v12ConfirmImport = function() {
     if (!_pendingImportData) return;
     var data = _pendingImportData;
     _pendingImportData = null;
 
     try {
-      // v17: reconstrói DB e persiste no localStorage
-      window.DB=typeof recalcDias==='function'?recalcDias(data):data;
+      // [v23 FIX] Merge/upsert pelo campo id — não substitui o DB inteiro.
+      // Registos com ID existente são atualizados; novos IDs são adicionados.
+      var DB_NOW = (typeof DB !== 'undefined' && Array.isArray(DB)) ? DB : [];
+      var existingMap = {};
+      DB_NOW.forEach(function(r) { if (r.id) existingMap[r.id] = r; });
+      data.forEach(function(imp) {
+        if (!imp || !imp.id) return;
+        if (existingMap[imp.id]) {
+          var ex = existingMap[imp.id];
+          Object.assign(ex, imp, { _uid: ex._uid, sheet: ex.sheet || imp.sheet || 'geral' });
+        } else {
+          imp._uid = imp._uid || (Date.now() + Math.random());
+          imp.sheet = imp.sheet || 'geral';
+          DB_NOW.push(imp);
+          existingMap[imp.id] = imp;
+        }
+      });
+      window.DB = typeof recalcDias==='function' ? recalcDias(DB_NOW) : DB_NOW;
       if(typeof saveLS==='function') saveLS();
       if(typeof _statsCache!=='undefined') window._statsCache=null;
       if(typeof updateAll==='function') updateAll();
       if(typeof fbSchedulePush==='function') fbSchedulePush();
-      v12AuditLog('import','—','v17 Import JSON: '+data.length+' reg. persistidos no localStorage.');
-      if(typeof showToast==='function') showToast('✅ Importado: '+data.length+' registo(s).');
+      v12AuditLog('import','—','v23 Import JSON merge: '+data.length+' reg.');
+      if(typeof showToast==='function') showToast('✅ Importado: '+data.length+' registo(s) — merge por ID.');
     } catch(err) {
       if(typeof showToast==='function') showToast('Erro ao importar: '+(err.message||''),'err');
     }
@@ -11743,7 +11765,6 @@ function toggleColFilterDd(tbl, col, event) {
     var modal = document.getElementById('v12-import-preview');
     if (modal) modal.classList.remove('on');
   };
-
   window.v12CancelImport = function() {
     _pendingImportData = null;
     var modal = document.getElementById('v12-import-preview');
