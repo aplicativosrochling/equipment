@@ -1,4 +1,60 @@
-<!DOCTYPE html>
+  // ── [FIX] INTERCEPTADOR DE QR DEEP LINK (executa primeiro) ──
+  const urlParams = new URLSearchParams(window.location.search);
+  const viewId = urlParams.get('view') || urlParams.get('id');
+  
+  if (viewId) {
+    console.log('[DeepLink] QR Code detectado, ID:', viewId);
+    
+    async function fetchAndOpenEquipment(id) {
+      try {
+        if (!_sb && typeof _initSupabaseClient === 'function') {
+          _initSupabaseClient();
+        }
+        
+        if (!_sb) {
+          console.warn('[DeepLink] Supabase não disponível');
+          return;
+        }
+        
+        const { data, error } = await _sb
+          .from('equipamentos')
+          .select('*')
+          .eq('id', id)
+          .limit(1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          const record = data[0];
+          console.log('[DeepLink] Equipamento encontrado:', record.id);
+          
+          const waitForDB = setInterval(() => {
+            if (typeof DB !== 'undefined' && DB.length > 0) {
+              clearInterval(waitForDB);
+              const localRecord = DB.find(r => r.id === record.id);
+              if (localRecord && typeof openEquipView === 'function') {
+                openEquipView(localRecord._uid);
+              }
+            }
+          }, 200);
+          
+          setTimeout(() => clearInterval(waitForDB), 8000);
+        } else {
+          console.warn('[DeepLink] Equipamento não encontrado:', id);
+          if (typeof showToast === 'function') {
+            showToast('⚠️ Equipamento "' + id + '" não encontrado.', 'err');
+          }
+        }
+      } catch (e) {
+        console.error('[DeepLink] Erro:', e);
+      }
+    }
+    
+    await fetchAndOpenEquipment(viewId);
+    
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, '', cleanUrl);
+  }<!DOCTYPE html>
 <html lang="pt-BR" data-theme="light">
 <head>
 <meta charset="UTF-8">
