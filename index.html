@@ -6938,6 +6938,7 @@ function saveRecord(){
   const luSave=document.getElementById('last-upd');
   if(luSave) luSave.textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
   fbSchedulePush();
+  refreshQrIfOpen();
 }
 
 function deleteRecord(){
@@ -9334,6 +9335,29 @@ function openQrModal(uid) {
   ov.style.pointerEvents = 'all';
   document.body.style.overflow = 'hidden';
 
+}}  // <-- FIM da openQrModal
+
+// ═══════════════════════════════════════════════════════════════════
+// FUNÇÃO AUXILIAR PARA ATUALIZAR QR QUANDO O MODAL ESTIVER ABERTO
+// ═══════════════════════════════════════════════════════════════════
+function refreshQrIfOpen() {
+  var ov = document.getElementById('qr-modal-ov');
+  if (ov && ov.classList.contains('on') && typeof _qrUID !== 'undefined' && _qrUID) {
+    console.log('[QR] Modal QR aberto, regenerando com dados atualizados...');
+    if (typeof openQrModal === 'function') {
+      openQrModal(_qrUID);
+    }
+  }
+}
+
+// Depois continua com a próxima função (geralmente closeQrModal)
+function closeQrModal() {
+  const ov = document.getElementById('qr-modal-ov');
+  if (!ov) return;
+  ov.classList.remove('on');
+  ov.style.opacity = '0';
+  ov.style.pointerEvents = 'none';
+  document.body.style.overflow = '';
 }
 
 function closeQrModal() {
@@ -11801,43 +11825,87 @@ function toggleColFilterDd(tbl, col, event) {
   }
 
    // ── Confirmar importação ──────────────────────────────────────────────
-  window.v12ConfirmImport = function() {
-    if (!_pendingImportData) return;
-    var data = _pendingImportData;
-    _pendingImportData = null;
+  // ── Confirmar importação com MERGE INTELIGENTE (v24) ─────────────────
+window.v12ConfirmImport = function() {
+  if (!_pendingImportData) return;
+  var incomingData = _pendingImportData;
+  _pendingImportData = null;
 
-    try {
-      // [v23 FIX] Merge/upsert pelo campo id — não substitui o DB inteiro.
-      // Registos com ID existente são atualizados; novos IDs são adicionados.
-      var DB_NOW = (typeof DB !== 'undefined' && Array.isArray(DB)) ? DB : [];
-      var existingMap = {};
-      DB_NOW.forEach(function(r) { if (r.id) existingMap[r.id] = r; });
-      data.forEach(function(imp) {
-        if (!imp || !imp.id) return;
-        if (existingMap[imp.id]) {
-          var ex = existingMap[imp.id];
-          Object.assign(ex, imp, { _uid: ex._uid, sheet: ex.sheet || imp.sheet || 'geral' });
-        } else {
-          imp._uid = imp._uid || (Date.now() + Math.random());
-          imp.sheet = imp.sheet || 'geral';
-          DB_NOW.push(imp);
-          existingMap[imp.id] = imp;
-        }
-      });
-      window.DB = typeof recalcDias==='function' ? recalcDias(DB_NOW) : DB_NOW;
-      if(typeof saveLS==='function') saveLS();
-      if(typeof _statsCache!=='undefined') window._statsCache=null;
-      if(typeof updateAll==='function') updateAll();
-      if(typeof fbSchedulePush==='function') fbSchedulePush();
-      v12AuditLog('import','—','v23 Import JSON merge: '+data.length+' reg.');
-      if(typeof showToast==='function') showToast('✅ Importado: '+data.length+' registo(s) — merge por ID.');
-    } catch(err) {
-      if(typeof showToast==='function') showToast('Erro ao importar: '+(err.message||''),'err');
+  try {
+    // 1. Garantir que DB existe
+    if (typeof DB === 'undefined' || !Array.isArray(DB)) {
+      window.DB = [];
     }
-    // Fecha preview
-    var modal = document.getElementById('v12-import-preview');
-    if (modal) modal.classList.remove('on');
-  };
+
+    // 2. Criar mapa dos registros existentes por ID (case-insensitive)
+    var existingMap = new Map();
+    DB.forEach(function(r) {
+      if (r && r.id) existingMap.set(String(r.id).trim().toUpperCase(), r);
+    });
+
+    // 3. Merge: atualiza existentes, adiciona novos
+    var updatedCount = 0;
+    var addedCount = 0;
+
+    incomingData.forEach(function(imp) {
+      if (!imp || !imp.id) return;
+      var impIdKey = String(imp.id).trim().toUpperCase();
+      var existing = existingMap.get(impIdKey);
+
+      if (existing) {
+        // Atualiza registro existente (preserva _uid, sheet, etc)
+        Object.assign(existing, imp);
+        // Garante que _uid permaneça (se veio sem, mantém o antigo)
+        if (!existing._uid && imp._uid) existing._uid = imp._uid;
+        if (!existing.sheet && imp.sheet) existing.sheet = imp.sheet;
+        updatedCount++;
+      } else {
+        // Novo registro: gera _uid se não tiver
+        if (!imp._uid) imp._uid = Date.now() + Math.random();
+        if (!imp.sheet) imp.sheet = 'geral';
+        DB.push(imp);
+        existingMap.set(impIdKey, imp);
+        addedCount++;
+      }
+    });
+
+    // 4. Recalcular campos derivados (dias_vencer, status_calib)
+    if (typeof recalcDias === 'function') {
+      window.DB = recalcDias(DB);
+    }
+
+    // 5. Persistir e atualizar UI
+    if (typeof saveLS === 'function') saveLS();
+    if (typeof _statsCache !== 'undefined') window._statsCache = null;
+    if (typeof updateAll === 'function') updateAll();
+    if (typeof fbSchedulePush === 'function') fbSchedulePush();
+
+    // 6. Registrar auditoria
+    if (typeof v12AuditLog === 'function') {
+      v12AuditLog('import', '—', 
+        'v24 Import merge: ' + addedCount + ' novo(s), ' + updatedCount + ' atualizado(s)');
+    }
+
+    // 7. Mensagem para o usuário
+    var msg = '✅ Importado: ' + incomingData.length + ' registro(s). ';
+    if (addedCount > 0) msg += addedCount + ' novo(s), ';
+    if (updatedCount > 0) msg += updatedCount + ' atualizado(s).';
+    if (typeof showToast === 'function') showToast(msg);
+
+    // 8. Se o modal QR estiver aberto, regenera com dados frescos
+    if (typeof refreshQrIfOpen === 'function') {
+      refreshQrIfOpen();
+    }
+
+  } catch(err) {
+    console.error('[v12ConfirmImport] Erro no merge:', err);
+    if (typeof showToast === 'function') showToast('Erro ao importar: ' + (err.message || ''), 'err');
+  }
+
+  // Fecha modal de preview
+  var modal = document.getElementById('v12-import-preview');
+  if (modal) modal.classList.remove('on');
+};
   window.v12CancelImport = function() {
     _pendingImportData = null;
     var modal = document.getElementById('v12-import-preview');
