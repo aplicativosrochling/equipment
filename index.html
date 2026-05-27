@@ -17,7 +17,29 @@
      style-src  'self' 'nonce-{RANDOM_NONCE}' https://fonts.googleapis.com
      The server must inject the same nonce into all <script> and <style> tags.
 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.io; frame-src 'none';">
+<meta http-equiv="Content-Security-Policy"
+content="
+default-src 'self' blob: data:;
+script-src 'self' 'unsafe-inline' 'unsafe-eval'
+https://cdn.jsdelivr.net
+https://cdnjs.cloudflare.com;
+style-src 'self' 'unsafe-inline'
+https://fonts.googleapis.com;
+font-src 'self'
+https://fonts.gstatic.com
+data:;
+img-src 'self'
+data:
+blob:
+https:;
+connect-src 'self'
+https://*.supabase.co
+wss://*.supabase.co
+https://cdn.jsdelivr.net
+https://cdnjs.cloudflare.com;
+worker-src 'self' blob:;
+frame-src 'none';
+">
 
 <!-- ── POLYFILLS: Element.closest, Optional Chaining safety, Object.fromEntries ── -->
 <script>
@@ -4196,7 +4218,14 @@ function _initSupabaseClient() {
       console.warn('[Supabase] Credenciais não configuradas. Use ⚙ Configurações → Supabase Config.');
       return false;
     }
-    _sb = supabase.createClient(_supabaseUrl, _supabaseKey);
+    if (!window._globalSupabaseClient) {
+  window._globalSupabaseClient = supabase.createClient(
+    _supabaseUrl,
+    _supabaseKey
+  );
+}
+
+_sb = window._globalSupabaseClient;
     _sbActive = true;
     return true;
   } catch (e) {
@@ -4309,13 +4338,22 @@ async function fbPush(manual) {
     // [v15 FIX] captura timestamp único para este push
     const _pushTs = new Date().toISOString();
     // Prepara payload: remove dias_vencer (campo calculado) e garante campos obrigatórios
-    const payload = DB.map(r => {
-      const { dias_vencer, ...rest } = r;
-      return {
-        ...rest,
-        _updated: _pushTs,
-      };
-    });
+    // Remove duplicados por ID antes do upsert
+const uniqueMap = new Map();
+
+DB.forEach(r => {
+  if (!r || !r.id) return;
+
+  const { dias_vencer, ...rest } = r;
+
+  uniqueMap.set(String(r.id).trim(), {
+    ...rest,
+    id: String(r.id).trim(),
+    _updated: _pushTs,
+  });
+});
+
+const payload = Array.from(uniqueMap.values());
 
     // Upsert em lotes de 200 registros (evita timeout em bases grandes)
     const CHUNK = 200;
