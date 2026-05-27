@@ -9269,9 +9269,10 @@ window.openPdfModalBulk = function(tbl) {
 
 function _buildQrPayload(r) {
     const id = encodeURIComponent(r.id || r._uid || '');
-    const base = window.location.href.split('?')[0];
-    const cleanBase = base.replace(/\\/g, '/').replace(/\s/g, '%20');
-    // Adiciona timestamp para forçar refresh do cache
+    // PEGA O NOME DO ARQUIVO ATUAL (em vez da URL completa)
+    const currentPath = window.location.pathname;
+    const baseUrl = window.location.origin + currentPath;
+    const cleanBase = baseUrl.replace(/\\/g, '/').replace(/\s/g, '%20');
     const version = Date.now();
     return cleanBase + '?view=' + id + '&v=' + version;
 }
