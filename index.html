@@ -7,6 +7,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0064b3">
+
+<!-- ✅ ANTI-CACHE - Garante que a página sempre carregue a versão mais recente -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+
 <title>Röchling Automotive — Controle de Equipamentos de Medição (v23)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição.">
 <meta name="robots" content="noindex,nofollow">
@@ -9262,11 +9268,11 @@ window.openPdfModalBulk = function(tbl) {
 
 function _buildQrPayload(r) {
     const id = encodeURIComponent(r.id || r._uid || '');
-    // Usar o nome correto do arquivo
     const base = window.location.href.split('?')[0];
-    // Remove qualquer espaçamento problemático
     const cleanBase = base.replace(/\\/g, '/').replace(/\s/g, '%20');
-    return cleanBase + '?view=' + id;
+    // Adiciona timestamp para forçar refresh do cache
+    const version = Date.now();
+    return cleanBase + '?view=' + id + '&v=' + version;
 }
 
 let _qrUID = null;
