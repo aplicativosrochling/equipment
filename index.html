@@ -13,7 +13,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v24)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v25)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição.">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -4745,6 +4745,15 @@ const initFirebase = initSupabase;
     buildPublicView(r);
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // ✅ FIX v25 — CREDENCIAIS SUPABASE PARA LEITURA PÚBLICA VIA QR
+  // Preencha abaixo com sua URL e Anon Key do Supabase.
+  // A Anon Key é PÚBLICA por design (leitura via RLS apenas).
+  // Sem isso, o QR não funciona em celulares que não fizeram login.
+  // ══════════════════════════════════════════════════════════════
+  const _QR_PUBLIC_SB_URL = ''; // ← Cole aqui: https://xxxxxx.supabase.co
+  const _QR_PUBLIC_SB_KEY = ''; // ← Cole aqui: eyJhbGciOi... (anon/public key)
+
   // Oculta o login, lê a tabela 'equipamentos' no Supabase (anon key = leitura pública via RLS) e renderiza a ficha.
   // No Supabase: certifique-se de habilitar RLS com uma policy "allow SELECT for anon" na tabela 'equipamentos'.
   window.addEventListener('DOMContentLoaded', () => {
@@ -4756,13 +4765,16 @@ const initFirebase = initSupabase;
     (async () => {
       try {
         const saved = JSON.parse(localStorage.getItem('rochling_sb_cfg') || '{}');
-        if (!saved.url || !saved.key) {
-          console.warn('[público] Supabase não configurado — modo offline (cache local).');
+        // ✅ FIX v25: Usa credenciais hardcoded como fallback quando localStorage está vazio (ex: celular)
+        const sbUrl = saved.url || _QR_PUBLIC_SB_URL;
+        const sbKey = saved.key || _QR_PUBLIC_SB_KEY;
+        if (!sbUrl || !sbKey) {
+          console.warn('[público] Supabase não configurado — adicione _QR_PUBLIC_SB_URL e _QR_PUBLIC_SB_KEY no código para acesso via QR em celulares.');
           waitAndRender();
           return;
         }
         // Cria cliente anônimo para leitura pública
-        const sbPub = supabase.createClient(saved.url, saved.key);
+        const sbPub = supabase.createClient(sbUrl, sbKey);
         const { data, error } = await sbPub
           .from('equipamentos')
           .select('*')
@@ -9467,6 +9479,11 @@ function printQrLabel() {
   const statusTxt   = d === null ? '—' : d < 0 ? 'VENCIDO' : d <= 30 ? `Vence ${fmt(r.prox_calib)}` : 'OK';
   const statusColor = d === null ? '#888' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : '#16a34a';
 
+  // ✅ FIX v25: Abre a janela AQUI (dentro do gesto do usuário) para evitar bloqueio de popup
+  const _printWin = window.open('', '_blank', 'width=750,height=650');
+  if (!_printWin) { alert('Permita popups para imprimir etiquetas.'); return; }
+  _printWin.document.write('<html><head><title>Aguarde...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial;color:#555;font-size:14px">⏳ Gerando etiqueta...</body></html>');
+
   // Gera QR em alta resolução para impressão com delay
   const payload = _buildQrPayload(r);  // ✅ QR com dados ATUAIS
   const _qrGenBox = document.createElement('div');
@@ -9482,10 +9499,10 @@ function printQrLabel() {
     const _qrCanvas = _qrGenBox.querySelector('canvas');
     const qrSrc = _qrCanvas ? _qrCanvas.toDataURL('image/png') : '';
     document.body.removeChild(_qrGenBox);
-    _doPrint(qrSrc);
+    _doPrint(qrSrc, _printWin);
   }, 80);
 
-  function _doPrint(qrSrc) {
+  function _doPrint(qrSrc, win) {
 
   // ── Layout de cada tamanho ──────────────────────────────────────
   function singleLabel() {
@@ -9590,8 +9607,8 @@ function printQrLabel() {
     folha:`Folha A4 — ${qty} etiquetas`
   };
 
-  const win = window.open('', '_blank', 'width=750,height=650');
-  if (!win) { alert('Permita popups para imprimir etiquetas.'); return; }
+  // ✅ FIX v25: Usa a janela já aberta (evita bloqueio de popup)
+  if (!win || win.closed) { alert('A janela de impressão foi fechada. Tente novamente.'); return; }
 
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Etiqueta — ${r.id||r.descricao}</title>
