@@ -9270,23 +9270,29 @@ let _qrInstance = null;
 
 function openQrModal(uid) {
   _qrUID = uid;
+  
+  // ✅ Busca dados FRESCOS do DB antes de qualquer operação
   const r = DB.find(x => x._uid === uid);
-  if (!r) { alert('Instrumento não encontrado (uid='+uid+')'); return; }
+  if (!r) { 
+    if(typeof showToast === 'function') showToast('Instrumento não encontrado', 'err');
+    else alert('Instrumento não encontrado');
+    return; 
+  }
 
   // Remove stale modal if present then re-inject fresh
   const old = document.getElementById('qr-modal-ov');
   if (old) old.remove();
   document.body.insertAdjacentHTML('beforeend', _qrModalHTML());
 
-  // Fill info
+  // Fill info com dados ATUAIS
   document.getElementById('qr-modal-title').textContent = r.id || r.descricao || '—';
   document.getElementById('qr-modal-sub').textContent = r.descricao || r.tipo || '';
 
-  // Generate QR
+  // Generate QR com dados ATUAIS
   const qrBox = document.getElementById('qr-canvas-box');
   qrBox.innerHTML = '';
   _qrInstance = null;
-  const payload = _buildQrPayload(r);
+  const payload = _buildQrPayload(r);  // ✅ r contém dados mais recentes do DB
   try {
     _qrInstance = new QRCode(qrBox, {
       text: payload,
@@ -9298,7 +9304,7 @@ function openQrModal(uid) {
     qrBox.innerHTML = '<div style="padding:20px;color:red;font-size:11px">Erro ao gerar QR: '+e.message+'</div>';
   }
 
-  // Force show — use both class and inline style to guarantee visibility
+  // Force show
   const ov = document.getElementById('qr-modal-ov');
   ov.classList.add('on');
   ov.style.opacity = '1';
@@ -9401,23 +9407,29 @@ function selectQrSize(size, btn) {
 }
 
 function printQrLabel() {
+  // ✅ CRÍTICO: Busca dados FRESCOS do DB ANTES de imprimir
   const r = DB.find(x => x._uid === _qrUID);
-  if (!r) return;
+  if (!r) { 
+    if(typeof showToast === 'function') showToast('Equipamento não encontrado', 'err');
+    closeQrModal();
+    return; 
+  }
 
-  const showId     = document.getElementById('qr-opt-id')?.checked;
-  const showDesc   = document.getElementById('qr-opt-desc')?.checked;
-  const showProx   = document.getElementById('qr-opt-prox')?.checked;
-  const showLocal  = document.getElementById('qr-opt-local')?.checked;
-  const showStatus = document.getElementById('qr-opt-status')?.checked;
+  // ✅ Re-lê as opções do DOM (podem ter mudado)
+  const showId     = document.getElementById('qr-opt-id')?.checked ?? true;
+  const showDesc   = document.getElementById('qr-opt-desc')?.checked ?? true;
+  const showProx   = document.getElementById('qr-opt-prox')?.checked ?? true;
+  const showLocal  = document.getElementById('qr-opt-local')?.checked ?? false;
+  const showStatus = document.getElementById('qr-opt-status')?.checked ?? true;
   const qty        = _qrSelectedSize === 'folha' ? parseInt(document.getElementById('qr-qty')?.value || '9') : 1;
 
   const fmt = v => fmtDateSafe(v);
-  const d = r.dias_vencer;
+  const d = r.dias_vencer;  // ✅ dias_vencer atualizado após recalc
   const statusTxt   = d === null ? '—' : d < 0 ? 'VENCIDO' : d <= 30 ? `Vence ${fmt(r.prox_calib)}` : 'OK';
   const statusColor = d === null ? '#888' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : '#16a34a';
 
-  // Gera QR em alta resolução para impressão com delay para garantir canvas preenchido
-  const payload = _buildQrPayload(r);
+  // Gera QR em alta resolução para impressão com delay
+  const payload = _buildQrPayload(r);  // ✅ QR com dados ATUAIS
   const _qrGenBox = document.createElement('div');
   _qrGenBox.style.cssText = 'position:absolute;left:-9999px;top:-9999px';
   document.body.appendChild(_qrGenBox);
@@ -11764,8 +11776,7 @@ function toggleColFilterDd(tbl, col, event) {
     if (modal) modal.classList.add('on');
   }
 
-  // ── Confirmar importação ──────────────────────────────────────────────
-  // ── Confirmar importação ──────────────────────────────────────────────
+   // ── Confirmar importação ──────────────────────────────────────────────
   window.v12ConfirmImport = function() {
     if (!_pendingImportData) return;
     var data = _pendingImportData;
