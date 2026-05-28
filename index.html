@@ -4374,7 +4374,12 @@ async function sbPush(manual) {
 const uniqueMap = new Map();
 
 DB.forEach(r => {
-  if (!r || !r.id) return;
+  if (!r) return;
+  // [v29 FIX] Registros sem id receberiam ID gerado automaticamente em vez de serem descartados
+  if (!r.id) {
+    r.id = 'AUTO-' + (r._uid ? String(r._uid) : (Date.now() + Math.floor(Math.random()*10000)));
+    console.warn('[sbPush] Registro sem id — gerado automaticamente:', r.id, r.descricao || '');
+  }
 
   const { dias_vencer, ...rest } = r;
 
@@ -4575,10 +4580,11 @@ async function sbConnect() {
 
   // [v27 FIX] Verifica se tabela no Supabase tem dados ANTES de fazer pull
   // Se tabela vazia e há dados locais → envia dados locais (preserva instrumentos cadastrados)
+  // [v29 FIX] Supabase JS v2: desestruturar { count } diretamente do response object
   let _remoteCount = 0;
   try {
-    const { count: _cnt } = await _sb.from('equipamentos').select('id', { count: 'exact', head: true });
-    _remoteCount = _cnt || 0;
+    const _cntRes = await _sb.from('equipamentos').select('id', { count: 'exact', head: true });
+    _remoteCount = (_cntRes && _cntRes.count) ? _cntRes.count : 0;
   } catch(_ce) { _remoteCount = 0; }
 
   if (_remoteCount === 0 && DB.length > 0) {
