@@ -13,7 +13,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v25)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v27)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição.">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -26,7 +26,7 @@
 <meta http-equiv="Content-Security-Policy"
 content="
 default-src 'self' blob: data:;
-script-src 'self' 'unsafe-inline' 'unsafe-eval'
+script-src 'self' 'unsafe-inline'
 https://cdn.jsdelivr.net
 https://cdnjs.cloudflare.com;
 style-src 'self' 'unsafe-inline'
@@ -49,6 +49,8 @@ frame-src 'none';
 
 <!-- ── POLYFILLS: Element.closest, Optional Chaining safety, Object.fromEntries ── -->
 <script>
+// [v25] Development mode flag — set to true to enable debug logs
+var _DEV = false;
 // Element.closest polyfill (IE11, old Android)
 if (!Element.prototype.closest) {
   Element.prototype.closest = function(s) {
@@ -1982,7 +1984,7 @@ input[type="checkbox"], input[type="radio"] {
   <div class="hdr-r">
     <!-- Sync status -->
     <span id="sync-indicator" style="font-size:10px;font-family:var(--mono);white-space:nowrap;display:none;color:var(--tx3)"></span>
-    <button class="btn-g" id="btn-sync-now" onclick="fbPush(true)" style="display:none;border-color:var(--green);color:var(--green);font-size:10px" title="Sync now" aria-label="Sincronizar agora">↑ Sync</button>
+    <button class="btn-g" id="btn-sync-now" onclick="sbPush(true)" style="display:none;border-color:var(--green);color:var(--green);font-size:10px" title="Sync now" aria-label="Sincronizar agora">↑ Sync</button>
 
     <!-- Divider -->
     <div class="hdr-divider"></div>
@@ -2282,6 +2284,7 @@ input[type="checkbox"], input[type="radio"] {
           <span class="tbl-cnt" id="eq-cnt">—</span>
           <input class="search-box" id="f-search" aria-label="Buscar equipamentos por código ou descrição" placeholder="🔍 Buscar código, descrição..." oninput="applyF()" style="min-width:200px">
           <button class="btn-g" onclick="clearF()" title="Limpar todos os filtros">✕ Limpar</button>
+          <button class="btn-g" id="btn-apply-filters" onclick="applyFiltersNow()" title="Reaplicar filtros e atualizar gráficos">🔄 Aplicar</button>
           <button class="btn-g" id="btn-card-select-toggle" onclick="toggleCardSelectMode()" title="Selecionar equipamentos para imprimir QR em lote">☑ Selecionar</button>
           <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
           <button class="btn-g" onclick="toggleEqView()" id="btn-toggle-eq-view" title="Alternar para visão de tabela">⊞ Tabela</button>
@@ -3129,7 +3132,7 @@ window.addEventListener('unhandledrejection', function(e) {
 // BUG-07 DATE: updateValidityBar() mesma inconsistência de timezone → corrigido para UTC
 // BUG-08 UX: alert() em sbDeleteRecord, doForgotPassword, openQrBulkModal
 //            substituídos por showToast() (não bloqueante)
-// BUG-09 LOOP: fbPushOrRetry() sem limite de tentativas → potencial loop infinito
+// BUG-09 LOOP: sbPushOrRetry() sem limite de tentativas → potencial loop infinito
 //              se Supabase indisponível; adicionado máximo de 30 retentativas (~60s)
 // BUG-10 RT: Listener realtime não chamava refreshInPlace() → tabelas não atualizavam
 //            ao receber mudanças de outros clientes conectados
@@ -3138,7 +3141,7 @@ window.addEventListener('unhandledrejection', function(e) {
 // BUG-12 XSS: audit table renderizava HTML sem sanitização → adicionado escString()
 // BUG-13 RACE: Chart.js carregado com defer; se sessão Supabase em cache → buildAllCharts()
 //              executava antes de Chart.js estar disponível → gráficos em branco
-// IMP-01: Comentário "Firebase" obsoleto no boot removido (app migrou para Supabase)
+// IMP-01: Referências Supabase removidas — app usa Supabase
 // IMP-02: --mono: 'JetBrains Mono' → 'JetBrains Mono' (DM Mono não está no Google Fonts import)
 // ═══════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════
@@ -4268,11 +4271,11 @@ function loadLS() {
 }
 
 // ── Supabase helpers ──────────────────────────────────────────────
-function fbActive() { return _sbActive && !!_sb; } // alias mantido para compatibilidade
+function sbActive() { return _sbActive && !!_sb; } // sbActive: alias for _sbActive check
 
 // LEITURA — carrega todos os registros da tabela 'equipamentos'
-async function fbPull() {
-  if(!fbActive()) return false;
+async function sbPull() {
+  if(!sbActive()) return false;
   setSyncInd(t('sync_loading'), 'var(--accent2)', true);
   try {
     const { data, error } = await _sb
@@ -4284,9 +4287,9 @@ async function fbPull() {
 
     if (data && data.length > 0) {
       if (_pending) {
-        console.log('[Supabase] fbPull: mudanças locais pendentes, enviando ao invés de sobrescrever');
+        console.log('[Supabase] sbPull: mudanças locais pendentes, enviando ao invés de sobrescrever');
         setSyncInd('⬆ Sincronizando mudanças locais…', 'var(--orange)');
-        await fbPush(false);
+        await sbPush(false);
         return true;
       }
       // Mapeia as colunas do Supabase para os campos internos do DB
@@ -4300,44 +4303,44 @@ async function fbPull() {
     return true;
   } catch(e) {
     setSyncInd(t('sync_offline'), 'var(--orange)');
-    console.warn('[Supabase] fbPull error:', e.message || e);
+    console.warn('[Supabase] sbPull error:', e.message || e);
     return false;
   }
 }
 
 // ESCRITA debounced
-function fbSchedulePush() {
+function sbSchedulePush() {
   _pending = true;
   saveLS(); // Salva localStorage imediatamente — garante que não perde nada
   const btn = document.getElementById('btn-sync-now');
   if(btn) btn.style.display = 'inline-block';
   setSyncInd(t('sync_pending'), 'var(--orange)');
   if(_pushTimer) clearTimeout(_pushTimer);
-  _pushTimer = setTimeout(() => fbPushOrRetry(), 1500);
+  _pushTimer = setTimeout(() => sbPushOrRetry(), 1500);
 }
 
 // Tenta enviar; se Supabase não está pronto, reagenda (máx. 30 tentativas ≈ 60s)
 let _pushRetryCount = 0;
 const _PUSH_MAX_RETRIES = 30;
-async function fbPushOrRetry() {
-  if(!fbActive()) {
+async function sbPushOrRetry() {
+  if(!sbActive()) {
     _pushRetryCount++;
     if(_pushRetryCount > _PUSH_MAX_RETRIES) {
-      console.warn('[Supabase] fbPushOrRetry: máximo de tentativas atingido. Supabase indisponível.');
+      console.warn('[Supabase] sbPushOrRetry: máximo de tentativas atingido. Supabase indisponível.');
       setSyncInd('⚠ Supabase indisponível', 'var(--orange)');
       _pushRetryCount = 0;
       return;
     }
-    _pushTimer = setTimeout(() => fbPushOrRetry(), 2000);
+    _pushTimer = setTimeout(() => sbPushOrRetry(), 2000);
     return;
   }
   _pushRetryCount = 0;
-  await fbPush(false);
+  await sbPush(false);
 }
 
 // ESCRITA — faz upsert de todos os registros na tabela 'equipamentos'
-async function fbPush(manual) {
-  if(!fbActive()) { saveLS(); return; }
+async function sbPush(manual) {
+  if(!sbActive()) { saveLS(); return; }
   if(_pushTimer) { clearTimeout(_pushTimer); _pushTimer = null; }
   setSyncInd(t('sync_saving'), 'var(--accent2)', true);
   try {
@@ -4381,8 +4384,8 @@ const payload = Array.from(uniqueMap.values());
     if(manual) showToast('☁ Salvo no Supabase!');
   } catch(e) {
     setSyncInd(t('sync_fail'), 'var(--red)');
-    console.error('[Supabase] fbPush error:', e.message || e);
-    _pushTimer = setTimeout(() => fbPush(false), 30000);
+    console.error('[Supabase] sbPush error:', e.message || e);
+    _pushTimer = setTimeout(() => sbPush(false), 30000);
     saveLS();
     if(manual) showToast('Falha Supabase. Salvo localmente. Erro: ' + (e.message || e), 'err');
     // [v15 FIX] removido alert() — bloqueava o browser; erro já visível no indicador e toast
@@ -4393,7 +4396,7 @@ const payload = Array.from(uniqueMap.values());
 
 // EXCLUSÃO de um registro específico pelo campo 'id' (código do equipamento)
 async function sbDeleteRecord(codigoEquipamento) {
-  if(!fbActive()) return;
+  if(!sbActive()) return;
   try {
     const { error } = await _sb
       .from('equipamentos')
@@ -4407,9 +4410,9 @@ async function sbDeleteRecord(codigoEquipamento) {
 }
 
 // LISTENER em tempo real via Supabase Realtime
-let _realtimeChannel = null;
+var _realtimeChannel = null; // [v25 FIX] var instead of let for cross-script-block global
 function fbStartListen() {
-  if(!fbActive()) return;
+  if(!sbActive()) return;
   // Cancela canal anterior, se houver
   if (_realtimeChannel) {
     _realtimeChannel.unsubscribe();
@@ -4538,12 +4541,12 @@ async function sbConnect() {
   localStorage.setItem(LS_SB_CFG, JSON.stringify({ url, key }));
   document.getElementById('sb-ov')?.remove();
   updateGsCfgBtn();
-  const pulled = await fbPull();
+  const pulled = await sbPull();
   if(pulled && DB.length > 0) {
     updateAll(); filterAlerts('vencido');
     showToast('☁ Supabase conectado! ' + DB.length + ' registros carregados.');
   } else {
-    await fbPush(false);
+    await sbPush(false);
     showToast('☁ Supabase conectado! Dados enviados.');
   }
   fbStartListen();
@@ -4565,7 +4568,7 @@ window.fbDisconnect = sbDisconnect;
 
 function updateGsCfgBtn() {
   const btn = document.getElementById('btn-gs-cfg'); if(!btn) return;
-  if(fbActive()) {
+  if(sbActive()) {
     btn.textContent = '☁ Supabase ✓'; btn.style.borderColor='var(--green)'; btn.style.color='var(--green)';
     document.getElementById('sync-indicator').style.display = 'inline';
     document.getElementById('btn-sync-now').style.display = 'none';
@@ -4604,12 +4607,12 @@ async function initSupabase() {
   // Resultado: initSupabase() era invocado 2× em rápida sucessão → fbPull duplo + realtime duplo → travado.
   if (_sbInitialized) return;
   _sbInitialized = true;
-  const pulled = await fbPull();
+  const pulled = await sbPull();
   if(pulled && !_pending) { updateAll(); filterAlerts('vencido'); }
   fbStartListen();
 }
 // Alias para compatibilidade interna
-const initFirebase = initSupabase;
+// initSupabase alias removed — use initSupabase() directly
 
 // ══════════════════════════════════════════════════════
 // MODO PÚBLICO — Ficha de equipamento via QR (?view=ID)
@@ -4751,8 +4754,8 @@ const initFirebase = initSupabase;
   // A Anon Key é PÚBLICA por design (leitura via RLS apenas).
   // Sem isso, o QR não funciona em celulares que não fizeram login.
   // ══════════════════════════════════════════════════════════════
-  const _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co'; // ← Cole aqui: https://xxxxxx.supabase.co
-  const _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw'; // ← Cole aqui: eyJhbGciOi... (anon/public key)
+  const _QR_PUBLIC_SB_URL = ''; // ← Cole aqui: https://xxxxxx.supabase.co
+  const _QR_PUBLIC_SB_KEY = ''; // ← Cole aqui: eyJhbGciOi... (anon/public key)
 
   // Oculta o login, lê a tabela 'equipamentos' no Supabase (anon key = leitura pública via RLS) e renderiza a ficha.
   // No Supabase: certifique-se de habilitar RLS com uma policy "allow SELECT for anon" na tabela 'equipamentos'.
@@ -4802,7 +4805,7 @@ const initFirebase = initSupabase;
 // ══════════════════════════════════════════════════════
 let _auth = null; // alias mantido; não usado diretamente com Supabase (usa _sb.auth)
 
-async function initFirebaseAndAuth() {
+async function initSupabaseAndAuth() {
   // ── GUARD: SDK Supabase deve ter carregado ──
   if (typeof supabase === 'undefined' || typeof supabase.createClient !== 'function') {
     console.warn('[Supabase] SDK não carregou — CDN bloqueada ou ausência de rede.');
@@ -4845,7 +4848,7 @@ async function initFirebaseAndAuth() {
       }
     });
   } catch(e) {
-    console.error('[initFirebaseAndAuth] Falha ao verificar sessão Supabase:', e);
+    console.error('[initSupabaseAndAuth] Falha ao verificar sessão Supabase:', e);
     showToast('Erro ao verificar sessão: ' + (e.message || e), 'err');
     showLoginScreen();
   }
@@ -4900,14 +4903,14 @@ async function doForgotPassword(ev) {
   if (ev && ev.preventDefault) ev.preventDefault();
   if (!_sb) {
     if(typeof showToast==='function') showToast('Supabase não configurado. Configure as credenciais primeiro.','err');
-    else alert('Supabase não configurado. Configure as credenciais primeiro.');
+    else showToast('⚠️ Supabase não configurado. Configure as credenciais primeiro.');
     return;
   }
   const emailField = document.getElementById('login-email');
   const email = (emailField && emailField.value || '').trim();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     if(typeof showToast==='function') showToast('⚠ Digite seu e-mail no campo acima primeiro.','err');
-    else alert('Digite seu e-mail no campo acima e clique em "Esqueci minha senha".');
+    else showToast('⚠️ Digite seu e-mail no campo acima e clique em "Esqueci minha senha".');
     if (emailField) emailField.focus();
     return;
   }
@@ -4918,11 +4921,11 @@ async function doForgotPassword(ev) {
     if (error) throw error;
     // [v18 FIX] usar showToast em vez de alert() bloqueante
     if(typeof showToast === 'function') showToast('📧 Link de redefinição enviado para ' + email + '. Verifique sua caixa de entrada.');
-    else alert('Enviamos um link de redefinição de senha para ' + email + '.');
+    else showToast('✅ Enviamos um link de redefinição de senha para ' + email + '.');
   } catch (e) {
     console.warn('[forgotPassword]', e);
     if(typeof showToast === 'function') showToast('Se o e-mail estiver cadastrado, você receberá um link em instantes.');
-    else alert('Se o e-mail estiver cadastrado, você receberá um link em instantes.');
+    else showToast('✅ Se o e-mail estiver cadastrado, você receberá um link em instantes.');
   }
 }
 document.addEventListener('DOMContentLoaded', function(){
@@ -4992,16 +4995,17 @@ async function doLogin() {
 }
 
 async function doLogout() {
-  if(!confirm('Deseja sair do sistema?')) return;
-  // Para o canal realtime
-  if (_realtimeChannel) { _realtimeChannel.unsubscribe(); _realtimeChannel = null; }
-  _sbActive = false;
-  try {
-    if (_sb) await _sb.auth.signOut();
-    // onAuthStateChange → showLoginScreen
-  } catch(e) {
-    showToast('Erro ao sair: ' + (e.message || e), 'err');
-  }
+  _confirmModal('Deseja sair do sistema?', async function() {
+    // Para o canal realtime
+    if (_realtimeChannel) { _realtimeChannel.unsubscribe(); _realtimeChannel = null; }
+    _sbActive = false;
+    try {
+      if (_sb) await _sb.auth.signOut();
+      // onAuthStateChange → showLoginScreen
+    } catch(e) {
+      showToast('Erro ao sair: ' + (e.message || e), 'err');
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -5673,7 +5677,7 @@ function recalcRecord(r) {
     
     if(r.ult_calib && r.freq_dias) {
         try {
-            const ult = new Date(r.ult_calib + 'T00:00:00');
+            const ult = new Date(r.ult_calib + 'T00:00:00Z');
             const prox = new Date(ult);
             prox.setDate(prox.getDate() + parseInt(r.freq_dias));
             r.prox_calib = prox.toISOString().slice(0, 10);
@@ -5683,7 +5687,7 @@ function recalcRecord(r) {
     if(r.prox_calib) {
         try {
             r.dias_vencer = Math.round(
-                (new Date(r.prox_calib + 'T00:00:00') - today) / 86400000
+                (new Date(r.prox_calib + 'T00:00:00Z') - today) / 86400000
             );
         } catch(e) { r.dias_vencer = null; }
     } else {
@@ -5711,7 +5715,7 @@ function recalcRecord(r) {
     }
 }
 
-function _origCommitInlineEdit(silent) {
+function commitInlineEdit(silent) {
   if(!_inlineActive) return;
   const { uid, k, td } = _inlineActive;
   const input = td.querySelector('input,select');
@@ -5733,7 +5737,7 @@ function _origCommitInlineEdit(silent) {
     _inlineActive = null;
     saveLS();
     if(!silent) {
-      fbSchedulePush();
+      sbSchedulePush();
       showToast(LANG==='en' ? '✅ Saved — filters will update when you click Apply' : '✅ Salvo — tabela mantida. Clique em 🔄 para atualizar filtros');
     }
     // ── Only re-render the ONE affected row — do NOT re-apply filters ──
@@ -5768,7 +5772,7 @@ function rerenderRow(uid, tbl) {
   const cols = (COL_DEFS[tbl]||[]).filter(c => colVis[tbl]?.[c.k] !== false);
   tr.innerHTML = cols.map(c => renderCell(r, c.k, tbl)).join('');
   // Restore selected highlight if needed
-  if(_selectedUIDs[tbl]?.has(uid)) tr.classList.add('selected');
+  if(typeof _selectedUIDs !== 'undefined' && _selectedUIDs[tbl]?.has(uid)) tr.classList.add('selected');
 }
 
 // ── Deferred filter refresh — user controls when filters re-apply ──────────
@@ -6378,7 +6382,7 @@ function applyF() {
   var de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
   var ultCalibDe=g('f-ult-calib-de'), ultCalibAte=g('f-ult-calib-ate');
   var proxCalibDe=g('f-prox-calib-de'), proxCalibAte=g('f-prox-calib-ate');
-  var rows = DB.slice();
+  var rows = (Array.isArray(DB) ? DB : []).slice();
   if(_selectedTipos.size>0) rows=rows.filter(function(r){return _selectedTipos.has(r.tipo);});
   var mCli   = _multiSel['f-cli']    || new Set();
   var mLocal = _multiSel['f-local']  || new Set();
@@ -6415,7 +6419,7 @@ function refreshInPlace() {
   var de=g('f-de'),ate=g('f-ate'),q=g('f-search').toLowerCase();
   var ultCalibDe=g('f-ult-calib-de'), ultCalibAte=g('f-ult-calib-ate');
   var proxCalibDe=g('f-prox-calib-de'), proxCalibAte=g('f-prox-calib-ate');
-  var rows = DB.slice();
+  var rows = (Array.isArray(DB) ? DB : []).slice();
   if(_selectedTipos.size>0) rows=rows.filter(function(r){return _selectedTipos.has(r.tipo);});
   var mCli   = _multiSel['f-cli']    || new Set();
   var mLocal = _multiSel['f-local']  || new Set();
@@ -6949,7 +6953,7 @@ function saveRecord(){
   refreshInPlace();
   const luSave=document.getElementById('last-upd');
   if(luSave) luSave.textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
-  fbSchedulePush();
+  sbSchedulePush();
   refreshQrIfOpen();
 }
 
@@ -6962,38 +6966,37 @@ function deleteRecord(){
   const msg = LANG==='en'
     ? `Delete "${name}"?\nThis action cannot be undone.`
     : `Excluir "${name}"?\nEsta ação não pode ser desfeita.`;
-  if(!confirm(msg)) return;
-  pushUndo();
-  // v12 AUDIT
-  v12AuditLog('del', r.id || editUID, `Equipamento eliminado: ${r.descricao||r.tipo||name}`);
-  const deletedId = r.id; // salva antes de filtrar
-  DB = DB.filter(x => x._uid !== editUID);
-  closeModal();
-  // [v18 FIX] KPIs e gráficos atualizam após exclusão
-  updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
-  refreshInPlace();
-  // [v18 FIX] remove do Supabase (não apenas upsert local)
-  if(deletedId) sbDeleteRecord(deletedId);
-  fbSchedulePush();
-  // [v19 MELHORIA 4] Toast com botão Desfazer
-  _showUndoToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
+  // [v25 FIX] replaced blocking confirm() with _confirmModal
+  _confirmModal(msg, function() {
+    pushUndo();
+    v12AuditLog('del', r.id || editUID, `Equipamento eliminado: ${r.descricao||r.tipo||name}`);
+    const deletedId = r.id;
+    DB = DB.filter(x => x._uid !== editUID);
+    closeModal();
+    updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
+    refreshInPlace();
+    if(deletedId) sbDeleteRecord(deletedId);
+    sbSchedulePush();
+    _showUndoToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
+  });
 }
+
 
 function deleteInline(uid){
   const r = DB.find(x => x._uid === uid);
   if(!r) return;
   const name = r.id || r.descricao || 'registro';
-  if(!confirm(LANG==='en' ? `Delete "${name}"?` : `Excluir "${name}"?`)) return;
-  pushUndo();
-  const deletedId = r.id;
-  DB = DB.filter(x => x._uid !== uid);
-  // [v18 FIX] KPIs e gráficos atualizam após exclusão inline
-  updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
-  refreshInPlace();
-  // [v18 FIX] remove do Supabase
-  if(deletedId) sbDeleteRecord(deletedId);
-  fbSchedulePush();
-  showToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
+  // [v25 FIX] replaced blocking confirm() with _confirmModal
+  _confirmModal(LANG==='en' ? `Delete "${name}"? This action cannot be undone.` : `Excluir "${name}"? Esta ação não pode ser desfeita.`, function() {
+    pushUndo();
+    const deletedId = r.id;
+    DB = DB.filter(x => x._uid !== uid);
+    updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
+    refreshInPlace();
+    if(deletedId) sbDeleteRecord(deletedId);
+    sbSchedulePush();
+    showToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
+  });
 }
 
 // deleteRecord_real é alias de deleteRecord (mantido para compatibilidade de hooks)
@@ -7123,7 +7126,7 @@ function importData(e) {
       if(sanitized.length === 0) throw new Error('Nenhum registro válido encontrado no arquivo.');
       DB = recalcDias(sanitized);
       updateAll();
-      fbSchedulePush();
+      sbSchedulePush();
       showToast(`✅ Importado: ${DB.length} registro(s). Sincronizando…`);
     } catch(err) {
       console.warn('[importData]', err);
@@ -7164,18 +7167,18 @@ function showToast(msg, type = 'success') {
 // RESET
 // ═══════════════════════════════════════════════════════
 function resetDB(){
-  if(!confirm('⚠️ Isso apagará TODAS as edições e voltará ao seed inicial (v17).\n\nTem certeza?')) return;
-  localStorage.removeItem(LS_KEY);
-  var seed=getSeedData();
-  DB=seed.length>0?recalcDias(seed):[];
-  saveLS();
-  updateAll();
-  filterAlerts('vencido');
-  fbSchedulePush();
-  showToast('✅ Dados resetados ('+DB.length+' registros). Sincronizando…');
+  // [v25 FIX] replaced blocking confirm() with _confirmModal
+  _confirmModal('⚠️ Isso apagará TODAS as edições e voltará ao seed inicial. Tem certeza?', function() {
+    localStorage.removeItem(LS_KEY);
+    var seed=getSeedData();
+    DB=seed.length>0?recalcDias(seed):[];
+    saveLS();
+    updateAll();
+    filterAlerts('vencido');
+    sbSchedulePush();
+    showToast('✅ Dados resetados ('+DB.length+' registros). Sincronizando…');
+  });
 }
-
-// ═══════════════════════════════════════════════════════
 // UNDO / REDO SYSTEM
 // ═══════════════════════════════════════════════════════
 let _undoStack = [];
@@ -7195,8 +7198,9 @@ function undoAction() {
   _redoStack.push(JSON.stringify(DB.map(r => { const {dias_vencer,...rest}=r; return rest; })));
   DB = recalcDias(JSON.parse(_undoStack.pop()));
   saveLS();
-  fbSchedulePush();
+  sbSchedulePush();
   updateAll();
+  updateKPIs(); buildAllCharts();
   filterAlerts('vencido');
   showToast('↩ Desfeito');
   updateUndoRedoBtns();
@@ -7207,8 +7211,9 @@ function redoAction() {
   _undoStack.push(JSON.stringify(DB.map(r => { const {dias_vencer,...rest}=r; return rest; })));
   DB = recalcDias(JSON.parse(_redoStack.pop()));
   saveLS();
-  fbSchedulePush();
+  sbSchedulePush();
   updateAll();
+  updateKPIs(); buildAllCharts();
   filterAlerts('vencido');
   showToast('↪ Refeito');
   updateUndoRedoBtns();
@@ -7502,13 +7507,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   // com o bloco de modo público acima
   if (!new URLSearchParams(window.location.search).has('view')) {
     // Boot: inicializa Supabase Auth → ao autenticar → conecta banco
-    initFirebaseAndAuth();
+    initSupabaseAndAuth();
     // ── Deep-link: ?id=EQ-001 (escaneado pelo QR) → abre equipamento automaticamente
     _handleQrDeepLink();
   }
 });
 
-// Chamada após o Firebase carregar dados — tenta novamente se DB ainda vazio
+// Chamada após o Supabase carregar dados — tenta novamente se DB ainda vazio
 function _handleQrDeepLink() {
   const params = new URLSearchParams(window.location.search);
   const targetId = params.get('id');
@@ -7530,7 +7535,7 @@ function _handleQrDeepLink() {
       showToast('⚠️ Equipamento "' + targetId + '" não encontrado.', 'warn');
     }
   }
-  // Aguarda o Firebase carregar (tenta por até 6s)
+  // Aguarda o Supabase carregar (tenta por até 6s)
   setTimeout(() => _tryOpen(7), 500);
 }
 
@@ -7783,7 +7788,7 @@ function _handleQrDeepLink() {
       <td>${esc(r.status)||'—'}</td>
       <td style="text-align:right"><span class="drill-act">
         <button onclick="openEdit(${r._uid})" title="Editar">✏</button>
-        <button class="del" onclick="if(confirm('Excluir este registro?'))deleteInline(${r._uid})" title="Excluir">🗑</button>
+        <button class="del" onclick="deleteInline(${r._uid})" title="Excluir">🗑</button>
       </span></td>
     </tr>`).join('');
     const countLine = filtered.length < rows.length
@@ -8080,7 +8085,7 @@ function _handleQrDeepLink() {
 
     if(changed > 0) {
       saveLS();
-      fbSchedulePush(); // [FIX] Agenda sync Firebase sem guarda fbActive() — fbPushOrRetry() já gerencia retry em caso de instabilidade
+      sbSchedulePush(); // [FIX] Agenda sync Supabase sem guarda sbActive() — sbPushOrRetry() já gerencia retry em caso de instabilidade
       showToast(`✅ ${changed} célula(s) preenchida(s) — clique em 🔄 para atualizar filtros`);
       // Re-render only the affected rows — stay in place
       previewIdxs.forEach(idx => {
@@ -8171,7 +8176,7 @@ function openQrBulkModal(source) {
   }
   if (!uids || uids.size === 0) {
     if(typeof showToast === 'function') showToast('⚠ Nenhum equipamento selecionado.', 'err');
-    else alert('Nenhum equipamento selecionado.');
+    else showToast('⚠️ Nenhum equipamento selecionado.');
     return;
   }
   const rows = DB.filter(r => uids.has(r._uid));
@@ -8552,7 +8557,7 @@ function applyBulkEdit(tbl) {
   // Persist
   saveLS();
   // Deleta do Supabase pelo campo 'id' (código do equipamento)
-  if(fbActive() && r.id) {
+  if(sbActive() && r.id) {
     sbDeleteRecord(r.id).catch(e => console.warn('[Supabase] delete record:', r.id, e));
   }
 
@@ -8568,10 +8573,13 @@ function applyBulkEdit(tbl) {
 function bulkDelete(tbl) {
   const uids = _selectedUIDs[tbl];
   if(uids.size === 0) return;
-  if(!confirm(`Excluir ${uids.size} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`)) return;
+  // [v25 FIX] replaced blocking confirm()
+  _confirmModal(`Excluir ${uids.size} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`, function() { _v25BulkDeleteBody(uids); }); return;
+}
+function _v25BulkDeleteBody(uids) {
 
   // Supabase: deleta cada registro pelo campo 'id' (código do equipamento)
-  if(fbActive()) {
+  if(sbActive()) {
     uids.forEach(uid => {
       const r = DB.find(x => x._uid === uid);
       if(r && r.id) {
@@ -9281,11 +9289,9 @@ window.openPdfModalBulk = function(tbl) {
 
 function _buildQrPayload(r) {
     const id = encodeURIComponent(r.id || r._uid || '');
-    // PEGA O NOME DO ARQUIVO ATUAL (em vez da URL completa)
-    const currentPath = window.location.pathname;
-    const baseUrl = window.location.origin + currentPath;
-    const cleanBase = baseUrl.replace(/\\/g, '/').replace(/\s/g, '%20');
-    return cleanBase + '?view=' + id + '&v=v24';
+    // BUG-12 FIX: URL fixa para GitHub Pages (não depende de window.location)
+    const BASE_URL = 'https://aplicativosrochling.github.io/equipment/';
+    return BASE_URL + '?view=' + id + '&v=v25';
 }
 
 let _qrUID = null;
@@ -9301,14 +9307,14 @@ function openQrModal(uid) {
   const r = DB.find(x => x._uid === uid);
   if (!r) { 
     if(typeof showToast === 'function') showToast('Instrumento não encontrado', 'err');
-    else alert('Instrumento não encontrado');
+    else showToast('⚠️ Instrumento não encontrado');
     return; 
   }
 
   // 🔥 ADICIONAR ESTAS LINHAS - Para ver no console se está funcionando
-  console.log('[QR] Gerando QR para:', r.id);
-  console.log('[QR] Status Calibração:', r.status_calib);
-  console.log('[QR] Dias para vencer:', r.dias_vencer);
+  _DEV && console.log('[QR] Gerando QR para:', r.id);
+  _DEV && console.log('[QR] Status Calibração:', r.status_calib);
+  _DEV && console.log('[QR] Dias para vencer:', r.dias_vencer);
 
   // Remove stale modal if present then re-inject fresh
   const old = document.getElementById('qr-modal-ov');
@@ -9326,7 +9332,7 @@ function openQrModal(uid) {
   const payload = _buildQrPayload(r);
   
   // 🔥 ADICIONAR ESTA LINHA - Para ver a URL do QR
-  console.log('[QR] URL gerada:', payload);
+  _DEV && console.log('[QR] URL gerada:', payload);
   
   try {
     _qrInstance = new QRCode(qrBox, {
@@ -9801,6 +9807,7 @@ function _injectTotalsRow(tbl, tbody, p) {
   const existing = tbody ? tbody.querySelector('tr.tbl-totals-row') : null;
   if (existing) existing.remove();
   if (!BB.totals[tbl] || !tbody || !p) return;
+  if (tbl === 'rep' && (!p.rows)) return; // BUG-05 FIX
 
   const rows = p.rows || [];
   const total = rows.length;
@@ -10301,7 +10308,7 @@ if (isTouchDevice) {
       }
       if (changed > 0) {
         if (typeof saveLS === 'function') saveLS();
-        if (typeof fbSchedulePush === 'function') fbSchedulePush(); // [FIX] Agenda sync Firebase sem guarda fbActive() — fbPushOrRetry() já gerencia retry em caso de instabilidade
+        if (typeof sbSchedulePush === 'function') sbSchedulePush(); // [FIX] Agenda sync Supabase sem guarda sbActive() — sbPushOrRetry() já gerencia retry em caso de instabilidade
         if (typeof showToast === 'function') showToast('✅ ' + changed + ' célula(s) preenchida(s)');
         if (typeof refreshInPlace === 'function') refreshInPlace();
       }
@@ -10479,7 +10486,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 // ── SAVE-BAR: rastreia edições pendentes de forma explícita ──────────────────
-// Sobrescreve commitInlineEdit para acumular edições sem salvar no Firebase
+// Sobrescreve commitInlineEdit para acumular edições sem salvar no Supabase
 // até o usuário clicar "Salvar alterações".
 
 (function() {
@@ -10502,7 +10509,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // ── Patch: commitInlineEdit ──
   // Salva localmente e re-renderiza imediatamente,
-  // mas só envia ao Firebase quando o usuário confirmar.
+  // mas só envia ao Supabase quando o usuário confirmar.
   // NOTA: _inlineActive, DB e _statsCache são declarados com let/const no escopo
   // global e NÃO ficam em window — por isso usamos as variáveis diretamente.
   window.commitInlineEdit = function(silent) {
@@ -10554,7 +10561,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       _inlineActive = null;
-      // Salva só no localStorage (não Firebase)
+      // Salva só no localStorage (não Supabase)
       window.saveLS && window.saveLS();
 
       // Re-renderiza a linha imediatamente
@@ -10575,15 +10582,15 @@ document.addEventListener('DOMContentLoaded', function() {
     _inlineActive = null;
   };
 
-  // ── Confirmar todas as edições → salva Firebase ──
+  // ── Confirmar todas as edições → salva Supabase ──
   window.commitAllPendingEdits = function() {
     if(!_pendingEdits.length) { sebHide(); return; }
     const n = _pendingEdits.length;
     _pendingEdits = [];
     _snapshotDB = null;
-    // Salva localmente e no Firebase
+    // Salva localmente e no Supabase
     window.saveLS && window.saveLS();
-    window.fbSchedulePush && window.fbSchedulePush();
+    window.sbSchedulePush && window.sbSchedulePush();
     // Atualiza KPIs, gráficos e filtros
     window.updateKPIs && window.updateKPIs();
     window.buildAllCharts && window.buildAllCharts();
@@ -11667,11 +11674,14 @@ function toggleColFilterDd(tbl, col, event) {
 
   // ── Limpar todos os logs ──────────────────────────────────────────────
   window.v12ClearAuditLogs = function() {
-    if (!confirm('⚠️ Eliminar todos os logs de auditoria?\n\nEsta ação é irreversível e não pode ser desfeita.')) return;
-    localStorage.removeItem(AUDIT_KEY);
-    v12RenderAuditTable();
-    if (typeof showToast==='function') showToast('🗑 Logs de auditoria eliminados.');
-  };
+    // [v25 FIX] replaced blocking confirm()
+    _confirmModal('⚠️ Eliminar todos os logs de auditoria? Esta ação é irreversível.', function() {
+      localStorage.removeItem(AUDIT_KEY);
+      v12RenderAuditTable();
+      if (typeof showToast==='function') showToast('🗑 Logs de auditoria eliminados.');
+    });
+    return;
+  }
 
   // Auto-render quando a aba Relatórios é aberta
   var _origShowTab = window.showTab;
@@ -11890,7 +11900,7 @@ window.v12ConfirmImport = function() {
     if (typeof saveLS === 'function') saveLS();
     if (typeof _statsCache !== 'undefined') window._statsCache = null;
     if (typeof updateAll === 'function') updateAll();
-    if (typeof fbSchedulePush === 'function') fbSchedulePush();
+    if (typeof sbSchedulePush === 'function') sbSchedulePush();
 
     // 6. Registrar auditoria
     if (typeof v12AuditLog === 'function') {
@@ -12175,7 +12185,7 @@ function cadSubmit(evt){
   if(typeof saveLS==='function') saveLS();
   if(typeof _statsCache!=='undefined') window._statsCache=null;
   if(typeof updateAll==='function') updateAll();
-  if(typeof fbSchedulePush==='function') fbSchedulePush();
+  if(typeof sbSchedulePush==='function') sbSchedulePush();
   if(typeof v12AuditLog==='function') v12AuditLog('add',idVal,'Cadastro via aba Cadastrar (v17).');
 
   _cadRecentSession.unshift(newRec);
@@ -12366,10 +12376,36 @@ window._showUndoToast = function(msg) {
   var toast = document.getElementById('toast');
   var tmsg  = document.getElementById('toast-msg');
   if (!toast || !tmsg) { if(typeof showToast==='function') showToast(msg); return; }
-  tmsg.innerHTML = msg + ' <button onclick="if(typeof doUndo==='function')doUndo();this.closest('#toast').classList.remove('on')" style="margin-left:8px;padding:2px 8px;border:1px solid var(--bdr2);border-radius:4px;background:var(--surf2);color:var(--tx);font-size:10px;cursor:pointer;font-weight:700;font-family:var(--font)">&#8617; Desfazer</button>';
+  tmsg.innerHTML = msg + ' <button onclick="window._undoAndClose(this)" style="margin-left:8px;padding:2px 8px;border:1px solid var(--bdr2);border-radius:4px;background:var(--surf2);color:var(--tx);font-size:10px;cursor:pointer;font-weight:700;font-family:var(--font)">&#8617; Desfazer</button>';
   toast.classList.add('on');
   clearTimeout(window._toastTimer);
   window._toastTimer = setTimeout(function(){ toast.classList.remove('on'); tmsg.textContent=''; }, 6000);
+};
+
+// ── [v25 FIX] Helper: closes toast and calls undoAction
+window._undoAndClose = function(btn) {
+  if (typeof undoAction === 'function') undoAction();
+  var t = btn.closest ? btn.closest('#toast') : document.getElementById('toast');
+  if (t) t.classList.remove('on');
+};
+
+// ── [v25 FIX] Non-blocking confirm replacement
+window._confirmModal = function(msg, onYes, onNo) {
+  var existing = document.getElementById('_v25-confirm-modal');
+  if (existing) existing.remove();
+  var d = document.createElement('div');
+  d.id = '_v25-confirm-modal';
+  d.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)';
+  d.innerHTML = '<div style="background:var(--surf,#fff);border:1px solid var(--bdr2,#ddd);border-radius:10px;padding:24px 28px;max-width:380px;width:90%;box-shadow:0 16px 48px rgba(0,0,0,.35);font-family:var(--font,sans-serif)">'
+    + '<p style="margin:0 0 20px;font-size:14px;color:var(--tx,#222);line-height:1.5">' + msg + '</p>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end">'
+    + '<button id="_v25cm-no" style="padding:7px 18px;border:1px solid var(--bdr2,#ddd);border-radius:6px;background:var(--surf2,#f5f5f5);color:var(--tx,#222);font-size:13px;cursor:pointer">Cancelar</button>'
+    + '<button id="_v25cm-yes" style="padding:7px 18px;border:none;border-radius:6px;background:var(--red,#dc2626);color:#fff;font-size:13px;cursor:pointer;font-weight:700">Confirmar</button>'
+    + '</div></div>';
+  document.body.appendChild(d);
+  d.querySelector('#_v25cm-yes').onclick = function() { d.remove(); if (typeof onYes === 'function') onYes(); };
+  d.querySelector('#_v25cm-no').onclick  = function() { d.remove(); if (typeof onNo  === 'function') onNo();  };
+  d.onclick = function(e) { if (e.target === d) { d.remove(); if (typeof onNo === 'function') onNo(); } };
 };
 
 // ── [v19 MELHORIA 5] Page size setter ────────────────────────────
@@ -12471,7 +12507,10 @@ window.renderAuditLog = function() {
 };
 
 window.clearAuditLog = function() {
-  if (!confirm('Limpar todo o log de auditoria? Esta ação não pode ser desfeita.')) return;
+  // [v25 FIX] replaced blocking confirm()
+  _confirmModal('Limpar todo o log de auditoria? Esta ação não pode ser desfeita.', function() { _v25ClearAuditLog2(); }); return;
+}
+function _v25ClearAuditLog2() {
   _AUDIT_LOG = [];
   try { localStorage.removeItem('rochling_audit_v19'); } catch(e) {}
   renderAuditLog();
