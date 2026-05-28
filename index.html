@@ -13,7 +13,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v29)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v27)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição.">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -4204,9 +4204,18 @@ function recalcDias(records) {
 // [v21-FIX-08] StorageService movido para antes do primeiro uso (era TDZ em v20)
 
 // ── Credenciais Supabase ──────────────────────────────────────────
-// 🔒 SEGURANÇA: Credenciais NÃO estão hardcoded no código-fonte.
-// Configure via: ⚙ Configurações → Supabase Config (dados salvos no localStorage local).
-// Se precisar resetar, abra DevTools → Application → localStorage e remova 'rochling_sb_cfg'.
+// [v27] Credenciais pré-configuradas — salvas automaticamente no localStorage na primeira carga.
+(function _preseedSupabaseCfg() {
+  try {
+    const _PRE_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co';
+    const _PRE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw';
+    const saved = JSON.parse(localStorage.getItem('rochling_sb_cfg') || '{}');
+    if (!saved.url || !saved.key) {
+      localStorage.setItem('rochling_sb_cfg', JSON.stringify({ url: _PRE_URL, key: _PRE_KEY }));
+      console.log('[v27] Credenciais Supabase pré-configuradas e salvas no localStorage.');
+    }
+  } catch(e) { console.warn('[v27] Erro ao pré-configurar Supabase:', e); }
+})();
 let _supabaseUrl = ''; // Preenchido via modal de configuração — nunca hardcode aqui
 let _supabaseKey = ''; // Preenchido via modal de configuração — nunca hardcode aqui
 let _sb          = null;   // Supabase client instance
@@ -4411,41 +4420,44 @@ async function sbDeleteRecord(codigoEquipamento) {
 
 // LISTENER em tempo real via Supabase Realtime
 var _realtimeChannel = null; // [v25 FIX] var instead of let for cross-script-block global
-// [v29 FIX] Substituído Realtime WebSocket por polling — evita estourar limite de
-// 200 conexões simultâneas do plano gratuito Supabase (foram 237 no ciclo anterior).
-// Polling a cada 60s tem comportamento idêntico para uso normal e não conta como conexão persistente.
-var _pollInterval = null;
-
-async function _sbPollOnce() {
-  if (!sbActive() || _pending) return;
-  try {
-    const { data, error } = await _sb.from('equipamentos').select('*').order('id', { ascending: true });
-    if (error || !data) return;
-    const newDB = recalcDias(data.map(r => ({ ...r, _uid: r._uid || r.id_interno || Date.now() + Math.random() })));
-    const stripDias = arr => arr.map(r => { const {dias_vencer, _updated, ...rest} = r; return rest; });
-    if (JSON.stringify(stripDias(newDB)) !== JSON.stringify(stripDias(DB))) {
-      DB = newDB;
-      saveLS(true);
-      updateKPIs(); buildAllCharts(); populateFilters();
-      renderAlerts();
-      if (typeof refreshInPlace === 'function') refreshInPlace();
-      setSyncInd('☁ Atualizado ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
-    }
-  } catch(e) {
-    _DEV && console.warn('[Supabase] poll error:', e.message);
-  }
-}
-
 function fbStartListen() {
-  if (!sbActive()) return;
-  // Cancela polling anterior se houver
-  if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; }
-  // Cancela canal realtime se ainda existir de versão anterior
-  if (_realtimeChannel) { _realtimeChannel.unsubscribe(); _realtimeChannel = null; }
-  // Inicia polling a cada 60 segundos (sem WebSocket persistente)
-  _pollInterval = setInterval(_sbPollOnce, 60000);
-  setSyncInd('☁ Sync ativo (60s)', 'var(--green)');
-  _DEV && console.log('[Supabase] polling iniciado (60s)');
+  if(!sbActive()) return;
+  // Cancela canal anterior, se houver
+  if (_realtimeChannel) {
+    _realtimeChannel.unsubscribe();
+    _realtimeChannel = null;
+  }
+  _realtimeChannel = _sb
+    .channel('equipamentos-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'equipamentos' },
+      async (payload) => {
+        if (_pending) return; // ignora enquanto está salvando
+        // Recarrega tudo ao receber qualquer mudança
+        const { data, error } = await _sb.from('equipamentos').select('*').order('id', { ascending: true });
+        if (error) { console.warn('[Supabase] realtime fetch error:', error.message); return; }
+        if (!data) return;
+        const newDB = recalcDias(data.map(r => ({ ...r, _uid: r._uid || r.id_interno || Date.now() + Math.random() })));
+        // [v15 FIX] exclui _updated do diff — evita loop: fbPush grava _updated novo → realtime detecta diff → loop
+        const stripDias = arr => arr.map(r => { const {dias_vencer, _updated, ...rest} = r; return rest; });
+        if (JSON.stringify(stripDias(newDB)) !== JSON.stringify(stripDias(DB))) {
+          DB = newDB;
+          saveLS(true); // [v15 FIX] silent: dado vem do cloud, não é mudança local
+          updateKPIs(); buildAllCharts(); populateFilters();
+          renderAlerts();
+          // [v18 FIX] atualiza tabelas visíveis em tempo real
+          if(typeof refreshInPlace === 'function') refreshInPlace();
+          setSyncInd('☁ Atualizado ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
+        }
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        setSyncInd('☁ Realtime ativo', 'var(--green)');
+      } else if (status === 'CHANNEL_ERROR') {
+        setSyncInd('⚠️ Listener desconectado', 'var(--orange)');
+        console.warn('[Supabase] Realtime channel error');
+      }
+    });
 }
 
 // ── Modal de configuração Supabase ────────────────────────────────
@@ -4472,9 +4484,15 @@ function openGsConfig() {
   status_calib TEXT, notes        TEXT, link        TEXT,
   link_data    TEXT, observacoes  TEXT, sheet       TEXT,
   _uid         BIGINT, _updated  TEXT
-);</code>
+);
+
+-- ⚠️ OBRIGATÓRIO: Desabilitar RLS e liberar acesso
+ALTER TABLE equipamentos DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON equipamentos TO anon;
+GRANT ALL ON equipamentos TO authenticated;</code>
           <button onclick="navigator.clipboard.writeText(document.getElementById('sb-sql').textContent).then(()=>showToast('SQL copiado!'))" style="position:absolute;top:5px;right:6px;font-size:10px;background:var(--accent2);color:#fff;border:none;border-radius:3px;padding:2px 7px;cursor:pointer">Copiar</button>
         </div>
+        <strong style="color:var(--accent)">Passo 3b</strong> — <strong style="color:var(--red)">⚠ Se aparecer "permission denied"</strong>: vá em <strong>SQL Editor</strong> e execute os comandos <code style="background:var(--bg);padding:1px 5px;border-radius:3px">DISABLE ROW LEVEL SECURITY</code> e <code style="background:var(--bg);padding:1px 5px;border-radius:3px">GRANT ALL</code> incluídos no SQL acima.<br>
         <strong style="color:var(--accent)">Passo 4</strong> — Em <strong>Authentication → Users</strong> → Add User (cadastre os e-mails autorizados)<br>
         <strong style="color:var(--accent)">Passo 5</strong> — Em <strong>Project Settings → API</strong>, copie a <strong>Project URL</strong> e a <strong>anon public key</strong> nos campos abaixo:
       </div>
@@ -4530,21 +4548,51 @@ async function sbConnect() {
   } catch(e) {
     if(res_el) { res_el.textContent = '❌ Erro: ' + (e.message || e); res_el.style.color='var(--red)'; }
     console.error('[Supabase] sbConnect test failed:', e);
-    // [v18 FIX] não bloquear com alert; erro já visível no modal
-    if(typeof showToast === 'function') showToast('Erro ao conectar ao Supabase: ' + (e.message || e), 'err');
+    // [v27] Mensagem de erro detalhada para RLS / permission denied
+    const _eMsg = (e.message || String(e));
+    let _hint = '';
+    if (_eMsg.includes('permission denied') || _eMsg.includes('42501')) {
+      _hint = ' \n\n🔧 SOLUÇÃO: No Supabase, vá em SQL Editor e execute:\n' +
+              'ALTER TABLE equipamentos DISABLE ROW LEVEL SECURITY;\n' +
+              'GRANT ALL ON equipamentos TO anon;\n' +
+              'GRANT ALL ON equipamentos TO authenticated;';
+      if(res_el) {
+        res_el.innerHTML = '❌ <strong>Permission denied</strong> — RLS está bloqueando o acesso.<br>' +
+          '<span style="color:var(--orange);font-size:10px">▶ Vá em <strong>SQL Editor</strong> no Supabase e execute o SQL do Passo 3 (inclui os comandos GRANT e DISABLE RLS).</span>';
+        res_el.style.color='var(--red)';
+      }
+    } else {
+      if(res_el) { res_el.textContent = '❌ Erro: ' + _eMsg; res_el.style.color='var(--red)'; }
+    }
+    if(typeof showToast === 'function') showToast('Erro: ' + _eMsg + _hint, 'err');
     return;
   }
 
   localStorage.setItem(LS_SB_CFG, JSON.stringify({ url, key }));
   document.getElementById('sb-ov')?.remove();
   updateGsCfgBtn();
-  const pulled = await sbPull();
-  if(pulled && DB.length > 0) {
-    updateAll(); filterAlerts('vencido');
-    showToast('☁ Supabase conectado! ' + DB.length + ' registros carregados.');
-  } else {
+
+  // [v27 FIX] Verifica se tabela no Supabase tem dados ANTES de fazer pull
+  // Se tabela vazia e há dados locais → envia dados locais (preserva instrumentos cadastrados)
+  let _remoteCount = 0;
+  try {
+    const { count: _cnt } = await _sb.from('equipamentos').select('id', { count: 'exact', head: true });
+    _remoteCount = _cnt || 0;
+  } catch(_ce) { _remoteCount = 0; }
+
+  if (_remoteCount === 0 && DB.length > 0) {
+    // Tabela remota vazia — envia dados locais para o Supabase
     await sbPush(false);
-    showToast('☁ Supabase conectado! Dados enviados.');
+    showToast('☁ Supabase conectado! ' + DB.length + ' instrumentos enviados para a nuvem.');
+  } else {
+    const pulled = await sbPull();
+    if(pulled && DB.length > 0) {
+      updateAll(); filterAlerts('vencido');
+      showToast('☁ Supabase conectado! ' + DB.length + ' registros carregados.');
+    } else {
+      await sbPush(false);
+      showToast('☁ Supabase conectado! Dados sincronizados.');
+    }
   }
   fbStartListen();
 }
@@ -4553,7 +4601,6 @@ async function sbConnect() {
 window.fbConnect = sbConnect;
 
 function sbDisconnect() {
-  if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; } // [v29 FIX]
   if (_realtimeChannel) { _realtimeChannel.unsubscribe(); _realtimeChannel = null; }
   _sbActive = false; _sb = null;
   _sbInitialized = false; // [v15 FIX] permite reconectar do zero
@@ -4752,8 +4799,8 @@ async function initSupabase() {
   // A Anon Key é PÚBLICA por design (leitura via RLS apenas).
   // Sem isso, o QR não funciona em celulares que não fizeram login.
   // ══════════════════════════════════════════════════════════════
-  const _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co'; // ← preenchido v28
-  const _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw'; // ← preenchido v28
+  const _QR_PUBLIC_SB_URL = ''; // ← Cole aqui: https://xxxxxx.supabase.co
+  const _QR_PUBLIC_SB_KEY = ''; // ← Cole aqui: eyJhbGciOi... (anon/public key)
 
   // Oculta o login, lê a tabela 'equipamentos' no Supabase (anon key = leitura pública via RLS) e renderiza a ficha.
   // No Supabase: certifique-se de habilitar RLS com uma policy "allow SELECT for anon" na tabela 'equipamentos'.
@@ -9289,7 +9336,7 @@ function _buildQrPayload(r) {
     const id = encodeURIComponent(r.id || r._uid || '');
     // BUG-12 FIX: URL fixa para GitHub Pages (não depende de window.location)
     const BASE_URL = 'https://aplicativosrochling.github.io/equipment/';
-    return BASE_URL + '?view=' + id + '&v=v28';
+    return BASE_URL + '?view=' + id + '&v=v25';
 }
 
 let _qrUID = null;
