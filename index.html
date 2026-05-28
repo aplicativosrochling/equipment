@@ -802,7 +802,7 @@ tr:nth-child(even) td { background: rgba(255,255,255,.022) }
 
 /* ── IMPORT PREVIEW MODAL ── */
 #v12-import-preview {
-  display: none; position: fixed; inset: 0; z-index: 1200;
+  display: none; position: fixed; inset: 0; z-index: 9500; /* [v30 FIX] acima do v10-proc-overlay (9000) */
   background: rgba(0,0,0,.55); backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
   align-items: center; justify-content: center; padding: 20px;
@@ -1185,7 +1185,7 @@ body.col-resizing * { cursor: col-resize !important }
 }
 .pdf-col-chip.on { border-color: var(--brand); background: rgba(0,100,179,.1); color: var(--brand); font-weight: 600 }
 .pdf-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--bdr2) }
-#fp,#file-import{display:none}
+#fp{display:none} #file-import{position:absolute;opacity:0;width:0;height:0;pointer-events:none} /* [v31 FIX] label-friendly hidden */
 
 /* scrollbar */
 ::-webkit-scrollbar{width:5px;height:5px}
@@ -1994,7 +1994,7 @@ input[type="checkbox"], input[type="radio"] {
     <button class="btn-g" id="btn-redo" onclick="redoAction()" title="Refazer (Ctrl+Y)" aria-label="Refazer" style="opacity:.4;font-size:13px;padding:4px 9px" disabled>↪</button>
 
     <!-- Data actions -->
-    <button class="btn-g" onclick="v12OpenImportModal()" title="Import JSON — Drag &amp; Drop" id="btn-import-v12">↓ <span data-i18n="btn_import_lbl">Import</span></button>
+    <button class="btn-g" onclick="v12OpenImportModal(event)" title="Import JSON — Drag &amp; Drop" id="btn-import-v12">↓ <span data-i18n="btn_import_lbl">Import</span></button>
     <button class="btn-g" onclick="v12ExportData()" title="Export JSON (Backup)">↑ <span data-i18n="btn_export_lbl">Export</span></button>
     <button class="btn-g" id="btn-font-picker" title="Trocar fonte" aria-label="Trocar fonte" style="font-size:11px">𝐀 Fonte</button>
     <button class="btn-g" onclick="openGsConfig()" id="btn-gs-cfg" title="Supabase config" aria-label="Configurar Supabase" style="font-size:11px">☁</button>
@@ -2756,29 +2756,35 @@ input[type="checkbox"], input[type="radio"] {
     <div style="padding:18px 20px 14px;border-bottom:1px solid var(--bdr2);background:var(--surf2);border-top:4px solid var(--brand);display:flex;align-items:center;justify-content:space-between">
       <div>
         <div style="font-size:14px;font-weight:800;color:var(--tx)">📥 Importar Dados</div>
-        <div style="font-size:10.5px;color:var(--tx3);margin-top:2px;font-family:var(--mono)">JSON · Arraste o ficheiro ou clique para selecionar</div>
+        <div style="font-size:10.5px;color:var(--tx3);margin-top:2px;font-family:var(--mono)">JSON · Arraste o ficheiro ou clique em "Selecionar arquivo"</div>
       </div>
       <button onclick="v12CloseImportModal()" style="background:none;border:none;cursor:pointer;color:var(--tx3);font-size:18px;padding:4px;line-height:1">×</button>
     </div>
     <div style="padding:18px 20px">
-      <!-- Drag-drop zone -->
+      <!-- [v32 FIX] Dropzone com drag-drop + botão dedicado (File System Access API + fallback) -->
       <div id="v12-dropzone"
-           onclick="document.getElementById('file-import').click()"
            ondragover="v12DragOver(event)"
            ondragleave="v12DragLeave(event)"
-           ondrop="v12Drop(event)"
-           role="button" tabindex="0" aria-label="Área de importação — arraste o ficheiro JSON"
-           onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('file-import').click()">
+           ondrop="v12Drop(event)">
         <div class="dz-icon" id="dz-icon">📂</div>
-        <div class="dz-title" id="dz-title">Arraste o ficheiro aqui</div>
-        <div class="dz-sub">ou <strong>clique para procurar</strong> no seu computador</div>
-        <div style="display:flex;gap:5px;margin-top:4px">
+        <div class="dz-title" id="dz-title">Arraste o ficheiro JSON aqui</div>
+        <div class="dz-sub" style="margin-bottom:10px">ou use o botão abaixo</div>
+        <div style="display:flex;gap:5px;margin-bottom:2px;justify-content:center">
           <span class="dz-badge">JSON</span>
           <span class="dz-badge">máx. 10 MB</span>
         </div>
       </div>
-      <input type="file" id="file-import" accept=".json" onchange="v12FileSelected(event)" style="display:none">
-      <div style="font-size:10px;color:var(--tx3);text-align:center;margin-top:8px;line-height:1.6">
+      <!-- [v32] Botão explícito — funciona em file://, http://, https:// -->
+      <div style="text-align:center;margin-top:14px">
+        <button id="btn-pick-file" class="btn-p" style="font-size:13px;padding:9px 28px;border-radius:8px"
+                onclick="v12PickFile()">
+          📂 Selecionar arquivo JSON
+        </button>
+      </div>
+      <!-- input fallback para drag-drop e browsers sem showOpenFilePicker -->
+      <input type="file" id="file-import" accept=".json" onchange="v12FileSelected(event)"
+             style="position:absolute;opacity:0;width:0;height:0;pointer-events:none">
+      <div style="font-size:10px;color:var(--tx3);text-align:center;margin-top:10px;line-height:1.6">
         ⚠️ Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.
       </div>
     </div>
@@ -11363,10 +11369,9 @@ function toggleColFilterDd(tbl, col, event) {
     var fileImport = document.getElementById('file-import');
     if (fileImport) {
       fileImport.addEventListener('change', function() {
-        if (this.files && this.files.length > 0) {
-          procStart('Importando arquivo…', []);
-          // Will be dismissed by the wrapped importCSV or after 15s safety
-        }
+        // [v30 FIX] NÃO chamar procStart aqui — o overlay (z-index:9000) bloqueia
+        // o modal de preview (z-index:1200), impedindo o clique em "Confirmar Importação"
+        // O fluxo v12 tem seu próprio UX — sem overlay necessário
       });
     }
   });
@@ -11783,9 +11788,40 @@ function toggleColFilterDd(tbl, col, event) {
   window._v12Pending = null;
 
   // ── Abre o modal de importação ────────────────────────────────────────
-  window.v12OpenImportModal = function() {
+  window.v12OpenImportModal = function(evt) {
+    if (evt && evt.stopPropagation) evt.stopPropagation();
     var m = document.getElementById('v12-import-modal');
-    if (m) { m.style.display = 'flex'; }
+    if (m) {
+      m.style.display = 'flex';
+      // [v33 FIX] ignora o próximo click do documento (o mesmo que abriu o modal)
+      m._justOpened = true;
+      setTimeout(function(){ if(m) m._justOpened = false; }, 100);
+    }
+  };
+
+  // [v32 FIX] Abre seletor de arquivo — funciona em file://, http:// e https://
+  // Usa File System Access API (showOpenFilePicker) se disponível; caso contrário
+  // usa input[type=file] tradicional como fallback.
+  window.v12PickFile = async function() {
+    // Método 1: File System Access API — funciona em file:// (Edge/Chrome 86+)
+    if (typeof window.showOpenFilePicker === 'function') {
+      try {
+        var handles = await window.showOpenFilePicker({
+          types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+          multiple: false
+        });
+        if (!handles || !handles.length) return;
+        var file = await handles[0].getFile();
+        _processFile(file);
+        return;
+      } catch(e) {
+        if (e.name === 'AbortError') return; // usuário cancelou
+        console.warn('[v32] showOpenFilePicker falhou, usando fallback:', e);
+      }
+    }
+    // Método 2: input[type=file] tradicional — fallback para Firefox e outros
+    var fi = document.getElementById('file-import');
+    if (fi) { fi.value = ''; fi.click(); }
   };
 
   window.v12CloseImportModal = function() {
@@ -11861,6 +11897,8 @@ function toggleColFilterDd(tbl, col, event) {
         _pendingImportData = sanitized;
         window._v12Pending = sanitized; // [v30 FIX] sync to window scope
         v12CloseImportModal();
+        // [v30 FIX] Garante que o overlay de processamento seja fechado antes do preview
+        if (typeof procEnd === 'function') procEnd();
         _openPreviewModal(file.name, sanitized);
       } catch(err) {
         if (typeof showToast === 'function') showToast('Erro: ' + (err.message || 'JSON inválido.'), 'err');
@@ -12029,7 +12067,7 @@ window.v12ConfirmImport = function() {
       window.v12CancelImport();
     }
     var importModal = document.getElementById('v12-import-modal');
-    if (importModal && importModal.style.display === 'flex') {
+    if (importModal && importModal.style.display === 'flex' && !importModal._justOpened) {
       var innerBox = importModal.querySelector('div > div');
       if (innerBox && !innerBox.contains(e.target)) v12CloseImportModal();
     }
