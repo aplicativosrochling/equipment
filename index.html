@@ -4287,10 +4287,24 @@ async function sbPull() {
   if(!sbActive()) return false;
   setSyncInd(t('sync_loading'), 'var(--accent2)', true);
   try {
-    const { data, error } = await _sb
-      .from('equipamentos')
-      .select('*')
-      .order('id', { ascending: true });
+    // [v28 FIX] Supabase limita 1000 linhas por query — busca todas as páginas
+    const PAGE_SIZE = 1000;
+    let allData = [];
+    let from = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data: page, error: pageErr } = await _sb
+        .from('equipamentos')
+        .select('*')
+        .order('id', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      if (pageErr) throw pageErr;
+      if (page && page.length > 0) allData = allData.concat(page);
+      hasMore = page && page.length === PAGE_SIZE;
+      from += PAGE_SIZE;
+    }
+    const data = allData;
+    const error = null;
 
     if (error) throw error;
 
@@ -4432,10 +4446,18 @@ function fbStartListen() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'equipamentos' },
       async (payload) => {
         if (_pending) return; // ignora enquanto está salvando
-        // Recarrega tudo ao receber qualquer mudança
-        const { data, error } = await _sb.from('equipamentos').select('*').order('id', { ascending: true });
-        if (error) { console.warn('[Supabase] realtime fetch error:', error.message); return; }
-        if (!data) return;
+        // [v28 FIX] Recarrega tudo com paginação (evita corte em 1000 linhas)
+        const _RT_PAGE = 1000;
+        let _rtAll = [], _rtFrom = 0, _rtMore = true;
+        while (_rtMore) {
+          const { data: _rtPage, error: _rtErr } = await _sb.from('equipamentos').select('*').order('id', { ascending: true }).range(_rtFrom, _rtFrom + _RT_PAGE - 1);
+          if (_rtErr) { console.warn('[Supabase] realtime fetch error:', _rtErr.message); return; }
+          if (_rtPage && _rtPage.length > 0) _rtAll = _rtAll.concat(_rtPage);
+          _rtMore = _rtPage && _rtPage.length === _RT_PAGE;
+          _rtFrom += _RT_PAGE;
+        }
+        const data = _rtAll;
+        if (!data || data.length === 0) return;
         const newDB = recalcDias(data.map(r => ({ ...r, _uid: r._uid || r.id_interno || Date.now() + Math.random() })));
         // [v15 FIX] exclui _updated do diff — evita loop: fbPush grava _updated novo → realtime detecta diff → loop
         const stripDias = arr => arr.map(r => { const {dias_vencer, _updated, ...rest} = r; return rest; });
@@ -4484,15 +4506,9 @@ function openGsConfig() {
   status_calib TEXT, notes        TEXT, link        TEXT,
   link_data    TEXT, observacoes  TEXT, sheet       TEXT,
   _uid         BIGINT, _updated  TEXT
-);
-
--- ⚠️ OBRIGATÓRIO: Desabilitar RLS e liberar acesso
-ALTER TABLE equipamentos DISABLE ROW LEVEL SECURITY;
-GRANT ALL ON equipamentos TO anon;
-GRANT ALL ON equipamentos TO authenticated;</code>
+);</code>
           <button onclick="navigator.clipboard.writeText(document.getElementById('sb-sql').textContent).then(()=>showToast('SQL copiado!'))" style="position:absolute;top:5px;right:6px;font-size:10px;background:var(--accent2);color:#fff;border:none;border-radius:3px;padding:2px 7px;cursor:pointer">Copiar</button>
         </div>
-        <strong style="color:var(--accent)">Passo 3b</strong> — <strong style="color:var(--red)">⚠ Se aparecer "permission denied"</strong>: vá em <strong>SQL Editor</strong> e execute os comandos <code style="background:var(--bg);padding:1px 5px;border-radius:3px">DISABLE ROW LEVEL SECURITY</code> e <code style="background:var(--bg);padding:1px 5px;border-radius:3px">GRANT ALL</code> incluídos no SQL acima.<br>
         <strong style="color:var(--accent)">Passo 4</strong> — Em <strong>Authentication → Users</strong> → Add User (cadastre os e-mails autorizados)<br>
         <strong style="color:var(--accent)">Passo 5</strong> — Em <strong>Project Settings → API</strong>, copie a <strong>Project URL</strong> e a <strong>anon public key</strong> nos campos abaixo:
       </div>
@@ -4548,23 +4564,8 @@ async function sbConnect() {
   } catch(e) {
     if(res_el) { res_el.textContent = '❌ Erro: ' + (e.message || e); res_el.style.color='var(--red)'; }
     console.error('[Supabase] sbConnect test failed:', e);
-    // [v27] Mensagem de erro detalhada para RLS / permission denied
-    const _eMsg = (e.message || String(e));
-    let _hint = '';
-    if (_eMsg.includes('permission denied') || _eMsg.includes('42501')) {
-      _hint = ' \n\n🔧 SOLUÇÃO: No Supabase, vá em SQL Editor e execute:\n' +
-              'ALTER TABLE equipamentos DISABLE ROW LEVEL SECURITY;\n' +
-              'GRANT ALL ON equipamentos TO anon;\n' +
-              'GRANT ALL ON equipamentos TO authenticated;';
-      if(res_el) {
-        res_el.innerHTML = '❌ <strong>Permission denied</strong> — RLS está bloqueando o acesso.<br>' +
-          '<span style="color:var(--orange);font-size:10px">▶ Vá em <strong>SQL Editor</strong> no Supabase e execute o SQL do Passo 3 (inclui os comandos GRANT e DISABLE RLS).</span>';
-        res_el.style.color='var(--red)';
-      }
-    } else {
-      if(res_el) { res_el.textContent = '❌ Erro: ' + _eMsg; res_el.style.color='var(--red)'; }
-    }
-    if(typeof showToast === 'function') showToast('Erro: ' + _eMsg + _hint, 'err');
+    // [v18 FIX] não bloquear com alert; erro já visível no modal
+    if(typeof showToast === 'function') showToast('Erro ao conectar ao Supabase: ' + (e.message || e), 'err');
     return;
   }
 
