@@ -2381,6 +2381,8 @@ input[type="checkbox"], input[type="radio"] {
           <option value="responsavel">👤 Responsável</option>
           <option value="status_calib">🔬 Status Calib.</option>
         </select>
+        <div class="excel-toolbar-sep"></div>
+        <button class="density-btn" onclick="openPdfEquipamentos()" title="Imprimir / PDF dos registros filtrados" style="display:flex;align-items:center;gap:3px;white-space:nowrap">🖨️ PDF</button>
       </div>
       <div class="tbl-wrap density-default stripe-mode" id="eq-wrap"><table id="eq-tbl"><thead id="eq-thead"></thead><tbody id="eq-tbody"></tbody></table></div>
       <!-- Excel Status Bar -->
@@ -9331,6 +9333,19 @@ ${(r.observacoes||r.notes)?`<div class="sec"><div class="sec-title">Observaçõe
 }
 
 // Bulk print from selection
+// [v30] PDF da aba Equipamentos — imprime os registros atualmente filtrados/visíveis
+window.openPdfEquipamentos = function() {
+  var rows = (typeof pag !== 'undefined' && pag.eq && pag.eq.rows) ? pag.eq.rows : (window.DB || []);
+  if (!rows.length) { showToast && showToast('Nenhum registro visível para imprimir.', 'err'); return; }
+  // Injeta no estado do drilldown para o openPdfModal reutilizar
+  window.__getDrillState = function() { return { filter: function() { return rows; } }; };
+  var titleEl = document.getElementById('drill-title');
+  var subEl   = document.getElementById('drill-sub');
+  if (titleEl) titleEl.textContent = '🖨️ Equipamentos — ' + rows.length + ' registro(s)';
+  if (subEl)   subEl.textContent   = 'Exportado em ' + new Date().toLocaleDateString('pt-BR');
+  openPdfModal();
+};
+
 window.openPdfModalBulk = function(tbl) {
   const uids = _selectedUIDs[tbl];
   if(!uids || uids.size === 0) return;
@@ -11764,6 +11779,8 @@ function toggleColFilterDd(tbl, col, event) {
   // FUNCIONALIDADE 2 — DRAG-DROP IMPORT COM PRÉ-VISUALIZAÇÃO
   // ─────────────────────────────────────────────────────────────────────────
   var _pendingImportData = null; // array validado aguardando confirmação
+  // [v30 FIX] Expõe via window para acesso fora do closure IIFE
+  window._v12Pending = null;
 
   // ── Abre o modal de importação ────────────────────────────────────────
   window.v12OpenImportModal = function() {
@@ -11842,6 +11859,7 @@ function toggleColFilterDd(tbl, col, event) {
         }).filter(Boolean);
         if (!sanitized.length) throw new Error('Nenhum registo válido encontrado.');
         _pendingImportData = sanitized;
+        window._v12Pending = sanitized; // [v30 FIX] sync to window scope
         v12CloseImportModal();
         _openPreviewModal(file.name, sanitized);
       } catch(err) {
@@ -11913,8 +11931,11 @@ function toggleColFilterDd(tbl, col, event) {
    // ── Confirmar importação ──────────────────────────────────────────────
   // ── Confirmar importação com MERGE INTELIGENTE (v24) ─────────────────
 window.v12ConfirmImport = function() {
+  // [v30 FIX] _pendingImportData lives inside IIFE closure — use window._v12Pending bridge
+  var _pendingImportData = window._v12Pending;
   if (!_pendingImportData) return;
   var incomingData = _pendingImportData;
+  window._v12Pending = null;
   _pendingImportData = null;
 
   try {
@@ -11994,6 +12015,7 @@ window.v12ConfirmImport = function() {
 };
   window.v12CancelImport = function() {
     _pendingImportData = null;
+    window._v12Pending = null; // [v30 FIX]
     var modal = document.getElementById('v12-import-preview');
     if (modal) modal.classList.remove('on');
     if (typeof showToast === 'function') showToast('Importação cancelada.');
