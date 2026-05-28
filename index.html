@@ -4321,7 +4321,7 @@ async function sbPull() {
       // Mapeia as colunas do Supabase para os campos internos do DB
       DB = recalcDias(data.map(r => ({
         ...r,
-        _uid: r._uid || r.id_interno || Date.now() + Math.random(),
+        _uid: r._uid || r.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)),
       })));
       saveLS(true); // [v15 FIX] silent=true: pull do cloud não é mudança local, não marcar como unsaved
     }
@@ -4466,7 +4466,7 @@ function fbStartListen() {
         }
         const data = _rtAll;
         if (!data || data.length === 0) return;
-        const newDB = recalcDias(data.map(r => ({ ...r, _uid: r._uid || r.id_interno || Date.now() + Math.random() })));
+        const newDB = recalcDias(data.map(r => ({ ...r, _uid: r._uid || r.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)) })));
         // [v15 FIX] exclui _updated do diff — evita loop: fbPush grava _updated novo → realtime detecta diff → loop
         const stripDias = arr => arr.map(r => { const {dias_vencer, _updated, ...rest} = r; return rest; });
         if (JSON.stringify(stripDias(newDB)) !== JSON.stringify(stripDias(DB))) {
@@ -4851,7 +4851,7 @@ async function initSupabase() {
 
         if (data && data.length > 0) {
           // [v23 FIX] Preserva _uid do registro salvo (não usa índice sequencial que quebra o lookup por _uid)
-          const rows = data.map((r) => ({ ...r, _uid: r._uid || r.id_interno || r.id || String(Math.random()) }));
+          const rows = data.map((r) => ({ ...r, _uid: r._uid || r.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)) }));
           DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
         } else {
           console.warn('[público] Tabela equipamentos vazia ou sem permissão de leitura anônima.');
@@ -11947,7 +11947,7 @@ window.v12ConfirmImport = function() {
         updatedCount++;
       } else {
         // Novo registro: gera _uid se não tiver
-        if (!imp._uid) imp._uid = Date.now() + Math.floor(Math.random() * 1000);
+        if (!imp._uid) imp._uid = Date.now() * 1000 + Math.floor(Math.random() * 1000);
         if (!imp.sheet) imp.sheet = 'geral';
         DB.push(imp);
         existingMap.set(impIdKey, imp);
