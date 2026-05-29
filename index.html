@@ -1203,8 +1203,8 @@ body.col-resizing * { cursor: col-resize !important }
 .drill-close{background:transparent;border:none;color:var(--tx2);font-size:22px;cursor:pointer;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:5px;transition:var(--tr)}
 .drill-close:hover{background:var(--surf3);color:var(--tx)}
 .drill-body{overflow:auto;padding:0}
-.drill-body table{width:100%;min-width:900px;border-collapse:collapse;font-size:11px}
-.drill-body thead th{position:sticky;top:0;background:var(--surf2);color:var(--tx2);font-weight:600;font-size:10px;letter-spacing:.04em;text-transform:uppercase;text-align:left;padding:9px 10px;border-bottom:1px solid var(--bdr2);z-index:2}
+.drill-body table{width:100%;min-width:1100px;border-collapse:collapse;font-size:12px}
+.drill-body thead th{position:sticky;top:0;background:var(--surf2);color:var(--tx2);font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase;text-align:left;padding:9px 10px;border-bottom:1px solid var(--bdr2);z-index:2}
 .drill-body tbody td{padding:8px 10px;border-bottom:1px solid var(--bdr);color:var(--tx);vertical-align:middle}
 .drill-body tbody tr:hover{background:var(--surf2)}
 .drill-body .drill-act{display:inline-flex;gap:4px}
@@ -7029,6 +7029,18 @@ function saveRecord(){
   refreshQrIfOpen();
 }
 
+// [v34 FIX] Lazy wrapper: garante que _confirmModal seja chamada após sua definição,
+// independente da ordem de execução dos scripts.
+function _safeConfirm(msg, onYes, onNo) {
+  if (typeof window._confirmModal === 'function') {
+    window._confirmModal(msg, onYes, onNo);
+  } else {
+    // fallback síncrono caso o modal ainda não tenha sido definido
+    if (window.confirm(msg)) { if (typeof onYes === 'function') onYes(); }
+    else { if (typeof onNo === 'function') onNo(); }
+  }
+}
+
 function deleteRecord(){
   if(editUID === null) return;
   const r = DB.find(x => x._uid === editUID);
@@ -7038,8 +7050,8 @@ function deleteRecord(){
   const msg = LANG==='en'
     ? `Delete "${name}"?\nThis action cannot be undone.`
     : `Excluir "${name}"?\nEsta ação não pode ser desfeita.`;
-  // [v25 FIX] replaced blocking confirm() with _confirmModal
-  _confirmModal(msg, function() {
+  // [v34 FIX] usa _safeConfirm para garantir que _confirmModal já foi definida
+  _safeConfirm(msg, function() {
     pushUndo();
     v12AuditLog('del', r.id || editUID, `Equipamento eliminado: ${r.descricao||r.tipo||name}`);
     const deletedId = r.id;
@@ -7058,8 +7070,8 @@ function deleteInline(uid){
   const r = DB.find(x => x._uid === uid);
   if(!r) return;
   const name = r.id || r.descricao || 'registro';
-  // [v25 FIX] replaced blocking confirm() with _confirmModal
-  _confirmModal(LANG==='en' ? `Delete "${name}"? This action cannot be undone.` : `Excluir "${name}"? Esta ação não pode ser desfeita.`, function() {
+  // [v34 FIX] usa _safeConfirm para garantir que _confirmModal já foi definida
+  _safeConfirm(LANG==='en' ? `Delete "${name}"? This action cannot be undone.` : `Excluir "${name}"? Esta ação não pode ser desfeita.`, function() {
     pushUndo();
     const deletedId = r.id;
     DB = DB.filter(x => x._uid !== uid);
@@ -7805,12 +7817,16 @@ function _handleQrDeepLink() {
     if(!rows.length) return '<div class="drill-empty">Nenhum registro encontrado para esta seleção.</div>';
     // Filtros Excel inline do drill-down
     const fs = filterState || {};
+    // [v34 FIX] Busca parcial (contains) para campos de texto; exata para selects
+    const _inc = (val, q) => (val||'').toLowerCase().includes((q||'').toLowerCase());
     let filtered = rows.filter(r => {
-      if(fs.tipo      && (r.tipo||'') !== fs.tipo)           return false;
-      if(fs.cod_lab   && (r.cod_lab||'') !== fs.cod_lab)     return false;
+      if(fs.id          && !_inc(r.id,          fs.id))          return false;
+      if(fs.cod_lab     && !_inc(r.cod_lab,      fs.cod_lab))     return false;
+      if(fs.descricao   && !_inc(r.descricao,    fs.descricao))   return false;
+      if(fs.tipo        && (r.tipo||'') !== fs.tipo)              return false;
       if(fs.localizacao && (r.localizacao||'') !== fs.localizacao) return false;
-      if(fs.empresa   && (r.empresa||'') !== fs.empresa)     return false;
-      if(fs.status    && (r.status||'').toUpperCase() !== fs.status.toUpperCase()) return false;
+      if(fs.empresa     && (r.empresa||'') !== fs.empresa)        return false;
+      if(fs.status      && (r.status||'').toUpperCase() !== fs.status.toUpperCase()) return false;
       if(fs.q && !Object.values(r).join(' ').toLowerCase().includes(fs.q.toLowerCase())) return false;
       return true;
     });
@@ -7821,13 +7837,13 @@ function _handleQrDeepLink() {
     function sel(key, label){
       const opts = uniq(key).map(v => `<option value="${esc(v)}"${fs[key]===v?' selected':''}>${esc(v)}</option>`).join('');
       return `<select class="drill-col-filter" data-key="${key}" onchange="__drillApplyFilter(this)"
-        style="font-size:10px;border:1px solid var(--bdr2);border-radius:4px;padding:2px 4px;background:var(--surf2);color:var(--tx);max-width:90px;cursor:pointer">
+        style="font-size:12px;border:1px solid var(--bdr2);border-radius:4px;padding:3px 6px;background:var(--surf2);color:var(--tx);max-width:120px;cursor:pointer">
         <option value="">Todos</option>${opts}</select>`;
     }
     function textF(key){
       return `<input class="drill-col-filter" data-key="${key}" type="text" placeholder="Buscar…" value="${esc(fs[key]||'')}"
         oninput="__drillApplyFilter(this)"
-        style="font-size:10px;border:1px solid var(--bdr2);border-radius:4px;padding:2px 6px;background:var(--surf2);color:var(--tx);width:90px">`;
+        style="font-size:12px;border:1px solid var(--bdr2);border-radius:4px;padding:3px 8px;background:var(--surf2);color:var(--tx);width:110px">`;
     }
 
     const head = `<thead>
@@ -7875,8 +7891,17 @@ function _handleQrDeepLink() {
   let _drillFilters = {};
 
   window.__drillApplyFilter = function(el) {
+    // [v34 FIX] Salva qual campo estava ativo e sua posição de cursor antes de re-renderizar
+    const activeKey = el.dataset.key;
+    const activeCursor = el.selectionStart;
     _drillFilters[el.dataset.key] = el.value;
     _doRefreshDrill();
+    // Restaura foco no mesmo campo após re-render
+    const restored = document.querySelector(`.drill-col-filter[data-key="${activeKey}"][type="text"]`);
+    if (restored) {
+      restored.focus();
+      try { restored.setSelectionRange(activeCursor, activeCursor); } catch(e){}
+    }
   };
   window.__drillClearFilters = function() {
     _drillFilters = {};
@@ -7888,11 +7913,15 @@ function _handleQrDeepLink() {
     const rows = drillState.filter();
     document.getElementById('drill-body').innerHTML = renderRows(rows, _drillFilters);
     const vis = rows.filter(r => {
-      if(_drillFilters.tipo      && (r.tipo||'') !== _drillFilters.tipo)           return false;
-      if(_drillFilters.cod_lab   && (r.cod_lab||'') !== _drillFilters.cod_lab)     return false;
+      // [v34 FIX] Busca parcial para campos de texto
+      const _incD = (val, q) => (val||'').toLowerCase().includes((q||'').toLowerCase());
+      if(_drillFilters.id          && !_incD(r.id,          _drillFilters.id))          return false;
+      if(_drillFilters.cod_lab     && !_incD(r.cod_lab,      _drillFilters.cod_lab))     return false;
+      if(_drillFilters.descricao   && !_incD(r.descricao,    _drillFilters.descricao))   return false;
+      if(_drillFilters.tipo        && (r.tipo||'') !== _drillFilters.tipo)              return false;
       if(_drillFilters.localizacao && (r.localizacao||'') !== _drillFilters.localizacao) return false;
-      if(_drillFilters.empresa   && (r.empresa||'') !== _drillFilters.empresa)     return false;
-      if(_drillFilters.status    && (r.status||'').toUpperCase() !== _drillFilters.status.toUpperCase()) return false;
+      if(_drillFilters.empresa     && (r.empresa||'') !== _drillFilters.empresa)        return false;
+      if(_drillFilters.status      && (r.status||'').toUpperCase() !== _drillFilters.status.toUpperCase()) return false;
       if(_drillFilters.q && !Object.values(r).join(' ').toLowerCase().includes(_drillFilters.q.toLowerCase())) return false;
       return true;
     });
