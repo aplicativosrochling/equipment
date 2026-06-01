@@ -13395,8 +13395,8 @@ window.exportAuditCSV = function() {
   _AUDIT_LOG.forEach(function(e) {
     lines.push([new Date(e.ts).toLocaleString('pt-BR'),e.action,e.code,e.desc,e.user].map(function(v){return '"'+String(v||'').replace(/"/g,'""')+'"';}).join(';'));
   });
-  var blob = new Blob(['﻿'+lines.join('
-')],{type:'text/csv;charset=utf-8'});
+   var blob = new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+
   var a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='auditoria_'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); URL.revokeObjectURL(a.href);
 };
 
