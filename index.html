@@ -13760,7 +13760,7 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('[QR] Sistema de atualização automática ativado!');
 });
 // ═══════════════════════════════════════════════════════════════════════
-// [PATCH v37-AUDIT-FIX] Correção da Aba Auditoria v19
+// [PATCH v37-AUDIT-FIX-v2] Correção da Aba Auditoria v19
 // ═══════════════════════════════════════════════════════════════════════
 (function() {
   'use strict';
@@ -13768,15 +13768,19 @@ document.addEventListener('DOMContentLoaded', function() {
   var V12_KEY = 'r_v12_audit_logs';
   var V19_KEY = 'rochling_audit_v19';
 
+  // ── 1. Sincronizar logs v12 → v19 ───────────────────────────────────
   function _syncV12ToV19() {
     try {
       var v12raw = localStorage.getItem(V12_KEY);
-      if (!v12raw) return;
+      if (!v12raw) { console.log('[AUDIT FIX] Nenhum log v12 encontrado.'); return; }
       var v12logs = JSON.parse(v12raw);
-      if (!v12logs.length) return;
+      if (!v12logs.length) { console.log('[AUDIT FIX] Log v12 vazio.'); return; }
+
+      console.log('[AUDIT FIX] Encontrados ' + v12logs.length + ' logs v12. Sincronizando...');
 
       var v19raw = localStorage.getItem(V19_KEY);
       var v19logs = v19raw ? JSON.parse(v19raw) : [];
+      var v19countBefore = v19logs.length;
 
       var typeMap = { add:'add', edit:'edit', del:'del', import:'import', export:'export' };
 
@@ -13794,6 +13798,7 @@ document.addEventListener('DOMContentLoaded', function() {
         };
       });
 
+      // Evitar duplicatas
       var existingKeys = {};
       v19logs.forEach(function(e) {
         existingKeys[(e.ts||'') + '|' + (e.action||'') + '|' + (e.code||'')] = true;
@@ -13813,30 +13818,45 @@ document.addEventListener('DOMContentLoaded', function() {
 
       localStorage.setItem(V19_KEY, JSON.stringify(v19logs));
 
+      // CRITICAL: Atualizar a variável global _AUDIT_LOG diretamente
+      // Sobrescrever completamente para garantir que a referência seja atualizada
       if (typeof _AUDIT_LOG !== 'undefined') {
-        _AUDIT_LOG.length = 0;
+        // Limpar array existente e repopular
+        _AUDIT_LOG.splice(0, _AUDIT_LOG.length);
         v19logs.forEach(function(e) { _AUDIT_LOG.push(e); });
       }
 
-      if (newEntries > 0) {
-        console.log('[AUDIT FIX] Sincronizados ' + newEntries + ' logs v12 → v19. Total: ' + v19logs.length);
-      }
+      console.log('[AUDIT FIX] Sincronização completa: ' + newEntries + ' novos logs. Total v19: ' + v19logs.length + ' (antes: ' + v19countBefore + ')');
     } catch(e) {
       console.warn('[AUDIT FIX] Erro na sincronização:', e);
     }
   }
 
-  var _origRenderAuditLog = window.renderAuditLog;
+  // ── 2. Função auxiliar para obter logs v19 (sempre do localStorage) ─
+  function _getV19Logs() {
+    try {
+      var raw = localStorage.getItem(V19_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch(e) {}
+    return [];
+  }
+
+  // ── 3. Sobrescrever renderAuditLog para ler SEMPRE do localStorage ──
   window.renderAuditLog = function() {
+    // Sempre ler do localStorage, nunca confiar em _AUDIT_LOG em memória
+    var logs = _getV19Logs();
+
+    // Se vazio, tentar sincronizar do v12
+    if (!logs.length) {
+      _syncV12ToV19();
+      logs = _getV19Logs();
+    }
+
     var q = ((document.getElementById('audit-search')||{}).value||'').toLowerCase();
     var tbody = document.getElementById('audit-tbody');
     if (!tbody) return;
 
-    if (typeof _AUDIT_LOG !== 'undefined' && _AUDIT_LOG.length === 0) {
-      _syncV12ToV19();
-    }
-
-    var rows = _AUDIT_LOG.filter(function(e) {
+    var rows = logs.filter(function(e) {
       if (!q) return true;
       return [e.action,e.code,e.desc,e.user].join(' ').toLowerCase().includes(q);
     });
@@ -13845,7 +13865,7 @@ document.addEventListener('DOMContentLoaded', function() {
       tbody.innerHTML = '<tr><td colspan="5" style="padding:32px;text-align:center;color:var(--tx3);font-size:12px">📄 Nenhum evento registrado ainda. Realize ações (adicionar, editar, excluir, importar) para gerar logs.</td></tr>';
       var pi = document.getElementById('audit-pinfo');
       if (pi) pi.textContent = '0 evento(s)';
-      _updateAuditKPIs();
+      _updateAuditKPIsFromLogs(logs);
       return;
     }
 
@@ -13873,26 +13893,59 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var pi = document.getElementById('audit-pinfo');
     if (pi) pi.textContent = rows.length + ' evento(s) exibido(s)';
-    _updateAuditKPIs();
+    _updateAuditKPIsFromLogs(logs);
   };
+
+  // ── 4. Atualizar KPIs a partir de um array de logs ──────────────────
+  function _updateAuditKPIsFromLogs(logs) {
+    var total  = logs.length;
+    var adds   = logs.filter(function(e){return e.action==='add';}).length;
+    var edits  = logs.filter(function(e){return e.action==='edit';}).length;
+    var dels   = logs.filter(function(e){return e.action==='del';}).length;
+    var imps   = logs.filter(function(e){return e.action==='import';}).length;
+    var set = function(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; };
+    set('audit-cnt', total);
+    set('audit-k-total', total);
+    set('audit-k-add', adds);
+    set('audit-k-edit', edits);
+    set('audit-k-del', dels);
+    set('audit-k-import', imps);
+  }
+
+  // ── 5. Sobrescrever _updateAuditKPIs para usar localStorage ─────────
+  window._updateAuditKPIs = function() {
+    _updateAuditKPIsFromLogs(_getV19Logs());
+  };
+
+  // ── 6. Sobrescrever clearAuditLog para limpar localStorage ──────────
+  window.clearAuditLog = function() {
+    _confirmModal('Limpar todo o log de auditoria? Esta ação não pode ser desfeita.', function() {
+      localStorage.removeItem(V19_KEY);
+      // Also clear _AUDIT_LOG
+      if (typeof _AUDIT_LOG !== 'undefined') _AUDIT_LOG.splice(0, _AUDIT_LOG.length);
+      renderAuditLog();
+      _updateAuditKPIsFromLogs([]);
+    });
+  };
+
+  // ── 7. Inicialização ────────────────────────────────────────────────
+  function _init() {
+    console.log('[AUDIT FIX] Iniciando sincronização v12 → v19...');
+    _syncV12ToV19();
+    setTimeout(function() {
+      if (typeof renderAuditLog === 'function') renderAuditLog();
+    }, 100);
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
-      setTimeout(_syncV12ToV19, 300);
-      setTimeout(function() {
-        if (typeof renderAuditLog === 'function') renderAuditLog();
-        if (typeof _updateAuditKPIs === 'function') _updateAuditKPIs();
-      }, 600);
+      setTimeout(_init, 200);
     });
   } else {
-    setTimeout(_syncV12ToV19, 300);
-    setTimeout(function() {
-      if (typeof renderAuditLog === 'function') renderAuditLog();
-      if (typeof _updateAuditKPIs === 'function') _updateAuditKPIs();
-    }, 600);
+    setTimeout(_init, 200);
   }
 
-  console.log('[AUDIT FIX] Patch v37-AUDIT-FIX carregado.');
+  console.log('[AUDIT FIX] Patch v37-AUDIT-FIX-v2 carregado.');
 })();
 // ═══════════════════════════════════════════════════════════════════════
 
