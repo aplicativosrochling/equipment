@@ -3614,72 +3614,7 @@ window.addEventListener('unhandledrejection', function(e) {
 
 // v17: Dados movidos para <script id="v17-seed"> no final do ficheiro.
 // getSeedData() carrega-os via fallback se localStorage estiver vazio.
-// ═══════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════
-// v20 — CHANGELOG DE CORREÇÕES E MELHORIAS
-// ═══════════════════════════════════════════════════════
-// [v20-FIX-01] IDs duplicados corrigidos: file-import, audit-wrap, audit-tbody
-// [v20-FIX-02] Função showToast duplicada removida
-// [v20-FIX-03] Função fileIcon duplicada removida
-// [v20-FIX-04] Memory leak: startAutoNotif agora guarda ref do interval
-// [v20-FIX-05] Memory leak: cancelInlineEdit verifica _inlineActive antes de cancelar
-// [v20-FIX-06] Global error boundary adicionado (window.onerror + unhandledrejection)
-// [v20-FIX-07] StorageService: camada de cache/fail-safe sobre localStorage
-// [v20-FIX-08] Debounce adicionado ao campo de busca (applyF) — 180ms
-// [v20-FIX-09] Debounce adicionado ao campo de busca de alertas — 180ms
-// [v20-FIX-10] renderTableDebounced() adicionada para uso interno
-// [v20-FIX-11] Toast tem role="alert" aria-live="polite" para screen readers
-// [v20-FIX-12] aria-label adicionado ao campo de busca principal
-// [v20-FIX-13] Botão Spotlight não se duplica em DOMContentLoaded múltiplo
-// [v20-FIX-14] CSS containment em .tbl-wrap para performance de layout
-// [v20-FIX-15] will-change em .eq-card para GPU composite layer
-// [v20-FIX-16] Comentário de segurança sobre anon key Supabase
-// [v20-FIX-17] StorageService integrado em setLang, setDateFmt, setTheme, setPageSize
-// ═══════════════════════════════════════════════════════
-// v18 — CHANGELOG DE CORREÇÕES E MELHORIAS
-// ═══════════════════════════════════════════════════════
-// BUG-01 CSS: variáveis --bg2/--tx1 não definidas → adicionados aliases em :root e temas
-// BUG-02 SYNC: deleteRecord/deleteInline não chamavam sbDeleteRecord() → registros
-//              excluídos localmente persistiam no Supabase após sync (upsert não deleta)
-// BUG-03 SYNC: deleteRecord/deleteInline não atualizavam KPIs e gráficos após exclusão
-// BUG-04 VALID: saveRecord() sem validação de campos obrigatórios (id, tipo, desc, local)
-// BUG-05 VALID: saveRecord() permitia ID duplicado ao criar novo registro
-// BUG-06 DATE: autoCalc() usava new Date(x+'T00:00:00') (local) ↔ resto usa Z (UTC)
-//              causando off-by-one em timezones negativos (ex: GMT-3)
-// BUG-07 DATE: updateValidityBar() mesma inconsistência de timezone → corrigido para UTC
-// BUG-08 UX: alert() em sbDeleteRecord, doForgotPassword, openQrBulkModal
-//            substituídos por showToast() (não bloqueante)
-// BUG-09 LOOP: sbPushOrRetry() sem limite de tentativas → potencial loop infinito
-//              se Supabase indisponível; adicionado máximo de 30 retentativas (~60s)
-// BUG-10 RT: Listener realtime não chamava refreshInPlace() → tabelas não atualizavam
-//            ao receber mudanças de outros clientes conectados
-// BUG-11 CRASH: _currentUser() referenciava _supabaseUrl (variável não global)
-//               → TypeError ao gerar logs de auditoria; corrigido para ler de localStorage
-// BUG-12 XSS: audit table renderizava HTML sem sanitização → adicionado escString()
-// BUG-13 RACE: Chart.js carregado com defer; se sessão Supabase em cache → buildAllCharts()
-//              executava antes de Chart.js estar disponível → gráficos em branco
-// IMP-01: Referências Supabase removidas — app usa Supabase
-// IMP-02: --mono: 'JetBrains Mono' → 'JetBrains Mono' (DM Mono não está no Google Fonts import)
-// ═══════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════
-// COL DEFS — todas as colunas visíveis por padrão
-// ═══════════════════════════════════════════════════════
-// VERSION 5 — Hardening pass (auditoria crítica)
-// • Saúde do parque corrigida: ignora equipamentos sem data
-// • Sparklines reais (não mais fake/decorativas)
-// • computeStats() — single-pass, cacheado
-// • Datas em UTC (timezone-safe)
-// • CSV exporta TODAS as linhas filtradas
-// • Empty state nas tabelas
-// • Filtros persistem em localStorage
-// • Login dentro de <form> (password manager)
-// • ARIA em botões só com ícone, role=tab na sidebar
-// • Sidebar traduz PT/EN
-// • Contraste --tx3 elevado (WCAG AA)
-// • Page size persistido
-// ═══════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════
+
 // ═══════════════════════════════════════════════════════════════════
 // PERSISTÊNCIA — Supabase (tabela única 'equipamentos') + localStorage (cache)
 // ═══════════════════════════════════════════════════════════════════
@@ -13177,6 +13112,7 @@ function cadRenderRecent(){
 <script id="v17-seed" type="application/json">
 []
 
+<script>
 // ╔══════════════════════════════════════════════════════════════════
 // ║  v19 — NOVOS RECURSOS & CORREÇÕES DE BUGS
 // ╚══════════════════════════════════════════════════════════════════
@@ -13211,8 +13147,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 50);
   };
 })();
-
-// ── [v19 MELHORIA 2] Auto-calc prox_calib on ult_calib change (already exists via autoCalc) ──
 
 // ── [v19 MELHORIA 3] Spotlight Search ────────────────────────────
 (function() {
@@ -13269,7 +13203,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var color = d===null?'var(--tx3)':d<0?'var(--red)':d<=30?'var(--orange)':d<=90?'var(--accent)':'var(--green)';
       var label = d===null?'Sem data':d<0?'Vencido '+Math.abs(d)+'d':d+'d';
       return [
-        '<div class="sp-item" onclick="openEdit('+r._uid+');_closeSpotlight();" style="display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;transition:background .1s" onmouseenter="this.classList.add('sp-active')" onmouseleave="this.classList.remove('sp-active')">',
+        '<div class="sp-item" onclick="openEdit('+r._uid+');_closeSpotlight();" style="display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;transition:background .1s" onmouseenter="this.classList.add(\'sp-active\')" onmouseleave="this.classList.remove(\'sp-active\')">',
           '<div style="flex:1;min-width:0">',
             '<div style="font-weight:700;font-size:12px;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_escSP(r.id||'—')+'</div>',
             '<div style="font-size:10px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_escSP((r.descricao||r.tipo||''))+' • '+_escSP(r.localizacao||'')+'</div>',
@@ -13421,7 +13355,7 @@ window.renderAuditLog = function() {
     return [e.action,e.code,e.desc,e.user].join(' ').toLowerCase().includes(q);
   });
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="padding:32px;text-align:center;color:var(--tx3);font-size:12px">Nenhum evento encontrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="padding:32px;text-align:center;color:var(--tx3);font-size:12px">Nenhum evento encontrado.nte</td></td>';
     return;
   }
   var actionMap = { add:'<span class="badge b-ok">+ Adição</span>', edit:'<span class="badge b-info">✏ Edição</span>', del:'<span class="badge b-err">✕ Exclusão</span>', import:'<span class="badge b-teal">&#8595; Import</span>' };
@@ -13467,149 +13401,272 @@ window.exportAuditCSV = function() {
 
 function _escAudit(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-// ── [v19 MELHORIA 8] Responsáveis Dashboard ──────────────────────
-window.renderRespDashboard = function() {
-  if (typeof DB === 'undefined') return;
-  var q = ((document.getElementById('resp-search')||{}).value||'').toLowerCase();
-  
-  // [v35 FIX] Limitar iteração inicial a máximo 5000 registros para evitar memory leak
-  var dbSlice = DB.slice(0, 5000);
-  var totalSkipped = Math.max(0, DB.length - 5000);
-  
-  var respMap = {};
-  dbSlice.forEach(function(r) {
-    var resp = (r.responsavel||'(Não definido)').trim();
-    if (!respMap[resp]) respMap[resp] = {total:0,vencidos:0,d30:0,d90:0,ok:0,semData:0,equips:[]};
-    var m = respMap[resp];
-    m.total++;
-    // [v35 FIX] Não armazenar objetos completos em equips - usar IDs apenas
-    m.equips.push(r.id);
-    var d = r.dias_vencer;
-    if (d===null||d===undefined) m.semData++;
-    else if (d<0) m.vencidos++;
-    else if (d<=30) m.d30++;
-    else if (d<=90) m.d90++;
-    else m.ok++;
-  });
-  
-  // Aviso se houver muitos registros
-  if (totalSkipped > 0) {
-    console.warn('[v35] DB com ' + DB.length + ' registros - renderizando apenas 5000 primeiros para performance');
-  }
-  
-  var sortedResp = Object.entries(respMap).sort(function(a,b){return b[1].vencidos-a[1].vencidos||a[0].localeCompare(b[0]);});
-  if (q) sortedResp = sortedResp.filter(function(e){return e[0].toLowerCase().includes(q);});
+// ============================================================
+// [v37 FIX] CORREÇÃO COMPLETA DA ABA RESPONSÁVEIS
+// ============================================================
 
-  // Card grid - LIMITAR A 24 CARDS MESMO
-  var grid = document.getElementById('resp-grid');
-  if (grid) {
-    grid.innerHTML = sortedResp.slice(0,24).map(function(entry) {
-      var name = entry[0], m = entry[1];
-      var saude = m.total ? Math.round((m.total-m.vencidos)/m.total*100) : 0;
-      var sc = saude>=80?'var(--green)':saude>=50?'var(--orange)':'var(--red)';
-      var pV = m.total?Math.round(m.vencidos/m.total*100):0;
-      var p3 = m.total?Math.round(m.d30/m.total*100):0;
-      var pO = 100-pV-p3;
-      return [
-        '<div class="kpi kpi-resp" style="cursor:default;position:relative;overflow:hidden" data-responsavel-name="' + name.replace(/"/g, '&quot;') + '" title="Clique para filtrar por este responsavel">',
-          '<div class="kpi-header"><span class="kpi-lbl" style="font-size:12px;font-weight:700">'+_escAudit(name)+'</span><span style="font-size:20px;font-weight:800;font-family:var(--mono);color:'+sc+'">'+saude+'%</span></div>',
-          '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;margin:6px 0">',
-            '<span style="color:var(--red)">&#128683; '+m.vencidos+' venc.</span>',
-            '<span style="color:var(--orange)">&#9203; '+m.d30+' &lt;30d</span>',
-            '<span style="color:var(--green)">&#10003; '+m.ok+' OK</span>',
-            '<span style="color:var(--tx3)">Total: '+m.total+'</span>',
-          '</div>',
-          '<div style="height:5px;border-radius:3px;overflow:hidden;display:flex;margin-top:4px">',
-            (pV>0?'<div style="width:'+pV+'%;background:var(--red)"></div>':''),
-            (p3>0?'<div style="width:'+p3+'%;background:var(--orange)"></div>':''),
-            (pO>0?'<div style="width:'+pO+'%;background:var(--green)"></div>':''),
-          '</div>',
-        '</div>'
-      ].join('');
-    }).join('');
-  }
+// Função de sanitização robusta para evitar XSS e garantir escape
+function _safeEsc(str) {
+  if (str === undefined || str === null) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
-  // Ranking table - LIMITAR A 50 LINHAS
-  var tbody = document.getElementById('resp-ranking-tbody');
-  if (tbody) {
-    tbody.innerHTML = sortedResp.slice(0, 50).map(function(entry, i) {
-      var name = entry[0], m = entry[1];
-      var saude = m.total ? Math.round((m.total-m.vencidos)/m.total*100) : 0;
-      var sc = saude>=80?'var(--green)':saude>=50?'var(--orange)':'var(--red)';
-      var pV = m.total?Math.round(m.vencidos/m.total*100):0;
-      var p3 = m.total?Math.round(m.d30/m.total*100):0;
-      var pO = 100-pV-p3;
-      return [
-        '<tr style="border-bottom:1px solid var(--bdr);cursor:pointer" class="resp-rank-row" data-responsavel-name="' + name.replace(/"/g, '&quot;') + '" title="Filtrar por este responsavel">',
-          '<td style="padding:7px 8px;font-family:var(--mono);color:var(--tx3)">'+(i+1)+'</td>',
-          '<td style="padding:7px 8px;font-weight:600;color:var(--tx)">'+_escAudit(name)+'</td>',
-          '<td style="padding:7px 8px;text-align:center;font-family:var(--mono);font-weight:700">'+m.total+'</td>',
-          '<td style="padding:7px 8px;text-align:center;color:'+(m.vencidos>0?'var(--red)':'var(--tx3)')+';font-weight:'+(m.vencidos>0?'700':'400')+'">'+m.vencidos+'</td>',
-          '<td style="padding:7px 8px;text-align:center;color:'+(m.d30>0?'var(--orange)':'var(--tx3)')+'">'+m.d30+'</td>',
-          '<td style="padding:7px 8px;text-align:center;color:var(--green)">'+m.ok+'</td>',
-          '<td style="padding:7px 8px;text-align:center;font-weight:800;font-family:var(--mono);color:'+sc+'">'+saude+'%</td>',
-          '<td style="padding:7px 8px;min-width:80px"><div style="display:flex;height:6px;border-radius:3px;overflow:hidden">'+
-            (pV>0?'<div style="width:'+pV+'%;background:var(--red)"></div>':'')+
-            (p3>0?'<div style="width:'+p3+'%;background:var(--orange)"></div>':'')+
-            (pO>0?'<div style="width:'+pO+'%;background:var(--green)"></div>':'')+
-          '</div></td>',
-        '</tr>'
-      ].join('');
-    }).join('');
-  }
-
-  // [v35 FIX] Event delegation para links de responsável (previne XSS)
-  document.removeEventListener('click', _respGridClickHandler);
-  document.addEventListener('click', _respGridClickHandler);
-  
-  // [v35 FIX] Limpeza de memória - liberar referências
-  respMap = null;
-  sortedResp = null;
-};
-
-// [v37 FIX] Bloco duplicado órfão removido — causava SyntaxError silencioso
-// que travava a aba Responsáveis em "Carregando..." e impedia renderAuditLog().
-
-var _respGridClickHandler = function(e) {
+// Handler global de clique para filtrar por responsável
+window._respGridClickHandler = function(e) {
+  // Verificar se o clique foi em um elemento que deve acionar o filtro
   var kpi = e.target.closest('.kpi-resp');
   var row = e.target.closest('.resp-rank-row');
+  
   if (kpi || row) {
-    var name = (kpi || row).getAttribute('data-responsavel-name');
-    if (name) filterByResponsavel(name);
+    var targetEl = kpi || row;
+    var name = targetEl.getAttribute('data-responsavel-name');
+    
+    if (name && name !== 'null' && name !== 'undefined') {
+      filterByResponsavel(name);
+    }
   }
-}; // [v37 FIX] Chave de fechamento faltava — quebrava o parser JS
-
-window.filterByResponsavel = function(name) {
-  if (typeof showTab === 'function') showTab('equipamentos', document.querySelector('.tab[onclick*="equipamentos"]'));
-  setTimeout(function() {
-    var fSearch = document.getElementById('f-search');
-    if (fSearch) { fSearch.value = name; if(typeof applyF==='function') applyF(); }
-  }, 100);
 };
 
-window.exportRespCSV = function() {
-  if (typeof DB === 'undefined') return;
-  var hdr = ['Responsavel','Total','Vencidos','30d','90d','OK','SemData','IndiceSaude'];
+// Função para filtrar equipamentos por responsável
+window.filterByResponsavel = function(name) {
+  if (!name) return;
+  
+  // Navegar para a aba de equipamentos
+  var equipTab = document.querySelector('.tab[data-tab="equipamentos"]');
+  if (equipTab && typeof showTab === 'function') {
+    showTab('equipamentos', equipTab);
+  }
+  
+  // Aplicar filtro após um pequeno delay (tempo para a aba carregar)
+  setTimeout(function() {
+    var fSearch = document.getElementById('f-search');
+    if (fSearch) {
+      fSearch.value = name;
+      if (typeof applyF === 'function') {
+        applyF();
+      }
+    } else {
+      // Fallback: tentar novamente após mais tempo
+      setTimeout(function() {
+        var fSearch2 = document.getElementById('f-search');
+        if (fSearch2) {
+          fSearch2.value = name;
+          if (typeof applyF === 'function') applyF();
+        }
+      }, 500);
+    }
+  }, 200);
+};
+
+// Versão corrigida do renderRespDashboard
+window.renderRespDashboard = function() {
+  if (typeof DB === 'undefined' || !DB.length) {
+    console.warn('[renderRespDashboard] DB não disponível ainda');
+    // Tentar novamente após breve delay
+    setTimeout(renderRespDashboard, 500);
+    return;
+  }
+  
+  var q = ((document.getElementById('resp-search') || {}).value || '').toLowerCase().trim();
+  
+  // Mapa para agregar dados por responsável
   var respMap = {};
-  DB.forEach(function(r) {
-    var resp = (r.responsavel||'(Não definido)').trim();
-    if (!respMap[resp]) respMap[resp]={total:0,vencidos:0,d30:0,d90:0,ok:0,semData:0};
-    var m=respMap[resp],d=r.dias_vencer;
+  
+  // Iterar sobre todos os equipamentos
+  for (var i = 0; i < DB.length; i++) {
+    var r = DB[i];
+    var resp = (r.responsavel || '(Não definido)').trim();
+    
+    if (!respMap[resp]) {
+      respMap[resp] = {
+        total: 0,
+        vencidos: 0,
+        d30: 0,
+        d90: 0,
+        ok: 0,
+        semData: 0
+      };
+    }
+    
+    var m = respMap[resp];
     m.total++;
-    if(d===null||d===undefined)m.semData++;
-    else if(d<0)m.vencidos++;
-    else if(d<=30)m.d30++;
-    else if(d<=90)m.d90++;
+    
+    var d = r.dias_vencer;
+    if (d === null || d === undefined) {
+      m.semData++;
+    } else if (d < 0) {
+      m.vencidos++;
+    } else if (d <= 30) {
+      m.d30++;
+    } else if (d <= 90) {
+      m.d90++;
+    } else {
+      m.ok++;
+    }
+  }
+  
+  // Converter para array e ordenar
+  var sortedResp = Object.keys(respMap).map(function(name) {
+    return { name: name, stats: respMap[name] };
+  });
+  
+  // Ordenar por mais vencidos primeiro
+  sortedResp.sort(function(a, b) {
+    return b.stats.vencidos - a.stats.vencidos || a.name.localeCompare(b.name);
+  });
+  
+  // Aplicar filtro de busca
+  if (q) {
+    sortedResp = sortedResp.filter(function(item) {
+      return item.name.toLowerCase().includes(q);
+    });
+  }
+  
+  // ========== RENDERIZAR CARDS (Dashboard de Responsáveis) ==========
+  var grid = document.getElementById('resp-grid');
+  if (grid) {
+    if (sortedResp.length === 0) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--tx3)">' +
+        '<div style="font-size:36px;margin-bottom:8px">👤</div>' +
+        '<div style="font-weight:600;margin-bottom:4px">Nenhum responsável encontrado</div>' +
+        '<div style="font-size:11px">Cadastre equipamentos com responsáveis para visualizar o dashboard</div>' +
+        '</div>';
+    } else {
+      grid.innerHTML = sortedResp.map(function(item) {
+        var m = item.stats;
+        var name = _safeEsc(item.name);
+        var total = m.total;
+        var vencidos = m.vencidos;
+        var d30 = m.d30;
+        var ok = m.ok;
+        
+        // Calcular índice de saúde
+        var saude = total > 0 ? Math.round(((total - vencidos) / total) * 100) : 0;
+        var sc = saude >= 80 ? 'var(--green)' : (saude >= 50 ? 'var(--orange)' : 'var(--red)');
+        
+        // Porcentagens para a barra
+        var pV = total > 0 ? Math.round((vencidos / total) * 100) : 0;
+        var p3 = total > 0 ? Math.round((d30 / total) * 100) : 0;
+        var pO = 100 - pV - p3;
+        
+        return [
+          '<div class="kpi kpi-resp" style="cursor:pointer;position:relative;overflow:hidden" data-responsavel-name="' + name.replace(/&quot;/g, '&#34;') + '" title="Clique para filtrar por este responsável">',
+            '<div class="kpi-header">',
+              '<span class="kpi-lbl" style="font-size:12px;font-weight:700">' + name + '</span>',
+              '<span style="font-size:20px;font-weight:800;font-family:var(--mono);color:' + sc + '">' + saude + '%</span>',
+            '</div>',
+            '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;margin:6px 0">',
+              '<span style="color:var(--red)">⛔ ' + vencidos + ' venc.</span>',
+              '<span style="color:var(--orange)">⏰ ' + d30 + ' &lt;30d</span>',
+              '<span style="color:var(--green)">✓ ' + ok + ' OK</span>',
+              '<span style="color:var(--tx3)">Total: ' + total + '</span>',
+            '</div>',
+            '<div style="height:5px;border-radius:3px;overflow:hidden;display:flex;margin-top:4px">',
+              (pV > 0 ? '<div style="width:' + pV + '%;background:var(--red)"></div>' : ''),
+              (p3 > 0 ? '<div style="width:' + p3 + '%;background:var(--orange)"></div>' : ''),
+              (pO > 0 ? '<div style="width:' + pO + '%;background:var(--green)"></div>' : ''),
+            '</div>',
+          '</div>'
+        ].join('');
+      }).join('');
+    }
+  }
+  
+  // ========== RENDERIZAR TABELA DE RANKING ==========
+  var tbody = document.getElementById('resp-ranking-tbody');
+  if (tbody) {
+    if (sortedResp.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="padding:32px;text-align:center;color:var(--tx3)">Nenhum dado encontrado</td></tr>';
+    } else {
+      tbody.innerHTML = sortedResp.map(function(item, idx) {
+        var m = item.stats;
+        var name = _safeEsc(item.name);
+        var total = m.total;
+        var vencidos = m.vencidos;
+        var d30 = m.d30;
+        var ok = m.ok;
+        var saude = total > 0 ? Math.round(((total - vencidos) / total) * 100) : 0;
+        var sc = saude >= 80 ? 'var(--green)' : (saude >= 50 ? 'var(--orange)' : 'var(--red)');
+        var pV = total > 0 ? Math.round((vencidos / total) * 100) : 0;
+        var p3 = total > 0 ? Math.round((d30 / total) * 100) : 0;
+        var pO = 100 - pV - p3;
+        
+        return [
+          '<tr class="resp-rank-row" style="border-bottom:1px solid var(--bdr);cursor:pointer" data-responsavel-name="' + name.replace(/&quot;/g, '&#34;') + '" title="Clique para filtrar por este responsável">',
+            '<td style="padding:7px 8px;font-family:var(--mono);color:var(--tx3)">' + (idx + 1) + '</td>',
+            '<td style="padding:7px 8px;font-weight:600;color:var(--tx)">' + name + '</td>',
+            '<td style="padding:7px 8px;text-align:center;font-family:var(--mono);font-weight:700">' + total + '</td>',
+            '<td style="padding:7px 8px;text-align:center;color:' + (vencidos > 0 ? 'var(--red)' : 'var(--tx3)') + ';font-weight:' + (vencidos > 0 ? '700' : '400') + '">' + vencidos + '</td>',
+            '<td style="padding:7px 8px;text-align:center;color:' + (d30 > 0 ? 'var(--orange)' : 'var(--tx3)') + '">' + d30 + '</td>',
+            '<td style="padding:7px 8px;text-align:center;color:var(--green)">' + ok + '</td>',
+            '<td style="padding:7px 8px;text-align:center;font-weight:800;font-family:var(--mono);color:' + sc + '">' + saude + '%</td>',
+            '<td style="padding:7px 8px;min-width:80px"><div style="display:flex;height:6px;border-radius:3px;overflow:hidden">' +
+              (pV > 0 ? '<div style="width:' + pV + '%;background:var(--red)"></div>' : '') +
+              (p3 > 0 ? '<div style="width:' + p3 + '%;background:var(--orange)"></div>' : '') +
+              (pO > 0 ? '<div style="width:' + pO + '%;background:var(--green)"></div>' : '') +
+            '</div></td>',
+          '</tr>'
+        ].join('');
+      }).join('');
+    }
+  }
+  
+  // ========== CONFIGURAR EVENT LISTENER DE CLIQUE ==========
+  // Remover listener antigo se existir (evita duplicação)
+  document.removeEventListener('click', window._respGridClickHandler);
+  // Adicionar novo listener
+  document.addEventListener('click', window._respGridClickHandler);
+};
+
+// Exportar dados dos responsáveis como CSV
+window.exportRespCSV = function() {
+  if (typeof DB === 'undefined' || !DB.length) {
+    if (typeof showToast === 'function') showToast('Nenhum dado para exportar', 'err');
+    return;
+  }
+  
+  var hdr = ['Responsavel', 'Total', 'Vencidos', '30d', '90d', 'OK', 'SemData', 'IndiceSaude'];
+  var respMap = {};
+  
+  for (var i = 0; i < DB.length; i++) {
+    var r = DB[i];
+    var resp = (r.responsavel || '(Não definido)').trim();
+    if (!respMap[resp]) respMap[resp] = { total: 0, vencidos: 0, d30: 0, d90: 0, ok: 0, semData: 0 };
+    var m = respMap[resp];
+    m.total++;
+    
+    var d = r.dias_vencer;
+    if (d === null || d === undefined) m.semData++;
+    else if (d < 0) m.vencidos++;
+    else if (d <= 30) m.d30++;
+    else if (d <= 90) m.d90++;
     else m.ok++;
+  }
+  
+  var lines = [hdr.join(';')];
+  Object.keys(respMap).forEach(function(name) {
+    var m = respMap[name];
+    var saude = m.total ? Math.round(((m.total - m.vencidos) / m.total) * 100) : 0;
+    lines.push([
+      '"' + name.replace(/"/g, '""') + '"',
+      m.total,
+      m.vencidos,
+      m.d30,
+      m.d90,
+      m.ok,
+      m.semData,
+      saude + '%'
+    ].join(';'));
   });
-  var lines=[hdr.join(';')];
-  Object.entries(respMap).forEach(function(e){
-    var n=e[0],m=e[1],s=m.total?Math.round((m.total-m.vencidos)/m.total*100):0;
-    lines.push([n,m.total,m.vencidos,m.d30,m.d90,m.ok,m.semData,s+'%'].map(function(v){return '"'+String(v||'').replace(/"/g,'""')+'"';}).join(';'));
-  });
-  var blob=new Blob(['﻿'+lines.join('
-')],{type:'text/csv;charset=utf-8'});
-  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='responsaveis_'+new Date().toISOString().slice(0,10)+'.csv';a.click();URL.revokeObjectURL(a.href);
+  
+  var blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'responsaveis_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  
+  if (typeof showToast === 'function') showToast('✅ Exportado: ' + Object.keys(respMap).length + ' responsáveis');
 };
 
 // ── [v19 MELHORIA 9] Hook showTab to render new tabs ─────────────
@@ -13618,44 +13675,56 @@ window.exportRespCSV = function() {
   if (typeof _origShowTab !== 'function') return;
   window.showTab = function(id) {
     _origShowTab.apply(this, arguments);
-    if (id === 'auditoria') { renderAuditLog(); _updateAuditKPIs(); }
-    if (id === 'responsaveis') renderRespDashboard();
+    if (id === 'auditoria') {
+      setTimeout(function() {
+        if (typeof renderAuditLog === 'function') renderAuditLog();
+        _updateAuditKPIs();
+      }, 100);
+    }
+    if (id === 'responsaveis') {
+      setTimeout(function() {
+        if (typeof renderRespDashboard === 'function') renderRespDashboard();
+      }, 100);
+    }
   };
 })();
 
 // ── [v19 MELHORIA 10] Spotlight keyboard shortcut in header ───────
-// Add Cmd+K hint to header
 document.addEventListener('DOMContentLoaded', function() {
   setTimeout(function() {
     var hdrR = document.querySelector('.hdr-r');
     if (hdrR && !document.getElementById('spotlight-trigger-btn')) {
       var spBtn = document.createElement('button');
-      spBtn.id = 'spotlight-trigger-btn'; // [v20 FIX] prevent duplicate
+      spBtn.id = 'spotlight-trigger-btn';
       spBtn.className = 'btn-ic';
       spBtn.title = 'Busca rápida (Ctrl+K)';
       spBtn.innerHTML = '&#128269; <span style="font-size:9px;font-family:var(--mono);color:var(--tx3)">Ctrl+K</span>';
-      spBtn.onclick = function() { window._openSpotlight && window._openSpotlight(); };
+      spBtn.onclick = function() { if (typeof window._openSpotlight === 'function') window._openSpotlight(); };
       hdrR.insertBefore(spBtn, hdrR.firstChild);
     }
     // Re-render audit log in case there are stored entries
-    renderAuditLog && renderAuditLog();
-    _updateAuditKPIs && _updateAuditKPIs();
+    if (typeof renderAuditLog === 'function') renderAuditLog();
+    if (typeof _updateAuditKPIs === 'function') _updateAuditKPIs();
+    // Inicializar dashboard de responsáveis se a aba estiver visível
+    if (document.getElementById('tab-responsaveis') && document.getElementById('tab-responsaveis').classList.contains('on')) {
+      if (typeof renderRespDashboard === 'function') setTimeout(renderRespDashboard, 500);
+    }
   }, 800);
 });
 
 // ── [v19 MELHORIA: Sticky filter banner] ─────────────────────────
-// Also wire clearF to reset table search
 (function() {
   var _origClearF = window.clearF;
   if (typeof _origClearF !== 'function') return;
   window.clearF = function() {
     _origClearF.apply(this, arguments);
-    // Also reset table view search
     var ftSearch = document.getElementById('ft-search');
     if (ftSearch) ftSearch.value = '';
   };
 })();
 
+// Registrar logs de inicialização para debug
+console.log('[v37] Sistema de Responsáveis inicializado e corrigido');
 </script>
 <!-- ================================================== -->
 <!-- CÓDIGO PARA ATUALIZAR QR AUTOMATICAMENTE          -->
