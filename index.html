@@ -13759,16 +13759,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   console.log('[QR] Sistema de atualização automática ativado!');
 });
-</script>
-
 // ═══════════════════════════════════════════════════════════════════════
 // [PATCH v37-AUDIT-FIX] Correção da Aba Auditoria v19
-// ═══════════════════════════════════════════════════════════════════════
-// Problemas corrigidos:
-// 1. v12 grava em 'r_v12_audit_logs' mas v19 lê de 'rochling_audit_v19'
-// 2. Logs antigos do v12 não apareciam na aba v19
-// 3. Mensagem de estado vazio truncada
-// 4. Sincronização bidirecional garantida
 // ═══════════════════════════════════════════════════════════════════════
 (function() {
   'use strict';
@@ -13776,7 +13768,6 @@ document.addEventListener('DOMContentLoaded', function() {
   var V12_KEY = 'r_v12_audit_logs';
   var V19_KEY = 'rochling_audit_v19';
 
-  // ── 1. Converter logs v12 → formato v19 ─────────────────────────────
   function _syncV12ToV19() {
     try {
       var v12raw = localStorage.getItem(V12_KEY);
@@ -13784,16 +13775,12 @@ document.addEventListener('DOMContentLoaded', function() {
       var v12logs = JSON.parse(v12raw);
       if (!v12logs.length) return;
 
-      // Ler logs v19 atuais
       var v19raw = localStorage.getItem(V19_KEY);
       var v19logs = v19raw ? JSON.parse(v19raw) : [];
 
-      // Mapear tipos v12 → v19
       var typeMap = { add:'add', edit:'edit', del:'del', import:'import', export:'export' };
 
-      // Converter cada log v12 para formato v19
       var converted = v12logs.map(function(e) {
-        // Converter timestamp v12 "YYYY-MM-DD HH:MM:SS" → ISO
         var ts = e.ts;
         if (ts && ts.includes(' ')) {
           ts = ts.replace(' ', 'T') + '.000Z';
@@ -13807,8 +13794,6 @@ document.addEventListener('DOMContentLoaded', function() {
         };
       });
 
-      // Merge: adicionar logs v12 que ainda não existem no v19
-      // (evita duplicatas comparando ts + action + code)
       var existingKeys = {};
       v19logs.forEach(function(e) {
         existingKeys[(e.ts||'') + '|' + (e.action||'') + '|' + (e.code||'')] = true;
@@ -13824,13 +13809,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
 
-      // Limitar a 500
       if (v19logs.length > 500) v19logs = v19logs.slice(0, 500);
 
-      // Salvar
       localStorage.setItem(V19_KEY, JSON.stringify(v19logs));
 
-      // Atualizar variável global _AUDIT_LOG
       if (typeof _AUDIT_LOG !== 'undefined') {
         _AUDIT_LOG.length = 0;
         v19logs.forEach(function(e) { _AUDIT_LOG.push(e); });
@@ -13844,14 +13826,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // ── 2. Corrigir mensagem truncada no renderAuditLog ───────────────
   var _origRenderAuditLog = window.renderAuditLog;
   window.renderAuditLog = function() {
     var q = ((document.getElementById('audit-search')||{}).value||'').toLowerCase();
     var tbody = document.getElementById('audit-tbody');
     if (!tbody) return;
 
-    // Garantir que _AUDIT_LOG está sincronizado
     if (typeof _AUDIT_LOG !== 'undefined' && _AUDIT_LOG.length === 0) {
       _syncV12ToV19();
     }
@@ -13896,7 +13876,6 @@ document.addEventListener('DOMContentLoaded', function() {
     _updateAuditKPIs();
   };
 
-  // ── 3. Sincronizar no carregamento da página ────────────────────────
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
       setTimeout(_syncV12ToV19, 300);
@@ -13915,7 +13894,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   console.log('[AUDIT FIX] Patch v37-AUDIT-FIX carregado.');
 })();
+// ═══════════════════════════════════════════════════════════════════════
 
+</script>
 
 </body>
 </html>
