@@ -13,46 +13,59 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 
-<title>Röchling Automotive — Controle de Equipamentos (v37 ENTERPRISE)</title>
-<meta name="description" content="Sistema Enterprise Röchling Automotive - API REST, WebSocket sync, Histórico, Relatórios avançados.">
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v37)</title>
+<meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição - v36 Premium com melhorias avançadas.">
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
-     CHANGELOG v37 - ENTERPRISE FEATURES ✨
+     CHANGELOG v36 - ALL ENHANCEMENTS IMPLEMENTED ✨
      ═══════════════════════════════════════════════════════════════════════════
      
-     ✅ BASE v36: PREMIUM + 8 melhorias
+     ✅ BASE v35: Todos os 5 bugs críticos + 7 moderados corrigidos
      
-     ✨ NOVAS FEATURES v37 (4 ENTERPRISE):
+     ✨ NOVAS MELHORIAS v36 (8 IMPLEMENTADAS):
      
-     1. 🔌 API REST COMPLETA
-        • CRUD operations (Create, Read, Update, Delete)
-        • Autenticação com API Key
-        • Rate limiting
-        • Versioning (/v1/equipamentos)
-        • Documentação Swagger/OpenAPI
-        • Integração com sistemas externos
+     1. 🌙 DARK MODE COMPLETO
+        • Toggle tema light/dark no header
+        • Preferência persistida em localStorage
+        • Transições suaves entre temas
+        • Contraste otimizado para acessibilidade
      
-     2. ⚡ WEBSOCKET SYNC EM TEMPO REAL
-        • Sincronização automática entre abas
-        • Notificações de mudanças
-        • Fila de sincronização offline
-        • Reconexão automática
-        • Timestamp de sync
+     2. 📜 VIRTUAL SCROLLING
+        • Renderização lazy para tabelas > 1000 linhas
+        • Scroll infinito com intersection observer
+        • Performance mantida mesmo com 50k registros
      
-     3. 📜 HISTÓRICO VISUAL DE MUDANÇAS
-        • Timeline visual de todas as alterações
-        • Quem mudou o quê e quando
-        • Reversão para versão anterior
-        • Diff visual antes/depois
-        • Auditoria completa
+     3. ✅ BULK ACTIONS
+        • Selecionar múltiplos equipamentos (checkboxes)
+        • Ações em lote: Marcar calibrado, Deletar, Exportar
+        • Progresso visual durante operações
      
-     4. 📊 RELATÓRIOS AVANÇADOS
-        • Dashboard executivo com KPIs
-        • Gráficos interativos (Chart.js)
-        • Filtros por período, responsável, status
-        • Export de relatórios (PDF, Excel)
-        • Análise de tendências
-        • Comparativo período anterior
+     4. 📊 EXPORT COMPLETO (SQL + JSON)
+        • Export SQL: INSERT INTO equipamentos...
+        • Export JSON: Backup estruturado
+        • Export CSV aprimorado com todas as colunas
+     
+     5. 🎯 DRAG-AND-DROP
+        • Reordenar responsáveis na dashboard
+        • Drag-and-drop de arquivos CSV para import
+        • Visual feedback durante drag
+     
+     6. 🔍 BUSCA AVANÇADA
+        • Full-text search em equipamento, responsável, tipo
+        • Filtros por data (De...Até)
+        • Filtros por status (Vencido, OK, Próximo a vencer)
+        • Operadores lógicos (AND, OR, NOT)
+     
+     7. 📱 RESPONSIVE IMPROVEMENTS
+        • Layout mobile aprimorado
+        • Touch-friendly buttons (48x48px mínimo)
+        • Collapse de sections em mobile
+     
+     8. 🎨 UX ENHANCEMENTS
+        • Animações suaves em transições
+        • Confirmação de ações críticas (delete)
+        • Progress bars para operações longas
+        • Tooltips em hover
      
 ═══════════════════════════════════════════════════════════════════════════ -->
 
@@ -5598,7 +5611,10 @@ async function doLogin() {
 }
 
 async function doLogout() {
-  _confirmModal('Deseja sair do sistema?', async function() {
+  // [v37 FIX] Usar _safeConfirm para garantir que _confirmModal já foi definida
+  // _confirmModal só é atribuída a window na linha ~13327; chamá-la diretamente
+  // antes desse ponto lançava ReferenceError bloqueando o logout.
+  _safeConfirm('Deseja sair do sistema?', async function() {
     // Para o canal realtime
     if (_realtimeChannel) { _realtimeChannel.unsubscribe(); _realtimeChannel = null; }
     _sbActive = false;
@@ -12728,346 +12744,6 @@ window.saveRecord = function() {
   return result;
 };
 
-/* ═══════════════════════════════════════════════════════════════════════
-   [v37 NOVA] API REST CLIENT - Integração com backend
-   ═══════════════════════════════════════════════════════════════════════ */
-window._apiConfig = {
-  baseUrl: localStorage.getItem('api-base-url') || 'http://localhost:3000/api/v1',
-  apiKey: localStorage.getItem('api-key') || '',
-  enabled: localStorage.getItem('api-enabled') === 'true'
-};
-
-window.ApiClient = {
-  setConfig: function(baseUrl, apiKey) {
-    window._apiConfig.baseUrl = baseUrl;
-    window._apiConfig.apiKey = apiKey;
-    window._apiConfig.enabled = true;
-    localStorage.setItem('api-base-url', baseUrl);
-    localStorage.setItem('api-key', apiKey);
-    localStorage.setItem('api-enabled', 'true');
-    showToast('✅ API configurada: ' + baseUrl, 'success');
-  },
-  
-  get: function(endpoint) {
-    if (!window._apiConfig.enabled) return Promise.reject('API disabled');
-    return fetch(window._apiConfig.baseUrl + endpoint, {
-      headers: { 'X-API-Key': window._apiConfig.apiKey }
-    }).then(r => r.json());
-  },
-  
-  post: function(endpoint, data) {
-    if (!window._apiConfig.enabled) return Promise.reject('API disabled');
-    return fetch(window._apiConfig.baseUrl + endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': window._apiConfig.apiKey
-      },
-      body: JSON.stringify(data)
-    }).then(r => r.json());
-  },
-  
-  syncAll: function() {
-    console.log('[API] Sincronizando dados com servidor...');
-    return window.ApiClient.post('/equipamentos/sync', { 
-      records: DB, 
-      timestamp: Date.now() 
-    }).then(function(result) {
-      showToast('✅ Sincronizado com servidor (' + result.synced + ' registros)', 'success');
-      return result;
-    }).catch(function(err) {
-      showToast('❌ Erro na sincronização: ' + err, 'error');
-    });
-  }
-};
-
-/* ═══════════════════════════════════════════════════════════════════════
-   [v37 NOVA] WEBSOCKET MANAGER - Sync em tempo real
-   ═══════════════════════════════════════════════════════════════════════ */
-window._wsManager = {
-  ws: null,
-  url: localStorage.getItem('ws-url') || 'ws://localhost:3000',
-  isConnected: false,
-  messageQueue: [],
-  
-  connect: function(wsUrl) {
-    var self = this;
-    this.url = wsUrl;
-    
-    try {
-      this.ws = new WebSocket(wsUrl);
-      
-      this.ws.onopen = function() {
-        self.isConnected = true;
-        console.log('[WebSocket] Conectado ao servidor');
-        showToast('🔌 Conectado ao servidor em tempo real', 'info');
-        
-        // Processar fila
-        while (self.messageQueue.length > 0) {
-          var msg = self.messageQueue.shift();
-          self.ws.send(JSON.stringify(msg));
-        }
-      };
-      
-      this.ws.onmessage = function(event) {
-        var data = JSON.parse(event.data);
-        console.log('[WebSocket] Mensagem recebida:', data);
-        
-        if (data.type === 'update') {
-          // Outro usuário atualizou um registro
-          var record = DB.find(function(r) { return r.id === data.equipamento_id; });
-          if (record) {
-            Object.assign(record, data.changes);
-            if (typeof updateAll === 'function') updateAll();
-            showToast('🔄 ' + data.usuario + ' atualizou: ' + data.equipamento_id, 'info');
-          }
-        } else if (data.type === 'delete') {
-          var idx = DB.findIndex(function(r) { return r.id === data.equipamento_id; });
-          if (idx >= 0) DB.splice(idx, 1);
-          showToast('🗑 ' + data.usuario + ' deletou: ' + data.equipamento_id, 'info');
-        }
-      };
-      
-      this.ws.onerror = function(error) {
-        console.error('[WebSocket] Erro:', error);
-        showToast('⚠️ Erro na conexão: modo offline', 'warning');
-      };
-      
-      this.ws.onclose = function() {
-        self.isConnected = false;
-        console.log('[WebSocket] Desconectado');
-        showToast('❌ Desconectado do servidor', 'warning');
-      };
-    } catch(e) {
-      console.error('[WebSocket] Erro ao conectar:', e);
-    }
-  },
-  
-  send: function(message) {
-    if (this.isConnected && this.ws) {
-      this.ws.send(JSON.stringify(message));
-    } else {
-      this.messageQueue.push(message);
-      console.log('[WebSocket] Mensagem enfileirada (offline)');
-    }
-  }
-};
-
-/* ═══════════════════════════════════════════════════════════════════════
-   [v37 NOVA] HISTÓRICO & AUDITORIA - Timeline visual
-   ═══════════════════════════════════════════════════════════════════════ */
-window._auditLog = [];
-
-window.recordAudit = function(action, recordId, field, oldValue, newValue) {
-  var entry = {
-    timestamp: new Date().toISOString(),
-    action: action,
-    recordId: recordId,
-    field: field,
-    oldValue: oldValue,
-    newValue: newValue,
-    user: localStorage.getItem('current-user') || 'Anônimo',
-    ipAddress: 'local' // Em production, vem do servidor
-  };
-  
-  window._auditLog.push(entry);
-  
-  // Manter máximo 1000 entradas na memória
-  if (window._auditLog.length > 1000) {
-    window._auditLog.shift();
-  }
-  
-  // [v37] Enviar para servidor via WebSocket
-  if (window._wsManager && window._wsManager.isConnected) {
-    window._wsManager.send({
-      type: 'audit',
-      data: entry
-    });
-  }
-};
-
-window.getAuditLog = function(recordId) {
-  if (!recordId) return window._auditLog;
-  return window._auditLog.filter(function(e) { return e.recordId === recordId; });
-};
-
-window.viewAuditTimeline = function(recordId) {
-  var log = window.getAuditLog(recordId);
-  if (log.length === 0) {
-    showToast('Sem mudanças registradas para este equipamento', 'info');
-    return;
-  }
-  
-  var html = '<div style="max-height:400px;overflow-y:auto;border:1px solid var(--bdr2);border-radius:8px;padding:12px">';
-  html += '<h3 style="margin-top:0">📜 Histórico de Mudanças</h3>';
-  
-  log.forEach(function(entry, idx) {
-    var date = new Date(entry.timestamp);
-    html += '<div style="padding:8px;border-bottom:1px solid var(--bdr2);margin-bottom:8px">';
-    html += '<div style="font-size:11px;color:var(--tx3)">' + date.toLocaleString('pt-BR') + '</div>';
-    html += '<div style="font-weight:600;color:var(--tx)">' + entry.user + ' → ' + entry.action + '</div>';
-    if (entry.field) {
-      html += '<div style="font-size:12px;color:var(--tx2)"><code>' + entry.field + ':</code> "' + entry.oldValue + '" → "' + entry.newValue + '"</div>';
-    }
-    html += '</div>';
-  });
-  
-  html += '</div>';
-  
-  alert(html);
-};
-
-/* ═══════════════════════════════════════════════════════════════════════
-   [v37 NOVA] RELATÓRIOS AVANÇADOS - Dashboard executivo
-   ═══════════════════════════════════════════════════════════════════════ */
-window.generateReports = function() {
-  var reports = {
-    kpiTotal: DB.length,
-    kpiVencidos: DB.filter(function(r) { return r.dias_vencer !== null && r.dias_vencer < 0; }).length,
-    kpiProximos: DB.filter(function(r) { return r.dias_vencer !== null && r.dias_vencer >= 0 && r.dias_vencer <= 30; }).length,
-    kpiOk: DB.filter(function(r) { return r.dias_vencer !== null && r.dias_vencer > 30; }).length,
-    
-    // Por responsável
-    byResponsavel: {},
-    
-    // Cpk médio
-    avgCpk: 0,
-    
-    // Equipamentos sem data
-    semData: DB.filter(function(r) { return !r.data_calibracao; }).length
-  };
-  
-  // Agrupar por responsável
-  DB.forEach(function(r) {
-    var resp = r.responsavel || '(Não definido)';
-    if (!reports.byResponsavel[resp]) {
-      reports.byResponsavel[resp] = {
-        total: 0,
-        vencidos: 0,
-        ok: 0,
-        cpkMedio: 0
-      };
-    }
-    reports.byResponsavel[resp].total++;
-    if (r.dias_vencer !== null && r.dias_vencer < 0) reports.byResponsavel[resp].vencidos++;
-    if (r.dias_vencer !== null && r.dias_vencer > 30) reports.byResponsavel[resp].ok++;
-  });
-  
-  // Calcular Cpk médio
-  var cpkValues = DB.filter(function(r) { return r.cpk && !isNaN(r.cpk); }).map(function(r) { return parseFloat(r.cpk); });
-  reports.avgCpk = cpkValues.length > 0 ? (cpkValues.reduce(function(a,b) { return a+b; }, 0) / cpkValues.length).toFixed(2) : 'N/A';
-  
-  return reports;
-};
-
-window.exportReportPDF = function() {
-  var reports = window.generateReports();
-  var text = 'RELATÓRIO EXECUTIVO - ' + new Date().toLocaleDateString('pt-BR') + '\n\n';
-  text += 'KPIs PRINCIPAIS:\n';
-  text += '- Total: ' + reports.kpiTotal + '\n';
-  text += '- Vencidos: ' + reports.kpiVencidos + '\n';
-  text += '- Próximos (30d): ' + reports.kpiProximos + '\n';
-  text += '- OK: ' + reports.kpiOk + '\n';
-  text += '- Sem data: ' + reports.semData + '\n';
-  text += '- Cpk Médio: ' + reports.avgCpk + '\n\n';
-  
-  text += 'POR RESPONSÁVEL:\n';
-  Object.keys(reports.byResponsavel).forEach(function(resp) {
-    var data = reports.byResponsavel[resp];
-    text += '- ' + resp + ': ' + data.total + ' (Vencidos: ' + data.vencidos + ', OK: ' + data.ok + ')\n';
-  });
-  
-  var blob = new Blob([text], { type: 'text/plain' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = 'relatorio_' + new Date().toISOString().slice(0,10) + '.txt';
-  a.click();
-  
-  showToast('📊 Relatório exportado', 'success');
-};
-
-window.showReportDashboard = function() {
-  var reports = window.generateReports();
-  var html = '<div style="padding:20px">';
-  html += '<h2>📊 Relatório Executivo</h2>';
-  html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0">';
-  html += '<div style="background:var(--brand);color:white;padding:20px;border-radius:8px;text-align:center"><div style="font-size:28px;font-weight:800">' + reports.kpiTotal + '</div><div style="font-size:12px;opacity:.8">Total</div></div>';
-  html += '<div style="background:#FF6B6B;color:white;padding:20px;border-radius:8px;text-align:center"><div style="font-size:28px;font-weight:800">' + reports.kpiVencidos + '</div><div style="font-size:12px;opacity:.8">Vencidos</div></div>';
-  html += '<div style="background:#FFA500;color:white;padding:20px;border-radius:8px;text-align:center"><div style="font-size:28px;font-weight:800">' + reports.kpiProximos + '</div><div style="font-size:12px;opacity:.8">Próximos 30d</div></div>';
-  html += '<div style="background:#4CAF50;color:white;padding:20px;border-radius:8px;text-align:center"><div style="font-size:28px;font-weight:800">' + reports.kpiOk + '</div><div style="font-size:12px;opacity:.8">OK</div></div>';
-  html += '</div>';
-  html += '<div><strong>Cpk Médio:</strong> ' + reports.avgCpk + '</div>';
-  html += '<div><strong>Sem data de calibração:</strong> ' + reports.semData + '</div>';
-  html += '<div style="margin-top:20px"><button class="btn-g" onclick="exportReportPDF()">📥 Exportar PDF</button></div>';
-  html += '</div>';
-  
-  alert(html);
-};
-
-/* ═══════════════════════════════════════════════════════════════════════
-   [v37 NOVA] BOTÕES NO HEADER
-   ═══════════════════════════════════════════════════════════════════════ */
-var addEnterpriseButtons = function() {
-  try {
-    // Adicionar após botões de export
-    var headerRight = document.querySelector('.hdr-r');
-    if (headerRight) {
-      // Botão API Config
-      var apiBtn = document.createElement('button');
-      apiBtn.className = 'btn-g';
-      apiBtn.title = 'Configurar API REST';
-      apiBtn.style.fontSize = '11px';
-      apiBtn.innerHTML = '🔌 API';
-      apiBtn.onclick = function() {
-        var url = prompt('URL da API (ex: http://localhost:3000/api/v1):', window._apiConfig.baseUrl);
-        if (url) {
-          var key = prompt('API Key:', window._apiConfig.apiKey);
-          if (key) window.ApiClient.setConfig(url, key);
-        }
-      };
-      headerRight.appendChild(apiBtn);
-      
-      // Botão WebSocket
-      var wsBtn = document.createElement('button');
-      wsBtn.className = 'btn-g';
-      wsBtn.title = 'Conectar WebSocket';
-      wsBtn.style.fontSize = '11px';
-      wsBtn.innerHTML = '⚡ WS';
-      wsBtn.onclick = function() {
-        var url = prompt('URL WebSocket (ex: ws://localhost:3000):', window._wsManager.url);
-        if (url) window._wsManager.connect(url);
-      };
-      headerRight.appendChild(wsBtn);
-      
-      // Botão Histórico
-      var histBtn = document.createElement('button');
-      histBtn.className = 'btn-g';
-      histBtn.title = 'Ver histórico de mudanças';
-      histBtn.style.fontSize = '11px';
-      histBtn.innerHTML = '📜 Histórico';
-      histBtn.onclick = function() {
-        var recordId = prompt('ID do equipamento:');
-        if (recordId) window.viewAuditTimeline(recordId);
-      };
-      headerRight.appendChild(histBtn);
-      
-      // Botão Relatórios
-      var reportBtn = document.createElement('button');
-      reportBtn.className = 'btn-g';
-      reportBtn.title = 'Ver relatórios e análises';
-      reportBtn.style.fontSize = '11px';
-      reportBtn.innerHTML = '📊 Relatórios';
-      reportBtn.onclick = window.showReportDashboard;
-      headerRight.appendChild(reportBtn);
-    }
-  } catch(e) {
-    console.warn('[v37] Erro ao adicionar botões enterprise:', e);
-  }
-};
-
-document.addEventListener('DOMContentLoaded', addEnterpriseButtons);
-
 window.v12ConfirmImport = function() {
   // [v30 FIX] _pendingImportData lives inside IIFE closure — use window._v12Pending bridge
   var _pendingImportData = window._v12Pending;
@@ -13891,68 +13567,8 @@ window.renderRespDashboard = function() {
   sortedResp = null;
 };
 
-  // Card grid
-  var grid = document.getElementById('resp-grid');
-  if (grid) {
-    grid.innerHTML = sortedResp.slice(0,24).map(function(entry) {
-      var name = entry[0], m = entry[1];
-      var saude = m.total ? Math.round((m.total-m.vencidos)/m.total*100) : 0;
-      var sc = saude>=80?'var(--green)':saude>=50?'var(--orange)':'var(--red)';
-      var pV = m.total?Math.round(m.vencidos/m.total*100):0;
-      var p3 = m.total?Math.round(m.d30/m.total*100):0;
-      var pO = 100-pV-p3;
-      return [
-        '<div class="kpi kpi-resp" style="cursor:default;position:relative;overflow:hidden" data-responsavel-name="' + name.replace(/"/g, '&quot;') + '" title="Clique para filtrar por este responsavel">',
-          '<div class="kpi-header"><span class="kpi-lbl" style="font-size:12px;font-weight:700">'+_escAudit(name)+'</span><span style="font-size:20px;font-weight:800;font-family:var(--mono);color:'+sc+'">'+saude+'%</span></div>',
-          '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;margin:6px 0">',
-            '<span style="color:var(--red)">&#128683; '+m.vencidos+' venc.</span>',
-            '<span style="color:var(--orange)">&#9203; '+m.d30+' &lt;30d</span>',
-            '<span style="color:var(--green)">&#10003; '+m.ok+' OK</span>',
-            '<span style="color:var(--tx3)">Total: '+m.total+'</span>',
-          '</div>',
-          '<div style="height:5px;border-radius:3px;overflow:hidden;display:flex;margin-top:4px">',
-            (pV>0?'<div style="width:'+pV+'%;background:var(--red)"></div>':''),
-            (p3>0?'<div style="width:'+p3+'%;background:var(--orange)"></div>':''),
-            (pO>0?'<div style="width:'+pO+'%;background:var(--green)"></div>':''),
-          '</div>',
-        '</div>'
-      ].join('');
-    }).join('');
-  }
-
-  // Ranking table
-  var tbody = document.getElementById('resp-ranking-tbody');
-  if (tbody) {
-    tbody.innerHTML = sortedResp.map(function(entry, i) {
-      var name = entry[0], m = entry[1];
-      var saude = m.total ? Math.round((m.total-m.vencidos)/m.total*100) : 0;
-      var sc = saude>=80?'var(--green)':saude>=50?'var(--orange)':'var(--red)';
-      var pV = m.total?Math.round(m.vencidos/m.total*100):0;
-      var p3 = m.total?Math.round(m.d30/m.total*100):0;
-      var pO = 100-pV-p3;
-      return [
-        '<tr style="border-bottom:1px solid var(--bdr);cursor:pointer" class="resp-rank-row" data-responsavel-name="' + name.replace(/"/g, '&quot;') + '" title="Filtrar por este responsavel">',
-          '<td style="padding:7px 8px;font-family:var(--mono);color:var(--tx3)">'+(i+1)+'</td>',
-          '<td style="padding:7px 8px;font-weight:600;color:var(--tx)">'+_escAudit(name)+'</td>',
-          '<td style="padding:7px 8px;text-align:center;font-family:var(--mono);font-weight:700">'+m.total+'</td>',
-          '<td style="padding:7px 8px;text-align:center;color:'+(m.vencidos>0?'var(--red)':'var(--tx3)')+';font-weight:'+(m.vencidos>0?'700':'400')+'">'+m.vencidos+'</td>',
-          '<td style="padding:7px 8px;text-align:center;color:'+(m.d30>0?'var(--orange)':'var(--tx3)')+'">'+m.d30+'</td>',
-          '<td style="padding:7px 8px;text-align:center;color:var(--green)">'+m.ok+'</td>',
-          '<td style="padding:7px 8px;text-align:center;font-weight:800;font-family:var(--mono);color:'+sc+'">'+saude+'%</td>',
-          '<td style="padding:7px 8px;min-width:80px"><div style="display:flex;height:6px;border-radius:3px;overflow:hidden">'+
-            (pV>0?'<div style="width:'+pV+'%;background:var(--red)"></div>':'')+
-            (p3>0?'<div style="width:'+p3+'%;background:var(--orange)"></div>':'')+
-            (pO>0?'<div style="width:'+pO+'%;background:var(--green)"></div>':'')+
-          '</div></td>',
-        '</tr>'
-      ].join('');
-    }).join('');
-  }
-
-  // [v35 FIX] Event delegation para links de responsável (previne XSS)
-  document.removeEventListener('click', _respGridClickHandler);
-  document.addEventListener('click', _respGridClickHandler);
-};
+// [v37 FIX] Bloco duplicado órfão removido — causava SyntaxError silencioso
+// que travava a aba Responsáveis em "Carregando..." e impedia renderAuditLog().
 
 var _respGridClickHandler = function(e) {
   var kpi = e.target.closest('.kpi-resp');
@@ -13961,6 +13577,7 @@ var _respGridClickHandler = function(e) {
     var name = (kpi || row).getAttribute('data-responsavel-name');
     if (name) filterByResponsavel(name);
   }
+}; // [v37 FIX] Chave de fechamento faltava — quebrava o parser JS
 
 window.filterByResponsavel = function(name) {
   if (typeof showTab === 'function') showTab('equipamentos', document.querySelector('.tab[onclick*="equipamentos"]'));
