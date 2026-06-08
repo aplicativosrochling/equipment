@@ -10423,44 +10423,53 @@ function printQrLabel() {
   // ✅ FIX v25: Abre a janela AQUI (dentro do gesto do usuário) para evitar bloqueio de popup
   const _printWin = window.open('', '_blank', 'width=750,height=650');
   if (!_printWin) { alert('Permita popups para imprimir etiquetas.'); return; }
-  _printWin.document.write('<html><head><title>Aguarde...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial;color:#555;font-size:14px">⏳ Gerando etiqueta...</body></html>');
+  // [v41 FIX] fecha o stream APÓS o loading p/ que o segundo document.write
+  // (no _doPrint) REINICIE o documento em vez de anexar. Sem close(), Safari/Chrome
+  // mantêm o stream aberto e o segundo write concatena, resultando em popup com
+  // "⏳ Gerando etiqueta..." + etiqueta colada do lado e window.print() falhando.
+  _printWin.document.open();
+  _printWin.document.write('<!DOCTYPE html><html><head><title>Aguarde...</title><meta charset="UTF-8"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:Arial;color:#555;font-size:14px">⏳ Gerando etiqueta...</body></html>');
+  _printWin.document.close();
 
-  // Gera QR em alta resolução para impressão com polling robusto
+  // Gera QR em alta resolução para impressão (compatível iOS Safari)
   const payload = _buildQrPayload(r);  // ✅ QR com dados ATUAIS
   const _qrGenBox = document.createElement('div');
   _qrGenBox.style.cssText = 'position:absolute;left:-9999px;top:-9999px';
   document.body.appendChild(_qrGenBox);
+  var _qrInst = null;
   try {
-    new QRCode(_qrGenBox, { text: payload, width: 400, height: 400,
+    _qrInst = new QRCode(_qrGenBox, { text: payload, width: 400, height: 400,
                             correctLevel: QRCode.CorrectLevel.M });
   } catch(e) { console.error('QR gen error:', e); }
 
-  // [v38 FIX] Polling robusto: aguarda o canvas ter pixels reais (não branco)
-  // Evita QR em branco causado pelo setTimeout fixo de 80ms ser insuficiente
+  // [v40 FIX] Polling baseado em canvas pronto (não em pixel da quiet zone).
+  // Bug anterior: lia pixel (2,2) que cai dentro da quiet zone branca (4 módulos),
+  // então 'ready' nunca virava true e a etiqueta saía com imagem quebrada.
   var _qrPollAttempts = 0;
-  var _qrMaxAttempts  = 40; // 40 × 50ms = 2s máx.
+  var _qrMaxAttempts  = 60; // 60 × 50ms = 3s máx.
   function _waitForQrCanvas() {
     _qrPollAttempts++;
-    var _qrCanvas = _qrGenBox.querySelector('canvas');
-    var ready = false;
-    if (_qrCanvas && _qrCanvas.width > 0) {
-      // Verifica se o canvas tem conteúdo real (pixel não é branco puro)
-      try {
-        var ctx = _qrCanvas.getContext('2d');
-        var px  = ctx.getImageData(2, 2, 1, 1).data; // pixel no canto superior
-        ready = (px[0] < 250 || px[1] < 250 || px[2] < 250); // pelo menos 1 canal escuro
-      } catch(e) { ready = true; } // CORS fallback: assume pronto
-    }
+    var _qrCanvas = (_qrInst && _qrInst._canvas) || _qrGenBox.querySelector('canvas');
+    var ready = !!(_qrCanvas && _qrCanvas.width > 0 && _qrCanvas.height > 0);
+
     if (ready || _qrPollAttempts >= _qrMaxAttempts) {
-      var qrSrc = (_qrCanvas && ready) ? _qrCanvas.toDataURL('image/png') : '';
-      if (!ready) console.warn('[QR] Canvas não ficou pronto após ' + _qrMaxAttempts + ' tentativas');
-      document.body.removeChild(_qrGenBox);
+      var qrSrc = '';
+      if (ready) {
+        try { qrSrc = _qrCanvas.toDataURL('image/png'); } catch(e){ console.warn('[QR] toDataURL falhou:', e); }
+      }
+      // Fallback iOS: se canvas falhou, tenta o <img> embutido pelo shim
+      if (!qrSrc) {
+        var fbImg = _qrGenBox.querySelector('img');
+        if (fbImg && fbImg.src && fbImg.src.indexOf('data:') === 0) qrSrc = fbImg.src;
+      }
+      if (!qrSrc) console.warn('[QR] Não foi possível gerar dataURL após ' + _qrPollAttempts + ' tentativas');
+      try { document.body.removeChild(_qrGenBox); } catch(_){}
       _doPrint(qrSrc, _printWin);
     } else {
       setTimeout(_waitForQrCanvas, 50);
     }
   }
-  setTimeout(_waitForQrCanvas, 30); // primeiro check após 30ms
+  setTimeout(_waitForQrCanvas, 50);
 
   function _doPrint(qrSrc, win) {
 
@@ -10570,6 +10579,8 @@ function printQrLabel() {
   // ✅ FIX v25: Usa a janela já aberta (evita bloqueio de popup)
   if (!win || win.closed) { alert('A janela de impressão foi fechada. Tente novamente.'); return; }
 
+  // [v41 FIX] reabre o documento — garante substituição total do "Gerando etiqueta..."
+  try { win.document.open(); } catch(_){}
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Etiqueta — ${r.id||r.descricao}</title>
 <style>
