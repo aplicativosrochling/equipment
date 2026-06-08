@@ -550,61 +550,287 @@ window.clearAdvancedSearch = function() {
 };
 </script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<!-- qrcodejs — biblioteca QR robusta e testada (mesma API: new QRCode(el, opts)) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     QR CODE v39 — iOS/Safari/WebKit SAFE IMPLEMENTATION
+     ═══════════════════════════════════════════════════════════════════════
+     PROBLEMA CORRIGIDO: qrcodejs (davidshimjs) detecta Android/iOS e renderiza
+     <table> em vez de <canvas>. O wrapper antigo fazia
+     el.querySelector('canvas').toDataURL() → retornava '' no iPhone,
+     gerando QR em branco / não escaneável no Safari.
+     SOLUÇÃO: usa qrcode-generator (kazuhikoarase) que SEMPRE produz
+     canvas/SVG/dataURL consistentes em qualquer plataforma (iOS, Safari,
+     Chrome iOS, WebView). Mantém 100% da API antiga: new QRCode(el, opts)
+     + .toDataURL() — sem quebrar nada no restante do sistema.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- Fallback CDN caso a primeira falhe (Safari às vezes bloqueia CDNs) -->
 <script>
-// Wrapper: garante compatibilidade com o .toDataURL() usado no restante do código.
-// CORREÇÃO v7: limite de 20 tentativas (2s máx.) para evitar loop infinito se CDN atrasar ou falhar.
-// Executa após DOMContentLoaded se o script ainda não tiver carregado (fallback de segurança).
+window.__qrLibReady = (typeof qrcode === 'function');
+if (!window.__qrLibReady) {
+  document.write('<scr'+'ipt src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js" crossorigin="anonymous"><\/scr'+'ipt>');
+}
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   QRCodeManager — Enterprise iOS-safe QR generator
+   ═══════════════════════════════════════════════════════════════════════ */
 (function(){
-  var MAX_RETRIES = 20; // 20 × 100 ms = 2 s
-  var _retries = 0;
+  'use strict';
 
-  function _installQRWrapper() {
-    if (typeof window.QRCode === 'undefined') {
-      _retries++;
-      if (_retries > MAX_RETRIES) {
-        console.error('[QR] qrcode.min.js não carregou em ' + (MAX_RETRIES * 100) + ' ms — QR Code indisponível. Verifique a CDN ou o bloqueio de proxy.');
-        return; // Para definitivamente — sem loop infinito
-      }
-      setTimeout(_installQRWrapper, 100);
-      return;
+  // ── Detecção de plataforma ────────────────────────────────────────────
+  var UA = navigator.userAgent || '';
+  window.isIOS = function(){
+    return /iPad|iPhone|iPod/.test(UA) ||
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  };
+  window.isSafari = function(){
+    return /^((?!chrome|android|crios|fxios).)*safari/i.test(UA);
+  };
+  window.isWebKit = function(){
+    return /AppleWebKit/i.test(UA) && !/Edge/i.test(UA);
+  };
+
+  // ── Normalização de URL (absoluta + UTF-8 safe) ───────────────────────
+  window.normalizeURL = function(url){
+    try {
+      if (!url) return '';
+      url = String(url).trim();
+      // Já é absoluta?
+      if (/^https?:\/\//i.test(url)) return url;
+      // Origin + path
+      var origin = window.location.origin || ('https://' + window.location.host);
+      if (url.charAt(0) === '/') return origin + url;
+      return origin + '/' + url;
+    } catch(e){ return url; }
+  };
+
+  // ── Abrir URL com fallback seguro para iOS Safari ─────────────────────
+  window.safeOpenURL = function(url){
+    try {
+      url = window.normalizeURL(url);
+      if (!url) return false;
+      // iOS Safari bloqueia window.open fora do gesto do usuário.
+      // Usar location.assign quando possível, ou criar um <a> e clicar.
+      var a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function(){ try{ document.body.removeChild(a); }catch(_){} }, 100);
+      return true;
+    } catch(e){
+      try { window.location.href = url; return true; } catch(_){ return false; }
     }
-    var _OrigQR = window.QRCode;
-    // Evita dupla instalação
-    if (_OrigQR._wrapped) return;
-    window.QRCode = function(el, opts) {
-      if (typeof opts === 'string') opts = { text: opts };
-      var w = opts.width  || 220;
-      var h = opts.height || opts.width || 220;
-      var instance = new _OrigQR(el, {
-        text:         opts.text || '',
-        width:        w,
-        height:       h,
-        colorDark:    opts.colorDark  || '#000000',
-        colorLight:   opts.colorLight || '#ffffff',
-        correctLevel: _OrigQR.CorrectLevel.M
-      });
-      // Expõe .toDataURL() — qrcodejs cria um <canvas> dentro do el
-      this.toDataURL = function(type) {
-        var canvas = el.querySelector('canvas');
-        return canvas ? canvas.toDataURL(type || 'image/png') : '';
-      };
-      this._instance = instance;
-    };
-    window.QRCode.CorrectLevel = _OrigQR.CorrectLevel;
-    window.QRCode._wrapped = true;
+  };
+
+  // ── Espera lib QR estar pronta ────────────────────────────────────────
+  function _waitForLib(cb){
+    var tries = 0;
+    (function poll(){
+      if (typeof window.qrcode === 'function') return cb(true);
+      if (tries++ > 40) return cb(false); // 4s
+      setTimeout(poll, 100);
+    })();
   }
 
-  // Tenta instalar imediatamente (script síncrono sem defer).
-  // Se o DOM ainda não tiver carregado, usa DOMContentLoaded como barreira adicional.
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _installQRWrapper);
-  } else {
-    _installQRWrapper();
+  // ── Núcleo: gera QR em canvas de alta resolução (retina-safe) ─────────
+  function _renderQRCanvas(text, sizePx, colorDark, colorLight){
+    // Type 0 = auto, ECC level 'M' (consistente com restante do sistema)
+    var qr;
+    // qrcode-generator falha se texto > capacidade — sobe nível até caber
+    var typeNumber = 0;
+    try {
+      qr = window.qrcode(typeNumber, 'M');
+      qr.addData(String(text || ''));
+      qr.make();
+    } catch(e){
+      // Fallback nível L (maior capacidade)
+      qr = window.qrcode(typeNumber, 'L');
+      qr.addData(String(text || ''));
+      qr.make();
+    }
+
+    var moduleCount = qr.getModuleCount();
+    var dpr = Math.max(1, window.devicePixelRatio || 1);
+    // Quiet zone = 4 módulos (padrão QR)
+    var quiet = 4;
+    var totalModules = moduleCount + quiet * 2;
+    // Tamanho de tile inteiro p/ evitar borrão sub-pixel no Retina
+    var tileSize = Math.max(2, Math.floor((sizePx * dpr) / totalModules));
+    var canvasPx = tileSize * totalModules;
+
+    var canvas = document.createElement('canvas');
+    canvas.width = canvasPx;
+    canvas.height = canvasPx;
+    canvas.style.width  = sizePx + 'px';
+    canvas.style.height = sizePx + 'px';
+    canvas.style.imageRendering = 'pixelated';
+    canvas.setAttribute('aria-label', 'QR Code');
+    canvas.setAttribute('role', 'img');
+
+    var ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    // Fundo
+    ctx.fillStyle = colorLight || '#ffffff';
+    ctx.fillRect(0, 0, canvasPx, canvasPx);
+    // Módulos
+    ctx.fillStyle = colorDark || '#000000';
+    for (var r = 0; r < moduleCount; r++){
+      for (var c = 0; c < moduleCount; c++){
+        if (qr.isDark(r, c)){
+          ctx.fillRect((c + quiet) * tileSize, (r + quiet) * tileSize, tileSize, tileSize);
+        }
+      }
+    }
+    return canvas;
   }
+
+  // ── API compatível com o código existente: new QRCode(el, opts) ──────
+  function QRCodeShim(el, opts){
+    if (!(this instanceof QRCodeShim)) return new QRCodeShim(el, opts);
+    if (typeof opts === 'string') opts = { text: opts };
+    opts = opts || {};
+    var size = opts.width || opts.height || 220;
+    var text = opts.text || '';
+    var dark = opts.colorDark  || '#000000';
+    var light= opts.colorLight || '#ffffff';
+
+    this._el   = el;
+    this._opts = opts;
+    this._canvas = null;
+
+    var self = this;
+
+    function _doRender(){
+      try {
+        if (!el) return;
+        // Limpa container
+        try { el.innerHTML = ''; } catch(_){}
+        var canvas = _renderQRCanvas(text, size, dark, light);
+        self._canvas = canvas;
+        el.appendChild(canvas);
+
+        // Fallback IMG iOS-safe (Safari às vezes não escaneia canvas em screenshot/AirPrint)
+        // Adiciona <img> oculto com dataURL como backup acessível
+        try {
+          var img = document.createElement('img');
+          img.alt = 'QR Code: ' + text;
+          img.src = canvas.toDataURL('image/png');
+          img.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none';
+          img.setAttribute('aria-hidden', 'true');
+          el.appendChild(img);
+          self._imgFallback = img;
+        } catch(_){}
+      } catch(err){
+        console.error('[QRCodeManager] Falha ao renderizar QR:', err);
+        try {
+          el.innerHTML = '<div style="padding:12px;color:#c00;font:12px sans-serif;text-align:center">' +
+            'QR indisponível.<br><a href="' + window.normalizeURL(text) +
+            '" target="_blank" rel="noopener" style="color:#06c">Abrir link</a></div>';
+        } catch(_){}
+      }
+    }
+
+    // Garante render APÓS layout — evita timing bug iOS
+    if (typeof window.qrcode !== 'function') {
+      _waitForLib(function(ok){
+        if (!ok) {
+          console.error('[QRCodeManager] qrcode-generator não carregou.');
+          try {
+            el.innerHTML = '<div style="padding:12px;color:#c00;font:12px sans-serif">Lib QR indisponível</div>';
+          } catch(_){}
+          return;
+        }
+        requestAnimationFrame(_doRender);
+      });
+    } else {
+      // double rAF p/ esperar layout estabilizar (iOS-safe)
+      requestAnimationFrame(function(){ requestAnimationFrame(_doRender); });
+    }
+
+    // .toDataURL() compatível com o código antigo
+    this.toDataURL = function(type){
+      try {
+        if (this._canvas) return this._canvas.toDataURL(type || 'image/png');
+        // Síncrono: tenta gerar na hora se canvas não existe ainda
+        if (typeof window.qrcode === 'function'){
+          var c = _renderQRCanvas(text, size, dark, light);
+          this._canvas = c;
+          return c.toDataURL(type || 'image/png');
+        }
+      } catch(e){ console.warn('[QRCodeManager] toDataURL falhou:', e); }
+      return '';
+    };
+
+    // Helper: aguarda canvas estar pronto (Promise) — útil p/ impressão iOS
+    this.ready = function(timeoutMs){
+      var t0 = Date.now();
+      var to = timeoutMs || 2500;
+      return new Promise(function(resolve){
+        (function check(){
+          if (self._canvas && self._canvas.width > 0) return resolve(self._canvas);
+          if (Date.now() - t0 > to) return resolve(self._canvas || null);
+          setTimeout(check, 40);
+        })();
+      });
+    };
+  }
+
+  // CorrectLevel stub (compatibilidade com chamadas antigas)
+  QRCodeShim.CorrectLevel = { L:'L', M:'M', Q:'Q', H:'H' };
+
+  // Substitui window.QRCode (mantém API legada usada em todo o sistema)
+  window.QRCode = QRCodeShim;
+  window.QRCodeManager = {
+    create: function(el, opts){ return new QRCodeShim(el, opts); },
+    isIOS: window.isIOS,
+    isSafari: window.isSafari,
+    normalizeURL: window.normalizeURL,
+    safeOpenURL: window.safeOpenURL
+  };
+
+  console.log('[QRCodeManager] v39 inicializado | iOS=' + window.isIOS() + ' Safari=' + window.isSafari() + ' DPR=' + (window.devicePixelRatio||1));
 })();
 </script>
+
+<!-- CSS iOS-safe para QR: evita borrão, zoom-bug, overflow, dark mode -->
+<style>
+[id="qr-canvas-box"], [id^="qr-canvas-"]{
+  -webkit-user-select:none; user-select:none;
+  -webkit-touch-callout:none;
+  background:#fff !important;
+  color-scheme: light;
+}
+[id="qr-canvas-box"] canvas, [id^="qr-canvas-"] canvas,
+[id="qr-canvas-box"] img,    [id^="qr-canvas-"] img{
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  max-width:100%;
+  height:auto;
+  display:block;
+}
+@media print{
+  [id="qr-canvas-box"] canvas, [id^="qr-canvas-"] canvas{
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
+.qr-action-btn{
+  padding:8px 14px;border-radius:7px;border:1px solid var(--bdr2,#ccc);
+  background:var(--surf2,#f5f5f5);color:var(--tx,#222);font-size:12px;font-weight:600;
+  cursor:pointer;font-family:inherit;touch-action:manipulation;
+  -webkit-tap-highlight-color:rgba(0,0,0,.1);
+  min-height:38px; /* alvo de toque iOS */
+}
+.qr-action-btn:active{ transform:scale(.97); }
+</style>
 <!-- ── FONTS: 2 famílias apenas — Inter (UI) + JetBrains Mono (dados técnicos/IDs) ── -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -10087,6 +10313,13 @@ function _qrModalHTML() {
     </select>
   </div>
 
+  <!-- Ações iOS-safe (Abrir / Copiar / Compartilhar) -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;justify-content:center">
+    <button type="button" class="qr-action-btn" onclick="qrModalOpenLink()" aria-label="Abrir link do QR Code">🔗 Abrir Link</button>
+    <button type="button" class="qr-action-btn" onclick="qrModalCopyLink(this)" aria-label="Copiar link do QR Code">📋 Copiar Link</button>
+    <button type="button" class="qr-action-btn" onclick="qrModalShareLink()" aria-label="Compartilhar link do QR Code">📤 Compartilhar</button>
+  </div>
+
   <div style="display:flex;gap:8px;justify-content:flex-end">
     <button onclick="closeQrModal()" style="padding:8px 18px;border-radius:7px;border:1px solid var(--bdr2);background:var(--surf2);color:var(--tx2);font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>
     <button onclick="printQrLabel()" style="padding:8px 18px;border-radius:7px;border:none;background:var(--brand);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">🖨️ Imprimir Etiqueta</button>
@@ -10094,6 +10327,66 @@ function _qrModalHTML() {
 </div>
 </div>`;
 }
+
+/* ── Ações iOS-safe do modal QR ──────────────────────────────────────── */
+function _qrCurrentPayload(){
+  try{
+    if(!_qrUID) return '';
+    var r = DB.find(function(x){ return x._uid === _qrUID; });
+    return r ? _buildQrPayload(r) : '';
+  }catch(_){ return ''; }
+}
+window.qrModalOpenLink = function(){
+  var url = _qrCurrentPayload();
+  if(!url){ if(typeof showToast==='function') showToast('Link indisponível','err'); return; }
+  window.safeOpenURL(url);
+};
+window.qrModalCopyLink = function(btn){
+  var url = _qrCurrentPayload();
+  if(!url) return;
+  var done = function(ok){
+    if(btn){
+      var orig = btn.innerHTML;
+      btn.innerHTML = ok ? '✅ Copiado!' : '❌ Falhou';
+      setTimeout(function(){ btn.innerHTML = orig; }, 1500);
+    }
+    if(typeof showToast==='function') showToast(ok?'Link copiado':'Falha ao copiar', ok?'ok':'err');
+  };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(function(){done(true);}, function(){
+        // fallback iOS antigo
+        _qrLegacyCopy(url, done);
+      });
+    } else { _qrLegacyCopy(url, done); }
+  }catch(e){ _qrLegacyCopy(url, done); }
+};
+function _qrLegacyCopy(text, cb){
+  try{
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText='position:fixed;top:0;left:0;opacity:0;font-size:16px'; // 16px evita zoom iOS
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    ta.setSelectionRange(0, text.length); // iOS
+    var ok = false;
+    try{ ok = document.execCommand('copy'); }catch(_){ ok=false; }
+    document.body.removeChild(ta);
+    cb(ok);
+  }catch(_){ cb(false); }
+}
+window.qrModalShareLink = function(){
+  var url = _qrCurrentPayload();
+  if(!url) return;
+  if(navigator.share){
+    navigator.share({ title:'Equipamento Röchling', text:'QR do equipamento', url:url })
+      .catch(function(e){ console.warn('[QR] share cancelado/erro:', e); });
+  } else {
+    // Fallback: copia + abre
+    window.qrModalCopyLink(null);
+    window.safeOpenURL(url);
+  }
+};
 
 let _qrSelectedSize = 'mini';
 
