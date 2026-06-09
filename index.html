@@ -665,10 +665,12 @@ window.clearAdvancedSearch = function() {
 </script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-<!-- [iOS QR FIX] Modern QRCode lib (SVG output, Safari-friendly) -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<!-- [iOS QR FIX v47] DUAS BIBLIOTECAS: Geração (qrcode.js) + Scanning (html5-qrcode) -->
 
-<!-- ✅ FIX v47: QR SCANNER REAL - Suporta câmera em iOS/Android/Desktop -->
+<!-- ✅ QRCode.js — GERAÇÃO de QR Code (SVG output, Safari-friendly) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<!-- ✅ html5-qrcode — SCANNER QR real (câmera em iOS/Android/Desktop) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 
 <script>
@@ -829,27 +831,111 @@ console.log('[QR Scanner FIX v47] ✅ Scanner QR real carregado (html5-qrcode + 
 </script>
 
 <script>
-// [iOS QR FIX] Função moderna que gera QR como SVG — compatível com iPhone/Safari
+// [iOS QR FIX v47] Função de GERAÇÃO de QR Code — compatível com iPhone/Safari
+// Usa QRCode.js (geração) + html5-qrcode (scanning)
+
 async function gerarQRCode(elementId, texto) {
   try {
-    const svg = await QRCode.toString(texto, {
-      type: 'svg',
-      width: 260,
-      margin: 2,
-      errorCorrectionLevel: 'H',
-      color: { dark: '#000000', light: '#FFFFFF' }
-    });
     const el = (typeof elementId === 'string')
       ? document.getElementById(elementId)
       : elementId;
-    if (el) el.innerHTML = svg;
-    console.log('QR SVG OK iPhone');
+    
+    if (!el) {
+      console.error('Elemento não encontrado:', elementId);
+      return;
+    }
+    
+    // Limpar elemento anterior
+    el.innerHTML = '';
+    
+    // Verificar se QRCode está disponível
+    if (typeof QRCode === 'undefined') {
+      console.error('[QR] Biblioteca QRCode.js não carregou. Tentando fallback...');
+      
+      // Fallback: gerar SVG simples
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="260" height="260" viewBox="0 0 260 260">
+          <rect width="260" height="260" fill="white"/>
+          <text x="130" y="130" text-anchor="middle" font-size="12" fill="red">
+            QR Error
+          </text>
+        </svg>
+      `;
+      el.innerHTML = svg;
+      return;
+    }
+    
+    // ✅ GERAÇÃO: Usar QRCode.js (biblioteca QRCode.js do CDN)
+    // Sintaxe: new QRCode(element, options)
+    // Nota: QRCode.js desenha direto no DOM, não retorna string
+    
+    // Limpar QRCode anterior se existir
+    el.innerHTML = '';
+    
+    // Criar novo QRCode
+    new QRCode(el, {
+      text: texto,
+      width: 260,
+      height: 260,
+      colorDark: '#000000',
+      colorLight: '#FFFFFF',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+    
+    console.log('[QR] ✅ QRCode.js gerado com sucesso (SVG renderizado)');
   } catch (err) {
-    console.error('Erro QR:', err);
+    console.error('[QR] Erro ao gerar QR:', err.message || err);
+    
+    // Fallback: elemento de erro
+    const el = (typeof elementId === 'string')
+      ? document.getElementById(elementId)
+      : elementId;
+    
+    if (el) {
+      el.innerHTML = `
+        <div style="width:260px;height:260px;background:#fff;border:1px solid #ccc;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:11px;color:red;text-align:center;padding:10px">
+          ❌ Erro ao gerar QR<br>
+          <span style="font-size:9px;color:#999;margin-top:4px">${err.message}</span>
+        </div>
+      `;
+    }
   }
 }
+
 window.gerarQRCode = gerarQRCode;
-console.log('[QR iOS FIX v47] qrcode@1.5.3 carregada (SVG mode + scanner real)');
+console.log('[QR iOS FIX v47] ✅ QRCode.js carregada (geração) + html5-qrcode (scanner)');
+</script>
+
+<!-- ✅ FIX v47: Verificar carregamento das bibliotecas QR -->
+<script>
+(function() {
+  var checkInterval = setInterval(function() {
+    var qrcodeLoaded = typeof QRCode !== 'undefined';
+    var html5qrcodeLoaded = typeof Html5Qrcode !== 'undefined';
+    
+    if (qrcodeLoaded && html5qrcodeLoaded) {
+      clearInterval(checkInterval);
+      console.log('[QR Libs Check] ✅ Ambas as bibliotecas carregaram com sucesso');
+      console.log('  • QRCode.js (geração): LOADED');
+      console.log('  • html5-qrcode (scanner): LOADED');
+    } else {
+      console.warn('[QR Libs Check] ⏳ Aguardando bibliotecas...');
+      console.log('  • QRCode.js:', qrcodeLoaded ? '✅ OK' : '⏳ Loading');
+      console.log('  • html5-qrcode:', html5qrcodeLoaded ? '✅ OK' : '⏳ Loading');
+    }
+  }, 500);
+  
+  // Timeout após 5s
+  setTimeout(function() {
+    clearInterval(checkInterval);
+    if (typeof QRCode === 'undefined') {
+      console.error('[QR Libs] ❌ QRCode.js não carregou. Fallback ativado.');
+    }
+    if (typeof Html5Qrcode === 'undefined') {
+      console.error('[QR Libs] ❌ html5-qrcode não carregou. Scanner desativado.');
+    }
+  }, 5000);
+})();
 </script>
 
 
