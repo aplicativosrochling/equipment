@@ -683,41 +683,160 @@ window.clearAdvancedSearch = function() {
 var _qrScanner = null;
 
 /**
- * Iniciar scanner de câmera com constraints em cascata para iOS
+ * ✅ FIX v47.2: Iniciar scanner de câmera com melhor tratamento de erros para iOS
  */
 async function initQrScanner(elementId) {
   try {
+    // Verificar se elemento existe
+    const container = document.getElementById(elementId);
+    if (!container) {
+      console.error('[QR Scanner] Elemento não encontrado:', elementId);
+      showQrUploadFallback();
+      return;
+    }
+    
+    // ✅ CRITICAL: Verificar HTTPS (required para getUserMedia)
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+      console.warn('[QR Scanner] ⚠️ HTTPS obrigatório para câmera');
+      _showToast('⚠️ HTTPS é necessário para acessar a câmera', 'warning');
+      showQrUploadFallback();
+      return;
+    }
+    
+    // Verificar disponibilidade de APIs
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.error('[QR Scanner] getUserMedia não suportado');
+      _showToast('❌ Seu navegador não suporta acesso à câmera', 'error');
+      showQrUploadFallback();
+      return;
+    }
+    
+    if (typeof Html5Qrcode === 'undefined') {
+      console.error('[QR Scanner] Biblioteca html5-qrcode não carregou');
+      _showToast('❌ Biblioteca de scanner não carregou', 'error');
+      showQrUploadFallback();
+      return;
+    }
+    
+    // Parar scanner anterior se existir
+    if (_qrScanner) {
+      try {
+        await _qrScanner.stop();
+      } catch (e) {
+        console.warn('[QR Scanner] Erro ao parar scanner anterior:', e);
+      }
+      _qrScanner = null;
+    }
+    
+    // ✅ Criar scanner com elemento limpo
     _qrScanner = new Html5Qrcode(elementId);
     
-    // Constraints em cascata: facingMode em ordem de preferência
-    const constraints = {
-      facingMode: { ideal: 'environment' }, // Câmera traseira (padrão)
-      aspectRatio: { ideal: 1 }
+    // Configurações padrão do leitor
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 }
     };
+
+    // Função interna para iniciar com tratamento específico para iPhone/Safari
+    const startScanning = (constraints) => {
+      _qrScanner.start(
+        constraints,
+        config,
+        (decodedText, result) => {
+          console.log('[QR Scanner] ✅ Código detectado:', decodedText.substring(0, 50) + '...');
+          handleQrScanned(decodedText);
+          stopQrScanner();
+        },
+        (errorMessage) => {
+          if (window._DEV) console.log('[QR Scanner] Tentando detectar...', errorMessage);
+        }
+      )
+      .then(() => {
+        console.log('[iOS FIX] Aplicando correções estritas de vídeo inline para iPhone...');
+        // Localiza o elemento <video> gerado dinamicamente e força as propriedades inline exigidas pelo iOS
+        const videoElem = document.querySelector('#' + elementId + ' video');
+        if (videoElem) {
+          videoElem.setAttribute('playsinline', 'true');
+          videoElem.setAttribute('webkit-playsinline', 'true');
+          videoElem.setAttribute('muted', 'true');
+          videoElem.play().catch(e => console.log('[iOS FIX] Erro ao dar play manual:', e));
+        }
+        _showToast('📱 Câmera ativa - aponte para QR Code', 'info');
+      })
+      .catch((err) => {
+        console.error('[QR Scanner] Falha na tentativa inicial:', err);
+        
+        // SE FALHAR NO IPHONE (Cenário onde o Safari recusa o facingMode ideal de primeira)
+        if (constraints.facingMode) {
+          console.log('[iOS FIX] Tentando fallback mapeando deviceId traseiro manualmente...');
+          Html5Qrcode.getCameras().then(devices => {
+            if (devices && devices.length > 0) {
+              // Pega a última câmera da lista (Normalmente é a lente principal traseira no iPhone)
+              const backCamera = devices[devices.length - 1];
+              startScanning({ deviceId: { exact: backCamera.id } });
+            } else {
+              showQrUploadFallback();
+            }
+          }).catch(e => {
+            console.error(e);
+            showQrUploadFallback();
+          });
+        } else {
+          showQrUploadFallback();
+        }
+      });
+    };
+
+    // Dispara a tentativa principal usando a câmera traseira padrão
+    startScanning({ facingMode: 'environment' });
     
-    await _qrScanner.start(
-      { facingMode: 'environment' }, // Tentativa 1: ambiente (padrão)
-      {
-        fps: 10,
-        qrbox: { width: 250, height: 250 }
-      },
-      (decodedText, result) => {
-        console.log('[QR Scanner] Código detectado:', decodedText);
-        handleQrScanned(decodedText);
-        stopQrScanner();
-      },
-      (errorMessage) => {
-        // Erros de detecção normais são silenciosos
-        if (window._DEV) console.log('[QR Scanner] Tentando detectar...', errorMessage);
-      }
-    );
-    
-    console.log('[QR Scanner] ✅ Câmera iniciada (iOS compatível)');
   } catch (err) {
-    console.error('[QR Scanner] ❌ Erro ao iniciar câmera:', err.message);
+    console.error('[QR Scanner] ❌ Erro detalhado:', {
+      name: err.name,
+      message: err.message,
+      code: err.code,
+      toString: err.toString()
+    });
     
-    // Fallback automático para upload de imagem
-    showQrUploadFallback();
+    // ✅ FIX v47.2: Identificar tipo de erro específico
+    let userMessage = '❌ Erro ao acessar câmera';
+    let suggestion = '';
+    
+    if (err.name === 'NotAllowedError' || err.message.includes('Permission denied')) {
+      userMessage = '❌ Permissão de câmera negada';
+      suggestion = 'Verifique as permissões do navegador para este site (Configurações → Câmera)';
+      console.warn('[QR Scanner] Permissão bloqueada. Instruções para iOS:');
+      console.warn('  1. Abrir Configurações → Safari');
+      console.warn('  2. Procurar por "Câmera" → Permitir');
+      console.warn('  3. Recarregar página');
+    } 
+    else if (err.name === 'NotFoundError' || err.message.includes('No camera')) {
+      userMessage = '❌ Nenhuma câmera encontrada';
+      suggestion = 'Seu dispositivo pode não ter câmera, ou ela está em uso';
+    } 
+    else if (err.name === 'NotSupportedError' || err.message.includes('not supported')) {
+      userMessage = '❌ Câmera não suportada neste navegador';
+      suggestion = 'Tente em Safari (iOS) ou Chrome (Android)';
+    }
+    else if (err.name === 'NotReadableError') {
+      userMessage = '❌ Câmera está em uso';
+      suggestion = 'Feche outros apps que possam estar usando a câmera';
+    }
+    else if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+      userMessage = '❌ HTTPS necessário para câmera';
+      suggestion = 'Este site deve estar em HTTPS para acessar a câmera';
+    }
+    
+    console.error('[QR Scanner] ' + userMessage);
+    if (suggestion) console.error('[QR Scanner] Sugestão: ' + suggestion);
+    
+    // Mostrar toast com erro e sugestão
+    _showToast(userMessage + (suggestion ? '. ' + suggestion : ''), 'error');
+    
+    // Oferecer fallback
+    setTimeout(() => {
+      showQrUploadFallback();
+    }, 500);
   }
 }
 
