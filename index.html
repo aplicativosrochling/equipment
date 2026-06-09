@@ -622,7 +622,7 @@ window.clearAdvancedSearch = function() {
 </script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-<!-- [v41 DEFINITIVO] QR Code — Google Charts API (INSTANTÂNEO, sem CDN/timeout) -->
+<!-- [v42 FINAL] QR Code — QR Server API (sem CDN local, funciona em file://) -->
 <script>
 window.QRCode = function(el, opts) {
   if (typeof opts === 'string') opts = { text: opts };
@@ -632,15 +632,24 @@ window.QRCode = function(el, opts) {
   var w = opts.width || 220;
   var h = opts.height || w;
   
-  // 🚀 Google Charts QR API — renderiza INSTANTANEAMENTE em iOS/Android/Desktop
-  // Sem dependência de CDN, sem polling, sem timeout
+  // 🚀 QR Server API — renderiza instantaneamente, funciona em file://
   var encoded = encodeURIComponent(text);
   var img = document.createElement('img');
-  img.src = 'https://chart.googleapis.com/chart?chs=' + w + 'x' + h + '&chd=D:' + encoded + '&cht=qr&choe=UTF-8';
+  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=' + w + 'x' + h + '&data=' + encoded;
   img.style.width = w + 'px';
   img.style.height = h + 'px';
   img.style.display = 'block';
   img.style.margin = '0 auto';
+  img.alt = 'QR Code';
+  
+  // Fallback em caso de erro
+  img.onerror = function() {
+    console.warn('[QR] Erro ao carregar QR — usando SVG fallback');
+    var div = document.createElement('div');
+    div.style.cssText = 'width:' + w + 'px;height:' + h + 'px;background:#f0f0f0;border:2px dashed #999;display:flex;align-items:center;justify-content:center;font-size:10px;color:#666;padding:10px;box-sizing:border-box;text-align:center;';
+    div.textContent = 'QR: ' + text.substring(0, 25) + (text.length > 25 ? '...' : '');
+    if (el && el.parentElement) el.parentElement.replaceChild(div, el);
+  };
   
   if (el && el.nodeType) {
     el.innerHTML = '';
@@ -651,7 +660,7 @@ window.QRCode = function(el, opts) {
 };
 
 window.QRCode.CorrectLevel = { L: 1, M: 0, Q: 3, H: 2 };
-console.log('[QR v41] Google Charts QR — INSTANTÂNEO, pronto em <100ms');
+console.log('[QR v42] QR Server API — funciona em file:// + online');
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
