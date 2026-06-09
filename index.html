@@ -622,46 +622,64 @@ window.clearAdvancedSearch = function() {
 </script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-<!-- [v42 FINAL] QR Code — QR Server API (sem CDN local, funciona em file://) -->
-<script>
-window.QRCode = function(el, opts) {
-  if (typeof opts === 'string') opts = { text: opts };
-  opts = opts || {};
-  
-  var text = opts.text || '';
-  var w = opts.width || 220;
-  var h = opts.height || w;
-  
-  // 🚀 QR Server API — renderiza instantaneamente, funciona em file://
-  var encoded = encodeURIComponent(text);
-  var img = document.createElement('img');
-  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=' + w + 'x' + h + '&data=' + encoded;
-  img.style.width = w + 'px';
-  img.style.height = h + 'px';
-  img.style.display = 'block';
-  img.style.margin = '0 auto';
-  img.alt = 'QR Code';
-  
-  // Fallback em caso de erro
-  img.onerror = function() {
-    console.warn('[QR] Erro ao carregar QR — usando SVG fallback');
-    var div = document.createElement('div');
-    div.style.cssText = 'width:' + w + 'px;height:' + h + 'px;background:#f0f0f0;border:2px dashed #999;display:flex;align-items:center;justify-content:center;font-size:10px;color:#666;padding:10px;box-sizing:border-box;text-align:center;';
-    div.textContent = 'QR: ' + text.substring(0, 25) + (text.length > 25 ? '...' : '');
-    if (el && el.parentElement) el.parentElement.replaceChild(div, el);
-  };
-  
-  if (el && el.nodeType) {
-    el.innerHTML = '';
-    el.appendChild(img);
-  }
-  
-  this.toDataURL = function() { return img.src; };
-};
+<!-- [v46 FINAL] QR Code — CDN qrcode.js + fallback SVG Google Charts -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-window.QRCode.CorrectLevel = { L: 1, M: 0, Q: 3, H: 2 };
-console.log('[QR v42] QR Server API — funciona em file:// + online');
+<script>
+// [v46] Fallback garantido se CDN falhar
+(function() {
+  var qrLoaded = false;
+  
+  // Verificar se qrcode.js carregou
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      if (typeof window.QRCode === 'undefined') {
+        console.warn('[QR] qrcode.js não carregou — usando fallback Google Charts');
+        setupQRFallback();
+      } else {
+        qrLoaded = true;
+        console.log('[QR] qrcode.js ✅ carregada');
+      }
+    }, 1000);
+  });
+  
+  function setupQRFallback() {
+    window.QRCode = function(eleId, opts) {
+      if (typeof opts === 'string') opts = { text: opts };
+      opts = opts || {};
+      
+      var elementId = eleId;
+      if (typeof eleId === 'object' && eleId.id) {
+        elementId = eleId.id;
+      }
+      
+      var text = opts.text || '';
+      var w = opts.width || 220;
+      var encoded = encodeURIComponent(text);
+      
+      var el = document.getElementById(elementId);
+      if (el) {
+        var img = document.createElement('img');
+        img.src = 'https://chart.googleapis.com/chart?chs=' + w + 'x' + w + '&chd=D:' + encoded + '&cht=qr&choe=UTF-8';
+        img.style.width = w + 'px';
+        img.style.height = w + 'px';
+        img.style.display = 'block';
+        img.style.margin = '0 auto';
+        
+        el.innerHTML = '';
+        el.appendChild(img);
+        
+        console.log('[QR v46] ✅ Google Charts QR renderizado');
+      }
+    };
+    window.QRCode.CorrectLevel = { L: 1, M: 0, Q: 3, H: 2 };
+  }
+})();
+
+console.log('[QR v46] Primary: qrcode.js CDN | Fallback: Google Charts');
 </script>
+
+
 
 <!-- ═══════════════════════════════════════════════════════════════════════
 <script>
@@ -672,6 +690,51 @@ console.log('[QR v42] QR Server API — funciona em file:// + online');
   var MAX_RETRIES = 20; // 20 × 100 ms = 2 s
   var _retries = 0;
 
+  function _installQRWrapper() {
+    if (typeof window.QRCode === 'undefined') {
+      _retries++;
+      if (_retries > MAX_RETRIES) {
+        console.error('[QR] qrcode.min.js não carregou em ' + (MAX_RETRIES * 100) + ' ms — QR Code indisponível. Verifique a CDN ou o bloqueio de proxy.');
+        return; // Para definitivamente — sem loop infinito
+      }
+      setTimeout(_installQRWrapper, 100);
+      return;
+    }
+    var _OrigQR = window.QRCode;
+    // Evita dupla instalação
+    if (_OrigQR._wrapped) return;
+    window.QRCode = function(el, opts) {
+      if (typeof opts === 'string') opts = { text: opts };
+      var w = opts.width  || 220;
+      var h = opts.height || opts.width || 220;
+      var instance = new _OrigQR(el, {
+        text:         opts.text || '',
+        width:        w,
+        height:       h,
+        colorDark:    opts.colorDark  || '#000000',
+        colorLight:   opts.colorLight || '#ffffff',
+        correctLevel: _OrigQR.CorrectLevel.M
+      });
+      // Expõe .toDataURL() — qrcodejs cria um <canvas> dentro do el
+      this.toDataURL = function(type) {
+        var canvas = el.querySelector('canvas');
+        return canvas ? canvas.toDataURL(type || 'image/png') : '';
+      };
+      this._instance = instance;
+    };
+    window.QRCode.CorrectLevel = _OrigQR.CorrectLevel;
+    window.QRCode._wrapped = true;
+  }
+
+  // Tenta instalar imediatamente (script síncrono sem defer).
+  // Se o DOM ainda não tiver carregado, usa DOMContentLoaded como barreira adicional.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _installQRWrapper);
+  } else {
+    _installQRWrapper();
+  }
+})();
+</script>
 <!-- ── FONTS: 2 famílias apenas — Inter (UI) + JetBrains Mono (dados técnicos/IDs) ── -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -10034,7 +10097,7 @@ function openQrModal(uid) {
   _DEV && console.log('[QR] URL gerada:', payload);
   
   try {
-    _qrInstance = new QRCode(qrBox, {
+    _qrInstance = new QRCode('qr-canvas-box', {
       text: payload,
       width: 220, height: 220,
       colorDark: '#000000', colorLight: '#ffffff',
