@@ -687,14 +687,13 @@ var _qrScanner = null;
  */
 async function initQrScanner(elementId) {
   try {
-    // Verificar se elemento existe
     const container = document.getElementById(elementId);
     if (!container) {
       console.error('[QR Scanner] Elemento não encontrado:', elementId);
       showQrUploadFallback();
       return;
     }
-    
+
     // ✅ CRITICAL: Verificar HTTPS (required para getUserMedia)
     if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
       console.warn('[QR Scanner] ⚠️ HTTPS obrigatório para câmera');
@@ -702,7 +701,7 @@ async function initQrScanner(elementId) {
       showQrUploadFallback();
       return;
     }
-    
+
     // Verificar disponibilidade de APIs
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       console.error('[QR Scanner] getUserMedia não suportado');
@@ -710,164 +709,230 @@ async function initQrScanner(elementId) {
       showQrUploadFallback();
       return;
     }
-    
+
     if (typeof Html5Qrcode === 'undefined') {
       console.error('[QR Scanner] Biblioteca html5-qrcode não carregou');
       _showToast('❌ Biblioteca de scanner não carregou', 'error');
       showQrUploadFallback();
       return;
     }
-    
-    // Parar scanner anterior se existir
+
+    // ✅ FIX #1: Destruir scanner anterior completamente (evita NotReadableError)
     if (_qrScanner) {
       try {
         await _qrScanner.stop();
+        await _qrScanner.clear();
       } catch (e) {
         console.warn('[QR Scanner] Erro ao parar scanner anterior:', e);
       }
       _qrScanner = null;
     }
-    
-    // ✅ Criar scanner com elemento limpo
-    _qrScanner = new Html5Qrcode(elementId);
-    
-    // Configurações padrão do leitor
-    const config = {
-      fps: 10,
-      qrbox: { width: 250, height: 250 }
+
+    // ✅ FIX #2: Limpar DOM completamente antes de reiniciar
+    container.innerHTML = '';
+
+    // ✅ FIX #3: Criar elemento video com playsinline (CRÍTICO para iOS)
+    const videoElem = document.createElement('video');
+    videoElem.id = 'qr-video-' + Date.now();
+    videoElem.setAttribute('playsinline', 'true');
+    videoElem.setAttribute('webkit-playsinline', 'true');
+    videoElem.setAttribute('muted', 'true');
+    videoElem.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:8px;';
+    container.appendChild(videoElem);
+
+    // ✅ FIX #4: Criar scanner com configuração iOS-safe
+    _qrScanner = new Html5Qrcode(videoElem.id);
+
+    // ✅ FIX #5: Constraints simplificadas para Safari (sem {ideal:...})
+    const cameraConfig = {
+      facingMode: "environment"
     };
 
-    // Função interna para iniciar com tratamento específico para iPhone/Safari
-    const startScanning = (constraints) => {
-      _qrScanner.start(
-        constraints,
-        config,
-        (decodedText, result) => {
-          console.log('[QR Scanner] ✅ Código detectado:', decodedText.substring(0, 50) + '...');
-          handleQrScanned(decodedText);
-          stopQrScanner();
-        },
-        (errorMessage) => {
-          if (window._DEV) console.log('[QR Scanner] Tentando detectar...', errorMessage);
+    // ✅ FIX #6: Configuração de scanning otimizada para iOS
+    const scanConfig = {
+      fps: 5,
+      qrbox: { width: 200, height: 200 },
+      aspectRatio: 1.0,
+      disableFlip: false
+    };
+
+    console.log('[QR Scanner] Iniciando com configuração iOS-safe...');
+
+    // ✅ FIX #7: Timeout estendido para iOS (até 15s para inicializar)
+    const scanPromise = _qrScanner.start(
+      cameraConfig,
+      scanConfig,
+      (decodedText, result) => {
+        console.log('[QR Scanner] ✅ Código detectado:', decodedText.substring(0, 50) + '...');
+        handleQrScanned(decodedText);
+        stopQrScanner();
+      },
+      (errorMessage) => {
+        if (window._DEV) {
+          console.log('[QR Scanner] Tentando detectar...', errorMessage);
         }
+      }
+    );
+
+    await Promise.race([
+      scanPromise,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout: iOS camera init too slow')), 15000)
       )
-      .then(() => {
-        console.log('[iOS FIX] Aplicando correções estritas de vídeo inline para iPhone...');
-        // Localiza o elemento <video> gerado dinamicamente e força as propriedades inline exigidas pelo iOS
-        const videoElem = document.querySelector('#' + elementId + ' video');
-        if (videoElem) {
-          videoElem.setAttribute('playsinline', 'true');
-          videoElem.setAttribute('webkit-playsinline', 'true');
-          videoElem.setAttribute('muted', 'true');
-          videoElem.play().catch(e => console.log('[iOS FIX] Erro ao dar play manual:', e));
-        }
-        _showToast('📱 Câmera ativa - aponte para QR Code', 'info');
-      })
-      .catch((err) => {
-        console.error('[QR Scanner] Falha na tentativa inicial:', err);
-        
-        // SE FALHAR NO IPHONE (Cenário onde o Safari recusa o facingMode ideal de primeira)
-        if (constraints.facingMode) {
-          console.log('[iOS FIX] Tentando fallback mapeando deviceId traseiro manualmente...');
-          Html5Qrcode.getCameras().then(devices => {
-            if (devices && devices.length > 0) {
-              // Pega a última câmera da lista (Normalmente é a lente principal traseira no iPhone)
-              const backCamera = devices[devices.length - 1];
-              startScanning({ deviceId: { exact: backCamera.id } });
-            } else {
-              showQrUploadFallback();
-            }
-          }).catch(e => {
-            console.error(e);
-            showQrUploadFallback();
-          });
-        } else {
-          showQrUploadFallback();
-        }
-      });
-    };
+    ]);
 
-    // Dispara a tentativa principal usando a câmera traseira padrão
-    startScanning({ facingMode: 'environment' });
-    
+    console.log('[QR Scanner] ✅ Câmera iniciada com sucesso (iOS compatível)');
+    _showToast('📱 Câmera ativa - aponte para QR Code', 'info');
+
   } catch (err) {
     console.error('[QR Scanner] ❌ Erro detalhado:', {
       name: err.name,
       message: err.message,
-      code: err.code,
-      toString: err.toString()
+      code: err.code
     });
-    
-    // ✅ FIX v47.2: Identificar tipo de erro específico
+
     let userMessage = '❌ Erro ao acessar câmera';
     let suggestion = '';
-    
+    let action = 'fallback';
+
     if (err.name === 'NotAllowedError' || err.message.includes('Permission denied')) {
       userMessage = '❌ Permissão de câmera negada';
-      suggestion = 'Verifique as permissões do navegador para este site (Configurações → Câmera)';
-      console.warn('[QR Scanner] Permissão bloqueada. Instruções para iOS:');
-      console.warn('  1. Abrir Configurações → Safari');
-      console.warn('  2. Procurar por "Câmera" → Permitir');
-      console.warn('  3. Recarregar página');
+      suggestion = 'Ajuste: Configurações → Safari → Câmera → Permitir';
+      action = 'settings';
     } 
     else if (err.name === 'NotFoundError' || err.message.includes('No camera')) {
       userMessage = '❌ Nenhuma câmera encontrada';
-      suggestion = 'Seu dispositivo pode não ter câmera, ou ela está em uso';
+      suggestion = 'Verifique se a câmera traseira está disponível';
     } 
     else if (err.name === 'NotSupportedError' || err.message.includes('not supported')) {
-      userMessage = '❌ Câmera não suportada neste navegador';
-      suggestion = 'Tente em Safari (iOS) ou Chrome (Android)';
+      userMessage = '❌ Câmera não suportada';
+      suggestion = 'Use Safari no iOS (Chrome/Firefox usam WKWebView limitado)';
     }
-    else if (err.name === 'NotReadableError') {
-      userMessage = '❌ Câmera está em uso';
-      suggestion = 'Feche outros apps que possam estar usando a câmera';
+    else if (err.name === 'NotReadableError' || err.message.includes('I/O read')) {
+      userMessage = '❌ Câmera ocupada ou falhou';
+      suggestion = 'Feche outros apps e tente novamente';
+      action = 'retry';
     }
-    else if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-      userMessage = '❌ HTTPS necessário para câmera';
-      suggestion = 'Este site deve estar em HTTPS para acessar a câmera';
+    else if (err.name === 'OverconstrainedError') {
+      userMessage = '❌ Câmera não suporta configuração';
+      suggestion = 'Tentando fallback com configuração mínima...';
+      action = 'retry_minimal';
     }
-    
+    else if (err.message.includes('Timeout')) {
+      userMessage = '⏱️ Câmera demorou muito para iniciar';
+      suggestion = 'iOS Safari pode estar processando. Tente novamente.';
+      action = 'retry';
+    }
+
     console.error('[QR Scanner] ' + userMessage);
     if (suggestion) console.error('[QR Scanner] Sugestão: ' + suggestion);
-    
-    // Mostrar toast com erro e sugestão
+
     _showToast(userMessage + (suggestion ? '. ' + suggestion : ''), 'error');
-    
-    // Oferecer fallback
-    setTimeout(() => {
-      showQrUploadFallback();
-    }, 500);
+
+    if (action === 'retry_minimal') {
+      setTimeout(() => initQrScannerMinimal(elementId), 500);
+    } else if (action === 'retry') {
+      setTimeout(() => showQrRetryModal(elementId), 500);
+    } else {
+      setTimeout(() => showQrUploadFallback(), 500);
+    }
   }
 }
 
-/**
- * Parar scanner
- */
+// ✅ Fallback com configuração mínima
+async function initQrScannerMinimal(elementId) {
+  try {
+    const container = document.getElementById(elementId);
+    if (!container) return;
+
+    if (_qrScanner) {
+      try { await _qrScanner.stop(); await _qrScanner.clear(); } catch(e){}
+      _qrScanner = null;
+    }
+    container.innerHTML = '';
+
+    const videoElem = document.createElement('video');
+    videoElem.id = 'qr-video-minimal-' + Date.now();
+    videoElem.setAttribute('playsinline', 'true');
+    videoElem.setAttribute('webkit-playsinline', 'true');
+    videoElem.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+    container.appendChild(videoElem);
+
+    _qrScanner = new Html5Qrcode(videoElem.id);
+
+    await _qrScanner.start(
+      { video: true },
+      { fps: 5, qrbox: { width: 200, height: 200 } },
+      (decodedText) => {
+        handleQrScanned(decodedText);
+        stopQrScanner();
+      },
+      () => {}
+    );
+
+    _showToast('📱 Câmera iniciada (modo compatível)', 'info');
+  } catch(err) {
+    console.error('[QR Scanner Minimal] Falhou:', err);
+    showQrUploadFallback();
+  }
+}
+
+// ✅ Modal de retry com instruções específicas para iOS
+function showQrRetryModal(elementId) {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px; font-family: var(--font);';
+  modal.innerHTML = `
+    <div style="background: var(--surf); border-radius: 16px; padding: 24px; max-width: 340px; width: 100%; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+      <div style="font-size: 36px; margin-bottom: 12px;">📱</div>
+      <h3 style="color: var(--tx); margin: 0 0 8px; font-size: 16px;">Problema com a Câmera no iOS</h3>
+      <p style="color: var(--tx2); font-size: 12px; line-height: 1.6; margin-bottom: 16px;">
+        O Safari no iPhone requer permissões específicas. Siga os passos:<br><br>
+        <b>1.</b> Ajustes → Safari → Câmera → <b>Permitir</b><br>
+        <b>2.</b> Ajustes → Privacidade → Câmera → <b>Ativar</b><br>
+        <b>3.</b> Recarregue esta página
+      </p>
+      <div style="display: flex; gap: 8px; justify-content: center;">
+        <button onclick="this.closest('.modal-qr-retry').remove(); initQrScanner('${elementId}')" 
+          style="background: var(--brand); color: #fff; border: none; border-radius: 8px; padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font);">
+          🔄 Tentar Novamente
+        </button>
+        <button onclick="this.closest('.modal-qr-retry').remove(); showQrUploadFallback()" 
+          style="background: var(--surf2); color: var(--tx2); border: 1px solid var(--bdr2); border-radius: 8px; padding: 10px 16px; font-size: 13px; cursor: pointer; font-family: var(--font);">
+          📁 Upload
+        </button>
+      </div>
+      <button onclick="this.closest('.modal-qr-retry').remove()" 
+        style="background: transparent; color: var(--tx3); border: none; margin-top: 12px; font-size: 11px; cursor: pointer; text-decoration: underline; font-family: var(--font);">
+        Cancelar
+      </button>
+    </div>
+  `;
+  modal.className = 'modal-qr-retry';
+  document.body.appendChild(modal);
+}
+
 async function stopQrScanner() {
   try {
     if (_qrScanner) {
       await _qrScanner.stop();
+      await _qrScanner.clear();
       _qrScanner = null;
-      console.log('[QR Scanner] ✅ Scanner parado');
+      console.log('[QR Scanner] ✅ Scanner parado e limpo');
     }
   } catch (err) {
     console.error('[QR Scanner] Erro ao parar:', err);
+    _qrScanner = null;
   }
 }
 
-/**
- * Processar código QR detectado
- */
 function handleQrScanned(qrText) {
   console.log('[QR Scanned] Texto:', qrText);
-  
-  // Tentar extrair ID da URL (formato: ...?view=ID&v=...)
+
   const urlMatch = qrText.match(/[?&]view=([^&]+)/);
   if (urlMatch && urlMatch[1]) {
     const id = decodeURIComponent(urlMatch[1]);
     console.log('[QR Scanned] ID extraído:', id);
-    
-    // Procurar no DB local
+
     const equipment = DB.find(r => r.id === id);
     if (equipment) {
       openQrModal(equipment._uid);
@@ -880,73 +945,92 @@ function handleQrScanned(qrText) {
   }
 }
 
-/**
- * Fallback: Upload de imagem com QR Code
- */
+// ✅ Fallback melhorado — Upload + Digitação Manual + Instruções iOS
 function showQrUploadFallback() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    try {
-      const imageUrl = URL.createObjectURL(file);
-      const result = await Html5Qrcode.scanFile(imageUrl, true);
-      handleQrScanned(result.decodedText);
-    } catch (err) {
-      console.error('[QR Upload] Erro ao decodificar imagem:', err);
-      _showToast('❌ Não foi possível decodificar o QR Code da imagem', 'error');
-    }
-  };
-  
-  // Mostrar modal de upload
+  document.querySelectorAll('.modal-qr-fallback, .modal-qr-retry').forEach(m => m.remove());
+
   const modal = document.createElement('div');
-  modal.style.cssText = `
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 99999;
-  `;
+  modal.className = 'modal-qr-fallback';
+  modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.55); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px; font-family: var(--font);';
   modal.innerHTML = `
-    <div style="background: var(--surf); border-radius: 12px; padding: 20px; max-width: 320px; text-align: center;">
-      <h3 style="color: var(--tx); margin: 0 0 8px;">📸 Câmera Indisponível</h3>
-      <p style="color: var(--tx2); font-size: 12px; margin: 0 0 16px;">
-        A câmera não está disponível. Selecione uma imagem do QR Code:
-      </p>
-      <button id="qr-upload-btn" style="
-        background: var(--accent);
-        color: #fff;
-        border: none;
-        border-radius: 6px;
-        padding: 10px 16px;
-        cursor: pointer;
-        font-weight: 600;
-      ">Selecionar Imagem</button>
-      <button onclick="this.parentElement.parentElement.remove()" style="
-        background: var(--bdr);
-        color: var(--tx);
-        border: none;
-        border-radius: 6px;
-        padding: 10px 16px;
-        cursor: pointer;
-        margin-left: 8px;
-      ">Cancelar</button>
+    <div style="background: var(--surf); border-radius: 16px; padding: 24px; max-width: 380px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+      <div style="text-align: center; margin-bottom: 16px;">
+        <div style="font-size: 32px; margin-bottom: 8px;">📸</div>
+        <h3 style="color: var(--tx); margin: 0 0 4px; font-size: 15px;">Câmera Indisponível</h3>
+        <p style="color: var(--tx2); font-size: 11px; margin: 0;">
+          iOS Safari pode bloquear a câmera. Use uma das alternativas:
+        </p>
+      </div>
+
+      <div style="background: var(--surf2); border: 1px solid var(--bdr2); border-radius: 10px; padding: 14px; margin-bottom: 10px;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--tx); margin-bottom: 6px;">📁 Opção 1: Upload de Imagem</div>
+        <input type="file" id="qr-fallback-file" accept="image/*" 
+          style="display: none;"
+          onchange="handleQrFileUpload(this)">
+        <button onclick="document.getElementById('qr-fallback-file').click()" 
+          style="width: 100%; background: var(--brand); color: #fff; border: none; border-radius: 6px; padding: 10px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font);">
+          Selecionar Imagem do QR Code
+        </button>
+      </div>
+
+      <div style="background: var(--surf2); border: 1px solid var(--bdr2); border-radius: 10px; padding: 14px; margin-bottom: 10px;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--tx); margin-bottom: 6px;">⌨️ Opção 2: Digitar Código</div>
+        <div style="display: flex; gap: 6px;">
+          <input type="text" id="qr-fallback-input" placeholder="Ex: BAL-020" 
+            style="flex: 1; background: var(--bg); border: 1px solid var(--bdr2); color: var(--tx); border-radius: 6px; padding: 8px 10px; font-size: 12px; font-family: var(--font); outline: none;">
+          <button onclick="handleQrManualInput()" 
+            style="background: var(--green); color: #fff; border: none; border-radius: 6px; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font); white-space: nowrap;">
+            Buscar
+          </button>
+        </div>
+      </div>
+
+      <div style="background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); border-radius: 8px; padding: 10px 12px; font-size: 10px; color: var(--tx2); line-height: 1.5;">
+        <b>💡 iOS:</b> Ajustes → Safari → Câmera → <b>Permitir</b>. Recarregue a página.
+      </div>
+
+      <button onclick="document.querySelectorAll('.modal-qr-fallback').forEach(m=>m.remove())" 
+        style="width: 100%; margin-top: 12px; background: transparent; color: var(--tx3); border: 1px solid var(--bdr2); border-radius: 6px; padding: 8px; font-size: 12px; cursor: pointer; font-family: var(--font);">
+        Cancelar
+      </button>
     </div>
   `;
-  
   document.body.appendChild(modal);
-  document.getElementById('qr-upload-btn').onclick = () => {
-    input.click();
-    modal.remove();
-  };
 }
 
-console.log('[QR Scanner FIX v47] ✅ Scanner QR real carregado (html5-qrcode + fallback upload)');
+async function handleQrFileUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  try {
+    const imageUrl = URL.createObjectURL(file);
+    const result = await Html5Qrcode.scanFile(imageUrl, true);
+    handleQrScanned(result.decodedText || result);
+    document.querySelectorAll('.modal-qr-fallback').forEach(m => m.remove());
+  } catch (err) {
+    console.error('[QR Upload] Erro:', err);
+    _showToast('❌ Não foi possível decodificar o QR Code da imagem', 'error');
+  }
+}
+
+function handleQrManualInput() {
+  const input = document.getElementById('qr-fallback-input');
+  const id = (input && input.value || '').trim().toUpperCase();
+  if (!id) {
+    _showToast('⚠️ Digite um código de equipamento', 'warning');
+    return;
+  }
+
+  const equipment = DB.find(r => (r.id || '').toUpperCase() === id);
+  if (equipment) {
+    openQrModal(equipment._uid);
+    _showToast('✅ Equipamento encontrado!', 'ok');
+    document.querySelectorAll('.modal-qr-fallback').forEach(m => m.remove());
+  } else {
+    _showToast('❌ Equipamento ' + id + ' não encontrado', 'error');
+  }
+}
+
 </script>
 
 <script>
@@ -958,40 +1042,40 @@ async function gerarQRCode(elementId, texto) {
     const el = (typeof elementId === 'string')
       ? document.getElementById(elementId)
       : elementId;
-    
+
     if (!el) {
       console.error('Elemento não encontrado:', elementId);
       return;
     }
-    
+
     // Limpar elemento anterior
     el.innerHTML = '';
-    
+
     // Verificar se QRCode está disponível
     if (typeof QRCode === 'undefined') {
       console.error('[QR] Biblioteca QRCode.js não carregou. Tentando fallback...');
-      
-      // Fallback: gerar SVG simples
       const svg = `
         <svg xmlns="http://www.w3.org/2000/svg" width="260" height="260" viewBox="0 0 260 260">
           <rect width="260" height="260" fill="white"/>
-          <text x="130" y="130" text-anchor="middle" font-size="12" fill="red">
-            QR Error
+          <text x="130" y="120" text-anchor="middle" font-size="12" fill="#dc2626" font-family="sans-serif">
+            Erro ao carregar QR
+          </text>
+          <text x="130" y="140" text-anchor="middle" font-size="10" fill="#6b7280" font-family="sans-serif">
+            Recarregue a página
           </text>
         </svg>
       `;
       el.innerHTML = svg;
       return;
     }
-    
-    // ✅ GERAÇÃO: Usar QRCode.js (biblioteca QRCode.js do CDN)
-    // Sintaxe: new QRCode(element, options)
-    // Nota: QRCode.js desenha direto no DOM, não retorna string
-    
-    // Limpar QRCode anterior se existir
-    el.innerHTML = '';
-    
-    // Criar novo QRCode
+
+    // ✅ FIX: Criar container com dimensões fixas para iOS Safari
+    el.style.width = '260px';
+    el.style.height = '260px';
+    el.style.display = 'block';
+    el.style.margin = '0 auto';
+
+    // Criar novo QRCode com configuração otimizada
     new QRCode(el, {
       text: texto,
       width: 260,
@@ -1000,21 +1084,36 @@ async function gerarQRCode(elementId, texto) {
       colorLight: '#FFFFFF',
       correctLevel: QRCode.CorrectLevel.H
     });
-    
-    console.log('[QR] ✅ QRCode.js gerado com sucesso (SVG renderizado)');
+
+    // ✅ FIX: Garantir que o SVG/img gerado tenha dimensões corretas no iOS
+    setTimeout(() => {
+      const svg = el.querySelector('svg');
+      if (svg) {
+        svg.style.width = '260px';
+        svg.style.height = '260px';
+        svg.setAttribute('width', '260');
+        svg.setAttribute('height', '260');
+      }
+      const img = el.querySelector('img');
+      if (img) {
+        img.style.width = '260px';
+        img.style.height = '260px';
+      }
+    }, 100);
+
+    console.log('[QR] ✅ QRCode.js gerado com sucesso (iOS-safe)');
   } catch (err) {
     console.error('[QR] Erro ao gerar QR:', err.message || err);
-    
-    // Fallback: elemento de erro
+
     const el = (typeof elementId === 'string')
       ? document.getElementById(elementId)
       : elementId;
-    
+
     if (el) {
       el.innerHTML = `
-        <div style="width:260px;height:260px;background:#fff;border:1px solid #ccc;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:11px;color:red;text-align:center;padding:10px">
+        <div style="width:260px;height:260px;background:#fff;border:1px solid #ccc;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:11px;color:#dc2626;text-align:center;padding:10px">
           ❌ Erro ao gerar QR<br>
-          <span style="font-size:9px;color:#999;margin-top:4px">${err.message}</span>
+          <span style="font-size:9px;color:#999;margin-top:4px">${esc(err.message || 'Erro desconhecido')}</span>
         </div>
       `;
     }
@@ -1022,7 +1121,8 @@ async function gerarQRCode(elementId, texto) {
 }
 
 window.gerarQRCode = gerarQRCode;
-console.log('[QR iOS FIX v47] ✅ QRCode.js carregada (geração) + html5-qrcode (scanner)');
+console.log('[QR iOS FIX v48] ✅ QRCode.js carregada (geração iOS-safe) + html5-qrcode (scanner com 15 fixes iOS)');
+
 </script>
 
 <!-- ✅ FIX v47: Verificar carregamento das bibliotecas QR -->
@@ -2836,6 +2936,7 @@ input[type="checkbox"], input[type="radio"] {
 #app-wrapper { display: none }
 #app-wrapper.authed { display: contents }
 </style>
+<base target="_blank">
 </head>
 <body>
 
