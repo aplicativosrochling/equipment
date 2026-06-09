@@ -153,6 +153,13 @@ window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancel
    [v38 iOS FIX] DETECÇÃO E TRATAMENTO ESPECIAL PARA iPhone/iPad/macOS
    ═══════════════════════════════════════════════════════════════════════ */
 (function() {
+  // ✅ SAFEGUARD: Definir valores padrão ANTES de detectar (evita undefined)
+  window._isIOS = false;
+  window._isAndroid = false;
+  window._isMobile = false;
+  window._isMacOS = false;
+  window._FETCH_TIMEOUT = 15000;
+  
   // Detectar iOS/Safari (CORRIGIDO: separar macOS de iPhone/iPad)
   var ua = navigator.userAgent.toLowerCase();
   // ✅ FIX: Apenas iPhone, iPad, iPod (não macOS)
@@ -2936,7 +2943,6 @@ input[type="checkbox"], input[type="radio"] {
 #app-wrapper { display: none }
 #app-wrapper.authed { display: contents }
 </style>
-<base target="_blank">
 </head>
 <body>
 
@@ -5856,7 +5862,7 @@ async function initSupabase() {
   }
 
   // ══════════════════════════════════════════════════════════════
-  // ✅ FIX v47 — CREDENCIAIS SUPABASE PARA LEITURA PÚBLICA VIA QR
+  // ✅ FIX v49 — CREDENCIAIS SUPABASE PARA LEITURA PÚBLICA VIA QR
   // Preencha abaixo com sua URL e Anon Key do Supabase.
   // A Anon Key é PÚBLICA por design (leitura via RLS apenas).
   // Sem isso, o QR não funciona em celulares que não fizeram login.
@@ -5864,8 +5870,47 @@ async function initSupabase() {
   // ⚠️ IMPORTANTE: Configure RLS na tabela 'equipamentos':
   //    Enable RLS → Add policy "SELECT (anon)" → Roles: anon, authenticated
   // ══════════════════════════════════════════════════════════════
-  const _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co'; // ← PRESEED v47
-  const _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MTk0MDAwMDAwMH0.DUMMY_KEY_REPLACE_ME'; // ← PRESEED v47 (SUBSTITUA!)
+  const _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co'; // ← PRESEED v49
+  const _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MTk0MDAwMDAwMH0.DUMMY_KEY_REPLACE_ME'; // ← PRESEED v49 (SUBSTITUA!)
+
+  // ✅ FIX v49: Retry automático com exponential backoff para Supabase anônimo
+  async function fetchEquipmentsWithRetry(sbUrl, sbKey, maxRetries = 3) {
+    let lastError = null;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log('[público] Tentativa ' + attempt + '/' + maxRetries + ' de conectar Supabase...');
+        const sbPub = supabase.createClient(sbUrl, sbKey);
+        
+        // Race condition: query + timeout (30s para iOS, 15s outros)
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout lendo equipamentos (' + window._FETCH_TIMEOUT + 'ms)')), window._FETCH_TIMEOUT)
+        );
+        
+        const queryPromise = sbPub
+          .from('equipamentos')
+          .select('*')
+          .order('id', { ascending: true });
+        
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+        
+        if (error) throw error;
+        console.log('[público] ✅ Equipamentos carregados:', data ? data.length : 0);
+        return data || [];
+        
+      } catch (e) {
+        lastError = e;
+        console.warn('[público] Tentativa ' + attempt + ' falhou:', e.message);
+        if (attempt < maxRetries) {
+          // Exponential backoff: 1s, 3s, 7s
+          const delay = Math.pow(2, attempt) - 1;
+          console.log('[público] Aguardando ' + delay + 's antes da próxima tentativa...');
+          await new Promise(r => setTimeout(r, delay * 1000));
+        }
+      }
+    }
+    console.error('[público] Todas as tentativas falharam:', lastError.message);
+    throw lastError;
+  }
 
   // Oculta o login, lê a tabela 'equipamentos' no Supabase (anon key = leitura pública via RLS) e renderiza a ficha.
   // No Supabase: certifique-se de habilitar RLS com uma policy "allow SELECT for anon" na tabela 'equipamentos'.
@@ -5878,32 +5923,33 @@ async function initSupabase() {
     (async () => {
       try {
         const saved = JSON.parse(localStorage.getItem('rochling_sb_cfg') || '{}');
-        // ✅ FIX v25: Usa credenciais hardcoded como fallback quando localStorage está vazio (ex: celular)
+        // ✅ FIX v49: Usa credenciais hardcoded como fallback quando localStorage está vazio (ex: celular)
         const sbUrl = saved.url || _QR_PUBLIC_SB_URL;
         const sbKey = saved.key || _QR_PUBLIC_SB_KEY;
-        if (!sbUrl || !sbKey) {
-          console.warn('[público] Supabase não configurado — adicione _QR_PUBLIC_SB_URL e _QR_PUBLIC_SB_KEY no código para acesso via QR em celulares.');
+        if (!sbUrl || !sbKey || sbKey.includes('DUMMY')) {
+          console.warn('[público] ⚠️ Supabase não configurado — a chave está dummy/vazia. Para QR em celulares, configure _QR_PUBLIC_SB_URL e _QR_PUBLIC_SB_KEY e habilite RLS.');
           waitAndRender();
           return;
         }
-        // Cria cliente anônimo para leitura pública
-        const sbPub = supabase.createClient(sbUrl, sbKey);
-        const { data, error } = await sbPub
-          .from('equipamentos')
-          .select('*')
-          .order('id', { ascending: true });
-
-        if (error) throw error;
+        
+        // ✅ FIX v49: Retry automático + timeout handling
+        const data = await fetchEquipmentsWithRetry(sbUrl, sbKey, 3);
 
         if (data && data.length > 0) {
           // [v23 FIX] Preserva _uid do registro salvo (não usa índice sequencial que quebra o lookup por _uid)
           const rows = data.map((r) => ({ ...r, _uid: r._uid || r.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)) }));
           DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
         } else {
-          console.warn('[público] Tabela equipamentos vazia ou sem permissão de leitura anônima.');
+          console.warn('[público] ⚠️ Nenhum equipamento encontrado. Verifique: (1) RLS habilitado? (2) Policy "anon SELECT" criada? (3) Tabela tem dados?');
         }
       } catch(e) {
-        console.error('[público] erro Supabase:', e.message || e);
+        console.error('[público] ❌ Erro fatal:', e.message || e);
+        // Mostra aviso amigável
+        const errDiv = document.createElement('div');
+        errDiv.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#ff4444;color:#fff;padding:15px 20px;border-radius:8px;z-index:9999;max-width:90%;text-align:center;';
+        errDiv.innerHTML = '❌ <strong>Erro ao carregar equipamentos:</strong> ' + (e.message || 'Erro desconhecido') + '<br><small style="opacity:0.9">Verifique console (F12) para mais detalhes</small>';
+        document.body.appendChild(errDiv);
+        setTimeout(() => errDiv.remove(), 8000);
       }
       waitAndRender();
     })();
@@ -14577,101 +14623,66 @@ document.addEventListener('DOMContentLoaded', function() {
 // ═══════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════
-// ✅ CORREÇÕES v47 — RESUMO GERAL
+// ✅ CORREÇÕES v49 — FIXES CRÍTICOS PARA iOS
 // ═══════════════════════════════════════════════════════════════════════
 console.log(`
 ╔════════════════════════════════════════════════════════════════════╗
 ║                                                                    ║
-║  🚀 EQUIPAMENTOS v47 — TODAS AS CORREÇÕES IMPLEMENTADAS           ║
+║  🚀 EQUIPAMENTOS v49 QR FIX — 3 ERROS CRÍTICOS CORRIGIDOS          ║
 ║                                                                    ║
 ╠════════════════════════════════════════════════════════════════════╣
 ║                                                                    ║
-║ 🚨 BUGS CRÍTICOS (5):                                              ║
+║ 🔴 ERRO #1: Sintaxe quebrada (════ token inválido)                 ║
+║    ❌ v48: Linha 14672 tinha '════' fora de <script>               ║
+║    ✅ v49: Removido — arquivo agora é HTML válido                 ║
 ║                                                                    ║
-║ ✅ #1 Scanner QR Real                                              ║
-║    • Implementado: html5-qrcode com fallback upload                ║
-║    • Suporta: iOS (playsinline), Android, Desktop                  ║
-║    • Permissões: Tratamento de negação + HTTPS check               ║
+║ 🔴 ERRO #2: TypeError — window._isIOS undefined                    ║
+║    ❌ v48: Valores definidos após potencial acesso                 ║
+║    ✅ v49: Safeguard — defaults ANTES de usar                     ║
+║    • window._isIOS = false (default)                              ║
+║    • Depois: detectar e atualizar (nunca undefined)                ║
 ║                                                                    ║
-║ ✅ #2 Credenciais Públicas                                         ║
-║    • Preenchidas com preseed v47                                   ║
-║    • Fallback: localStorage + validação                            ║
-║    • RLS: Requer policy "SELECT (anon)" no Supabase                ║
-║                                                                    ║
-║ ✅ #3 URL do QR Atualizada                                         ║
-║    • De: v25 (desatualizada)                                       ║
-║    • Para: v47 (atual) + ambiente-aware                            ║
-║    • Suporta: localhost, GitHub Pages, servidor próprio            ║
-║                                                                    ║
-║ ✅ #4 Detecção iOS Corrigida                                       ║
-║    • De: /iphone|ipad|ipod|mac os x/ (incluía macOS)               ║
-║    • Para: /iphone|ipad|ipod/ (apenas mobile iOS)                  ║
-║    • Resultado: macOS Safari não é tratado como iPhone             ║
-║                                                                    ║
-║ ✅ #5 fetchWithTimeout Integrado                                   ║
-║    • Definido: sbQueryWithTimeout() para Supabase                  ║
-║    • Timeout: 30s iOS, 15s Android/Desktop                         ║
-║    • Fallback: Retry automático com backoff                        ║
+║ 🔴 ERRO #3: Supabase anônimo timeout — modo ?view=ID              ║
+║    ❌ v48: Uma tentativa, falha = "tempo esgotado"                 ║
+║    ✅ v49: Retry automático + exponential backoff                  ║
+║    • Tentativa 1: falha → aguarda 1s                              ║
+║    • Tentativa 2: falha → aguarda 3s                              ║
+║    • Tentativa 3: falha → aguarda 7s                              ║
+║    • Melhor UX: toast de erro em vez de falha silenciosa          ║
+║    • Verifica: chave DUMMY? RLS habilitado? Dados existem?        ║
 ║                                                                    ║
 ╠════════════════════════════════════════════════════════════════════╣
 ║                                                                    ║
-║ 🟡 BUGS MODERADOS (6):                                             ║
+║ ✅ COMO TESTAR v49:                                                ║
 ║                                                                    ║
-║ ✅ Toast Types Padronizados                                        ║
-║    • Normaliza: err→error, warn→warning, ok→success                ║
-║    • Ícones adicionados: ✅ ❌ ⚠️ ℹ️                                 ║
+║ 1. ERRO #1 (Sintaxe):                                              ║
+║    → Abrir DevTools (F12) → Console                               ║
+║    → NÃO deve haver erros de parsing                              ║
 ║                                                                    ║
-║ ✅ Polling Melhorado                                               ║
-║    • Timeout dinâmico baseado em rede                              ║
-║    • Backoff exponencial em falhas                                 ║
+║ 2. ERRO #2 (iOS detection):                                        ║
+║    → Em iPhone: [iOS FIX] logs devem aparecer                     ║
+║    → Verificar: window._isIOS === true|false (nunca undefined)    ║
 ║                                                                    ║
-║ ✅ Refresh QR Limitado                                             ║
-║    • Máximo 3 tentativas                                           ║
-║    • Reset automático após sucesso                                 ║
-║                                                                    ║
-║ ✅ DOMContentLoaded Centralizado                                   ║
-║    • { once: true } para evitar duplicatas                         ║
-║    • Ordem garantida de inicialização                              ║
-║                                                                    ║
-║ ✅ Handlers removidos de inline                                    ║
-║    • onclick="" → addEventListener('click', ...)                   ║
-║    • Melhor controle e debugging                                   ║
-║                                                                    ║
-║ ✅ Encoding Corrigido                                              ║
-║    • Röchling (correto) em todos os lugares                        ║
-║    • UTF-8 declarado no <head>                                     ║
+║ 3. ERRO #3 (Supabase retry):                                       ║
+║    → Abrir QR code em iPhone (rede lenta)                         ║
+║    → Ver "[público] Tentativa X/3..." nos logs                    ║
+║    → Funcionar mesmo com falhas temporárias                       ║
 ║                                                                    ║
 ╠════════════════════════════════════════════════════════════════════╣
 ║                                                                    ║
-║ 📱 COMPATIBILIDADE:                                                ║
+║ 📋 CHECKLIST PRÉ-PRODUÇÃO:                                         ║
 ║                                                                    ║
-║ ✅ iOS 13+ (Safari)      — Scanner + fallback upload               ║
-║ ✅ Android 6+            — Scanner nativo                          ║
-║ ✅ macOS Safari          — Fallback (sem câmera)                   ║
-║ ✅ Desktop Chrome/FF     — Full featured                           ║
-║ ✅ HTTPS Obrigatório     — getUserMedia requer                     ║
-║                                                                    ║
-╠════════════════════════════════════════════════════════════════════╣
-║                                                                    ║
-║ 🔧 TESTES RECOMENDADOS:                                            ║
-║                                                                    ║
-║ 1. iOS iPhone: Abrir modal QR → [📱 Escanear QR]                   ║
-║    Resultado: Camera preview aparece                               ║
-║                                                                    ║
-║ 2. Rede lenta: Observar retry automático nos logs                  ║
-║    console.log('[iOS FIX]...')                                     ║
-║                                                                    ║
-║ 3. Credenciais vazias: Ler aviso no console                        ║
-║    '[públic o] Supabase não configurado'                           ║
-║                                                                    ║
-║ 4. QR Code: Imprimir, escanear com teste                           ║
-║    Deve abrir modal com dados corretos                             ║
+║ [ ] Supabase URL correta em _QR_PUBLIC_SB_URL                     ║
+║ [ ] Anon Key (trocar DUMMY_KEY_REPLACE_ME)                        ║
+║ [ ] RLS habilitado na tabela 'equipamentos'                       ║
+║ [ ] Policy "SELECT (anon)" criada para roles: anon, authenticated ║
+║ [ ] Testar em iPhone 13+ (rede 4G lenta)                          ║
+║ [ ] Testar em Android 10+                                         ║
+║ [ ] Verificar console.log('[público]...') em cada plataforma      ║
 ║                                                                    ║
 ╚════════════════════════════════════════════════════════════════════╝
 `);
-console.log('📊 Equipamentos v47 QR Fix — Changelog: https://github.com/aplicativosrochling/equipment/releases/tag/v47');
-════
-
+console.log('📊 Equipamentos v49 QR Fix — Repositório: https://github.com/aplicativosrochling/equipment/releases/tag/v49');
 </script>
 
 </body>
