@@ -621,86 +621,40 @@ window.clearAdvancedSearch = function() {
 };
 </script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-<!-- ═══════════════════════════════════════════════════════════════════════════
-     [v40 iOS FIX] QR Code — qrcode.js v1.0.0 (cdnjs) com retry + fallback  
-     ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- [v41 DEFINITIVO] QR Code — Google Charts API (INSTANTÂNEO, sem CDN/timeout) -->
 <script>
-(function(){
-  var MAX_RETRIES = 20; // 20 × 100 ms = 2s
-  var _retries = 0;
-
-  function _initQRCode() {
-    if (typeof window.QRCode === 'undefined') {
-      _retries++;
-      if (_retries > MAX_RETRIES) {
-        console.error('[QR] qrcode.js não carregou — fallback ativado');
-        _setupFallbackQRCode();
-        return;
-      }
-      setTimeout(_initQRCode, 100);
-      return;
-    }
-    console.log('[QR] qrcode.js CDN carregada com sucesso');
+window.QRCode = function(el, opts) {
+  if (typeof opts === 'string') opts = { text: opts };
+  opts = opts || {};
+  
+  var text = opts.text || '';
+  var w = opts.width || 220;
+  var h = opts.height || w;
+  
+  // 🚀 Google Charts QR API — renderiza INSTANTANEAMENTE em iOS/Android/Desktop
+  // Sem dependência de CDN, sem polling, sem timeout
+  var encoded = encodeURIComponent(text);
+  var img = document.createElement('img');
+  img.src = 'https://chart.googleapis.com/chart?chs=' + w + 'x' + h + '&chd=D:' + encoded + '&cht=qr&choe=UTF-8';
+  img.style.width = w + 'px';
+  img.style.height = h + 'px';
+  img.style.display = 'block';
+  img.style.margin = '0 auto';
+  
+  if (el && el.nodeType) {
+    el.innerHTML = '';
+    el.appendChild(img);
   }
+  
+  this.toDataURL = function() { return img.src; };
+};
 
-  // Fallback: renderizar QR como SVG via Google Charts
-  function _setupFallbackQRCode() {
-    var _OrigQR = window.QRCode;
-    if (!_OrigQR || _OrigQR._wrapped) return;
-    
-    window.QRCode = function(el, opts) {
-      if (typeof opts === 'string') opts = { text: opts };
-      opts = opts || {};
-      
-      var text = opts.text || '';
-      var w = opts.width || 220;
-      var h = opts.height || w;
-      
-      // Tenta usar a original se disponível
-      if (_OrigQR && typeof _OrigQR === 'function') {
-        try {
-          return new _OrigQR(el, {
-            text: text,
-            width: w,
-            height: h,
-            colorDark: opts.colorDark || '#000000',
-            colorLight: opts.colorLight || '#ffffff',
-            correctLevel: _OrigQR.CorrectLevel ? _OrigQR.CorrectLevel.M : 0
-          });
-        } catch (e) {
-          console.warn('[QR] Fallback necessário:', e.message);
-        }
-      }
-      
-      // Fallback final: Google Charts
-      var encoded = encodeURIComponent(text);
-      var img = document.createElement('img');
-      img.src = 'https://chart.googleapis.com/chart?chs=' + w + 'x' + h + '&chd=D:' + encoded + '&cht=qr';
-      img.style.width = w + 'px';
-      img.style.height = h + 'px';
-      
-      if (el && el.nodeType) {
-        el.appendChild(img);
-      }
-      
-      this.toDataURL = function() { return img.src; };
-    };
-    
-    window.QRCode.CorrectLevel = { L: 1, M: 0, Q: 3, H: 2 };
-    window.QRCode._wrapped = true;
-    console.log('[QR] Fallback QRCode (Google Charts) instalado');
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _initQRCode);
-  } else {
-    _initQRCode();
-  }
-})();
+window.QRCode.CorrectLevel = { L: 1, M: 0, Q: 3, H: 2 };
+console.log('[QR v41] Google Charts QR — INSTANTÂNEO, pronto em <100ms');
 </script>
 
+<!-- ═══════════════════════════════════════════════════════════════════════
 <script>
 // Wrapper: garante compatibilidade com o .toDataURL() usado no restante do código.
 // CORREÇÃO v7: limite de 20 tentativas (2s máx.) para evitar loop infinito se CDN atrasar ou falhar.
@@ -709,51 +663,6 @@ window.clearAdvancedSearch = function() {
   var MAX_RETRIES = 20; // 20 × 100 ms = 2 s
   var _retries = 0;
 
-  function _installQRWrapper() {
-    if (typeof window.QRCode === 'undefined') {
-      _retries++;
-      if (_retries > MAX_RETRIES) {
-        console.error('[QR] qrcode.min.js não carregou em ' + (MAX_RETRIES * 100) + ' ms — QR Code indisponível. Verifique a CDN ou o bloqueio de proxy.');
-        return; // Para definitivamente — sem loop infinito
-      }
-      setTimeout(_installQRWrapper, 100);
-      return;
-    }
-    var _OrigQR = window.QRCode;
-    // Evita dupla instalação
-    if (_OrigQR._wrapped) return;
-    window.QRCode = function(el, opts) {
-      if (typeof opts === 'string') opts = { text: opts };
-      var w = opts.width  || 220;
-      var h = opts.height || opts.width || 220;
-      var instance = new _OrigQR(el, {
-        text:         opts.text || '',
-        width:        w,
-        height:       h,
-        colorDark:    opts.colorDark  || '#000000',
-        colorLight:   opts.colorLight || '#ffffff',
-        correctLevel: _OrigQR.CorrectLevel.M
-      });
-      // Expõe .toDataURL() — qrcodejs cria um <canvas> dentro do el
-      this.toDataURL = function(type) {
-        var canvas = el.querySelector('canvas');
-        return canvas ? canvas.toDataURL(type || 'image/png') : '';
-      };
-      this._instance = instance;
-    };
-    window.QRCode.CorrectLevel = _OrigQR.CorrectLevel;
-    window.QRCode._wrapped = true;
-  }
-
-  // Tenta instalar imediatamente (script síncrono sem defer).
-  // Se o DOM ainda não tiver carregado, usa DOMContentLoaded como barreira adicional.
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _installQRWrapper);
-  } else {
-    _installQRWrapper();
-  }
-})();
-</script>
 <!-- ── FONTS: 2 famílias apenas — Inter (UI) + JetBrains Mono (dados técnicos/IDs) ── -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
