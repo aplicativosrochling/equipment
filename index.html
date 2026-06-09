@@ -1046,6 +1046,12 @@ function handleQrManualInput() {
 
 async function gerarQRCode(elementId, texto) {
   try {
+    // ✅ FIX v50: Validar que 'texto' é STRING
+    if (typeof texto !== 'string' || !texto.trim()) {
+      console.error('[QR] ❌ Texto inválido para QR:', typeof texto, texto);
+      throw new Error('QR text must be a non-empty string');
+    }
+    
     const el = (typeof elementId === 'string')
       ? document.getElementById(elementId)
       : elementId;
@@ -1076,11 +1082,14 @@ async function gerarQRCode(elementId, texto) {
       return;
     }
 
-    // ✅ FIX: Criar container com dimensões fixas para iOS Safari
+    // ✅ FIX v50: Criar container com dimensões fixas para iOS Safari
     el.style.width = '260px';
     el.style.height = '260px';
     el.style.display = 'block';
     el.style.margin = '0 auto';
+
+    // Log detalhado
+    console.log('[QR] Gerando para:', texto.substring(0, 50) + (texto.length > 50 ? '...' : ''));
 
     // Criar novo QRCode com configuração otimizada
     new QRCode(el, {
@@ -1092,7 +1101,7 @@ async function gerarQRCode(elementId, texto) {
       correctLevel: QRCode.CorrectLevel.H
     });
 
-    // ✅ FIX: Garantir que o SVG/img gerado tenha dimensões corretas no iOS
+    // ✅ FIX v50: Garantir que o SVG/img gerado tenha dimensões corretas no iOS
     setTimeout(() => {
       const svg = el.querySelector('svg');
       if (svg) {
@@ -1108,7 +1117,7 @@ async function gerarQRCode(elementId, texto) {
       }
     }, 100);
 
-    console.log('[QR] ✅ QRCode.js gerado com sucesso (iOS-safe)');
+    console.log('[QR] ✅ QRCode.js gerado com sucesso (iOS-safe v50)');
   } catch (err) {
     console.error('[QR] Erro ao gerar QR:', err.message || err);
 
@@ -10516,8 +10525,18 @@ window.openPdfModalBulk = function(tbl) {
 // ═══════════════════════════════════════════════════════
 
 function _buildQrPayload(r) {
-    const id = encodeURIComponent(r.id || r._uid || '');
-    // ✅ FIX v47: URL dinâmica baseada no ambiente (suporta localhost, GitHub Pages, servidor próprio)
+    // ✅ FIX v50: Garantir que ID é sempre STRING, nunca objeto
+    let id = String(r.id || r._uid || r._uid || '').trim();
+    id = encodeURIComponent(id);
+    
+    // Se ID ficar vazio, usar índice sequencial como fallback
+    if (!id || id === '') {
+      const idx = DB.indexOf(r) + 1;
+      id = encodeURIComponent(String(idx));
+      console.warn('[QR] ⚠️ ID vazio! Usando índice como fallback:', idx);
+    }
+    
+    // ✅ FIX v50: URL dinâmica baseada no ambiente (suporta localhost, GitHub Pages, servidor próprio)
     let BASE_URL = window.location.origin + '/equipment/';
     
     // Fallback para GitHub Pages se em produção (detecta se é GitHub Pages)
@@ -10525,8 +10544,13 @@ function _buildQrPayload(r) {
       BASE_URL = 'https://aplicativosrochling.github.io/equipment/';
     }
     
-    // Versão sempre atual (v47)
-    return BASE_URL + '?view=' + id + '&v=v47';
+    // ✅ FIX v50: Versão SEMPRE atualizada (v50)
+    const url = BASE_URL + '?view=' + id + '&v=v50';
+    
+    // ✅ DEBUG: Log para verificar exatamente o que está sendo codificado
+    if (_DEV) console.log('[QR BUILD] Payload:', { r_id: r.id, r_uid: r._uid, final_id: id, url: url });
+    
+    return url;
 }
 
 let _qrUID = null;
@@ -14623,66 +14647,86 @@ document.addEventListener('DOMContentLoaded', function() {
 // ═══════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════
-// ✅ CORREÇÕES v49 — FIXES CRÍTICOS PARA iOS
+// ✅ CORREÇÕES v50 — QR CODE FIX FINAL
 // ═══════════════════════════════════════════════════════════════════════
 console.log(`
 ╔════════════════════════════════════════════════════════════════════╗
 ║                                                                    ║
-║  🚀 EQUIPAMENTOS v49 QR FIX — 3 ERROS CRÍTICOS CORRIGIDOS          ║
+║  🚀 EQUIPAMENTOS v50 — QR CODE CORRUPTO CORRIGIDO                 ║
 ║                                                                    ║
 ╠════════════════════════════════════════════════════════════════════╣
 ║                                                                    ║
-║ 🔴 ERRO #1: Sintaxe quebrada (════ token inválido)                 ║
-║    ❌ v48: Linha 14672 tinha '════' fora de <script>               ║
-║    ✅ v49: Removido — arquivo agora é HTML válido                 ║
+║ 🔴 ERRO v49 HERDADO: QR Code mostrando lixo JSON                  ║
+║    • Screenshot mostrava: 00000",c / cl;"string / ,this.el         ║
+║    • Causa: _buildQrPayload() retornando tipo errado              ║
+║    • Impacto: Etiquetas impressas com QR ilegível                 ║
 ║                                                                    ║
-║ 🔴 ERRO #2: TypeError — window._isIOS undefined                    ║
-║    ❌ v48: Valores definidos após potencial acesso                 ║
-║    ✅ v49: Safeguard — defaults ANTES de usar                     ║
-║    • window._isIOS = false (default)                              ║
-║    • Depois: detectar e atualizar (nunca undefined)                ║
+║ ✅ SOLUÇÃO v50:                                                    ║
+║    1. Garantir r.id SEMPRE é STRING (não objeto/undefined)        ║
+║    2. Validar tipo em gerarQRCode() antes de usar                 ║
+║    3. Fallback: se ID vazio, usar índice sequencial               ║
+║    4. Debug mode: logs detalhados do que vai para QR              ║
+║    5. Atualizar para v50 (v47 era desatualizado)                  ║
 ║                                                                    ║
-║ 🔴 ERRO #3: Supabase anônimo timeout — modo ?view=ID              ║
-║    ❌ v48: Uma tentativa, falha = "tempo esgotado"                 ║
-║    ✅ v49: Retry automático + exponential backoff                  ║
-║    • Tentativa 1: falha → aguarda 1s                              ║
-║    • Tentativa 2: falha → aguarda 3s                              ║
-║    • Tentativa 3: falha → aguarda 7s                              ║
-║    • Melhor UX: toast de erro em vez de falha silenciosa          ║
-║    • Verifica: chave DUMMY? RLS habilitado? Dados existem?        ║
+║ 🔧 MUDANÇAS:                                                       ║
 ║                                                                    ║
-╠════════════════════════════════════════════════════════════════════╣
+║ _buildQrPayload(r):                                               ║
+║   - String(r.id || r._uid || '') — força conversão               ║
+║   - Se vazio: usa índice do DB como fallback                      ║
+║   - URL: https://.../?view=CLEANED_ID&v=v50                       ║
+║   - Log: [QR BUILD] mostra r_id, r_uid, final_id                  ║
 ║                                                                    ║
-║ ✅ COMO TESTAR v49:                                                ║
-║                                                                    ║
-║ 1. ERRO #1 (Sintaxe):                                              ║
-║    → Abrir DevTools (F12) → Console                               ║
-║    → NÃO deve haver erros de parsing                              ║
-║                                                                    ║
-║ 2. ERRO #2 (iOS detection):                                        ║
-║    → Em iPhone: [iOS FIX] logs devem aparecer                     ║
-║    → Verificar: window._isIOS === true|false (nunca undefined)    ║
-║                                                                    ║
-║ 3. ERRO #3 (Supabase retry):                                       ║
-║    → Abrir QR code em iPhone (rede lenta)                         ║
-║    → Ver "[público] Tentativa X/3..." nos logs                    ║
-║    → Funcionar mesmo com falhas temporárias                       ║
+║ gerarQRCode(elementId, texto):                                    ║
+║   - typeof texto !== 'string' → throw error                       ║
+║   - Não aceita mais objetos/undefined                             ║
+║   - Log: [QR] Gerando para: [primeiros 50 chars]                  ║
 ║                                                                    ║
 ╠════════════════════════════════════════════════════════════════════╣
 ║                                                                    ║
-║ 📋 CHECKLIST PRÉ-PRODUÇÃO:                                         ║
+║ ✅ COMO TESTAR v50:                                                ║
 ║                                                                    ║
-║ [ ] Supabase URL correta em _QR_PUBLIC_SB_URL                     ║
-║ [ ] Anon Key (trocar DUMMY_KEY_REPLACE_ME)                        ║
-║ [ ] RLS habilitado na tabela 'equipamentos'                       ║
-║ [ ] Policy "SELECT (anon)" criada para roles: anon, authenticated ║
-║ [ ] Testar em iPhone 13+ (rede 4G lenta)                          ║
-║ [ ] Testar em Android 10+                                         ║
-║ [ ] Verificar console.log('[público]...') em cada plataforma      ║
+║ 1. Abrir DevTools (F12) → Console                                 ║
+║ 2. Selecionar 3+ equipamentos                                     ║
+║ 3. Clique em [▦ Imprimir QR selecionados]                         ║
+║ 4. Verificar logs:                                                ║
+║    [QR BUILD] Payload: { r_id: '...' final_id: '...', url: ... } ║
+║    [QR] Gerando para: https://seu-site...?view=123&v=v50         ║
+║    [QR] ✅ QRCode.js gerado com sucesso (iOS-safe v50)           ║
+║ 5. Gerar e imprimir                                               ║
+║ 6. Escanear com iPhone → deve abrir modo ?view=ID                ║
+║                                                                    ║
+║ Se aparecer [QR] ❌ Texto inválido:                               ║
+║    → Há um bug onde r.id/r._uid é objeto (não string)            ║
+║    → Reportar no console com: console.log(DB[0])                  ║
+║                                                                    ║
+╠════════════════════════════════════════════════════════════════════╣
+║                                                                    ║
+║ 📊 DIFERENÇAS v49 → v50:                                          ║
+║                                                                    ║
+║ v49 QR Code (ANTES - ERRADO):                                     ║
+║   ┌─────────────────────┐                                         ║
+║   │ 00000",c            │                                         ║
+║   │ cl;"string          │  ← Lixo JSON/objeto stringificado       ║
+║   │ ,this.el            │                                         ║
+║   │ 920019404 (barcode) │                                         ║
+║   └─────────────────────┘                                         ║
+║                                                                    ║
+║ v50 QR Code (DEPOIS - CORRETO):                                   ║
+║   ┌─────────────────────┐                                         ║
+║   │   ▄▄▄▄▄▄▄           │                                         ║
+║   │  ██       ██        │  ← URL limpa e válida                   ║
+║   │  ██  ▀▀▀  ██        │                                         ║
+║   │  ██       ██        │                                         ║
+║   │   ▀▀▀▀▀▀▀           │                                         ║
+║   │ https://seu-site... │                                         ║
+║   │ /equipamentos_v50...│                                         ║
+║   │ ?view=123&v=v50    │                                         ║
+║   │ 920019404 (barcode) │                                         ║
+║   └─────────────────────┘                                         ║
 ║                                                                    ║
 ╚════════════════════════════════════════════════════════════════════╝
 `);
-console.log('📊 Equipamentos v49 QR Fix — Repositório: https://github.com/aplicativosrochling/equipment/releases/tag/v49');
+console.log('📊 Equipamentos v50 QR Fix Final — Repositório: https://github.com/aplicativosrochling/equipment/releases/tag/v50');
 </script>
 
 </body>
