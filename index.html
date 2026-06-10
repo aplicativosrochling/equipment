@@ -5362,26 +5362,86 @@ async function initSupabase() {
     document.body.appendChild(ov);
   }
 
-  // Espera o DB estar pronto, depois renderiza (timeout de 8s como segurança)
+  // Espera o DB estar pronto, depois renderiza
   const _pubStart = Date.now();
+  // [v41 iOS FIX] Timeout dinâmico: 45s para iOS, 20s para outros — carregamento de dados via QR
+  const _QR_TIMEOUT = window._isIOS ? 45000 : 20000;
+  let _timeoutWarningShown = false;
+  let _loadingOverlay = null;
+  
+  function showLoadingScreen() {
+    if (_loadingOverlay) return;
+    _loadingOverlay = document.createElement('div');
+    _loadingOverlay.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99998;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:12px';
+    _loadingOverlay.innerHTML = `
+      <div style="display:flex;gap:6px;align-items:center;justify-content:center">
+        <div style="width:8px;height:8px;border-radius:50%;background:#0064b3;animation:pulse-dot 1.2s infinite;animation-delay:0s"></div>
+        <div style="width:8px;height:8px;border-radius:50%;background:#0064b3;animation:pulse-dot 1.2s infinite;animation-delay:0.2s"></div>
+        <div style="width:8px;height:8px;border-radius:50%;background:#0064b3;animation:pulse-dot 1.2s infinite;animation-delay:0.4s"></div>
+      </div>
+      <div style="font-size:14px;font-weight:600;color:#1a1a1a">Carregando equipamento...</div>
+      <div style="font-size:11px;color:#9ca3bc;max-width:280px;text-align:center" id="qr-loading-status">Conectando ao servidor (${window._isIOS ? 'iOS - espere até 45s' : 'até 20s'})</div>
+    `;
+    document.body.appendChild(_loadingOverlay);
+    
+    // Adicionar estilos de animação se não existem
+    if (!document.getElementById('qr-pulse-style')) {
+      const style = document.createElement('style');
+      style.id = 'qr-pulse-style';
+      style.textContent = '@keyframes pulse-dot { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }';
+      document.head.appendChild(style);
+    }
+  }
+  
+  function hideLoadingScreen() {
+    if (_loadingOverlay) {
+      _loadingOverlay.remove();
+      _loadingOverlay = null;
+    }
+  }
+  
+  function updateLoadingStatus(msg) {
+    const status = document.getElementById('qr-loading-status');
+    if (status) status.textContent = msg;
+  }
+  
   function waitAndRender() {
     if (typeof DB === 'undefined' || !DB.length) {
-      if (Date.now() - _pubStart > 15000) {
+      const elapsedMs = Date.now() - _pubStart;
+      
+      // Mostrar tela de loading depois de 200ms
+      if (elapsedMs > 200) {
+        showLoadingScreen();
+      }
+      
+      // Aviso em 25s (para iOS, antes do timeout final de 45s)
+      if (window._isIOS && elapsedMs > 25000 && !_timeoutWarningShown) {
+        _timeoutWarningShown = true;
+        updateLoadingStatus('⏳ Demorando mais que o esperado... Aguarde.');
+        console.warn('[QR iOS] Demorando mais que o esperado (25s+)... tentando ainda.');
+      }
+      
+      if (elapsedMs > _QR_TIMEOUT) {
         // Timeout: mostra erro em vez de girar para sempre
+        hideLoadingScreen();
         const ov = document.createElement('div');
-        ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:8px';
-        ov.innerHTML = `<div style="font-size:36px">⏱️</div><div style="font-size:16px;font-weight:700;color:#1a1a1a">Tempo esgotado</div><div style="font-size:12px;color:#6b7280">Não foi possível carregar os dados. Verifique sua conexão.</div>`;
+        ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:8px;padding:24px;text-align:center';
+        ov.innerHTML = `<div style="font-size:36px">⏱️</div><div style="font-size:16px;font-weight:700;color:#1a1a1a">Tempo esgotado</div><div style="font-size:12px;color:#6b7280">Não foi possível carregar os dados em ${(elapsedMs/1000).toFixed(1)}s. Verifique sua conexão.</div><div style="font-size:11px;color:#9ca3bc;margin-top:12px">💡 Dica: Tente novamente em alguns segundos ou verifique se está conectado à internet.</div>`;
         document.body.appendChild(ov);
         return;
       }
       setTimeout(waitAndRender, 200);
       return;
     }
+    
+    // DB carregado com sucesso
+    hideLoadingScreen();
     const vId = decodeURIComponent(viewId).toUpperCase();
     const r = DB.find(x => (x.id || '').toUpperCase() === vId)
            || DB.find(x => String(x._uid) === decodeURIComponent(viewId))
            || DB.find(x => (x._docId || '').toUpperCase() === vId);
     if (!r) {
+      hideLoadingScreen();
       const ov = document.createElement('div');
       const dbCount = (typeof DB !== 'undefined' && DB) ? DB.length : 0;
       ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:6px;padding:24px;text-align:center';
@@ -5394,6 +5454,7 @@ async function initSupabase() {
       document.body.appendChild(ov);
       return;
     }
+    hideLoadingScreen();
     buildPublicView(r);
   }
 
@@ -5422,12 +5483,25 @@ async function initSupabase() {
           waitAndRender();
           return;
         }
+        
+        // [v41 iOS FIX] Timeout customizado para fetch do Supabase (maior para iOS)
+        const sbFetchTimeoutMs = window._isIOS ? 40000 : 15000;
+        
         // Cria cliente anônimo para leitura pública
         const sbPub = supabase.createClient(sbUrl, sbKey);
-        const { data, error } = await sbPub
-          .from('equipamentos')
-          .select('*')
-          .order('id', { ascending: true });
+        
+        // Envolver com timeout para iOS
+        const fetchWithTimeout = Promise.race([
+          sbPub
+            .from('equipamentos')
+            .select('*')
+            .order('id', { ascending: true }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Supabase fetch timeout')), sbFetchTimeoutMs)
+          )
+        ]);
+        
+        const { data, error } = await fetchWithTimeout;
 
         if (error) throw error;
 
@@ -5435,11 +5509,18 @@ async function initSupabase() {
           // [v23 FIX] Preserva _uid do registro salvo (não usa índice sequencial que quebra o lookup por _uid)
           const rows = data.map((r) => ({ ...r, _uid: r._uid || r.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)) }));
           DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
+          console.log('[público] ' + data.length + ' equipamento(s) carregado(s) do Supabase com sucesso');
         } else {
           console.warn('[público] Tabela equipamentos vazia ou sem permissão de leitura anônima.');
         }
       } catch(e) {
         console.error('[público] erro Supabase:', e.message || e);
+        // Tentar carregar do localStorage como fallback
+        if (typeof DB !== 'undefined' && DB.length > 0) {
+          console.log('[público] Usando dados do localStorage como fallback após erro de Supabase');
+        } else {
+          console.warn('[público] Nenhum fallback disponível — renderização pode falhar');
+        }
       }
       waitAndRender();
     })();
