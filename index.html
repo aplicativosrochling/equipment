@@ -15,7 +15,7 @@
 <!-- 🍎 iOS Specific: Evita timeout em Safari -->
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v38)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v39)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição - v36 Premium com melhorias avançadas.">
 
 
@@ -5486,30 +5486,73 @@ async function initSupabase() {
         
         // [v41 iOS FIX] Timeout customizado para fetch do Supabase (maior para iOS)
         const sbFetchTimeoutMs = window._isIOS ? 40000 : 15000;
-        
+
         // Cria cliente anônimo para leitura pública
         const sbPub = supabase.createClient(sbUrl, sbKey);
-        
-        // Envolver com timeout para iOS
-        const fetchWithTimeout = Promise.race([
-          sbPub
-            .from('equipamentos')
-            .select('*')
-            .order('id', { ascending: true }),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Supabase fetch timeout')), sbFetchTimeoutMs)
-          )
-        ]);
-        
-        const { data, error } = await fetchWithTimeout;
 
-        if (error) throw error;
+        // ════════════════════════════════════════════════════════════
+        // ✅ FIX v39 CRÍTICO — PAGINAÇÃO COMPLETA (Supabase limita 1000)
+        // Bug anterior: .select('*') sem .range() → máx 1000 registros
+        // → QR de equipamentos após o 1000º retornava "não encontrado"
+        // ════════════════════════════════════════════════════════════
+        const PAGE_SIZE = 1000;
+        const _qrT0 = performance.now();
+        let allData = [];
+        let from = 0;
+        let hasMore = true;
+        let pageNum = 0;
+
+        async function _qrFetchPage(_from) {
+          // [v41] Cada página com seu próprio timeout (iOS-safe)
+          return Promise.race([
+            sbPub
+              .from('equipamentos')
+              .select('*')
+              .order('id', { ascending: true })
+              .range(_from, _from + PAGE_SIZE - 1),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Supabase page timeout @from=' + _from)), sbFetchTimeoutMs)
+            )
+          ]);
+        }
+
+        while (hasMore) {
+          pageNum++;
+          updateLoadingStatus && updateLoadingStatus('Carregando dados (página ' + pageNum + ')...');
+          let page = null, error = null;
+          // [v39] Retry inteligente: 3 tentativas por página
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              const res = await _qrFetchPage(from);
+              page = res.data; error = res.error;
+              if (!error) break;
+              console.warn('[FETCH] tentativa ' + attempt + '/3 falhou:', error.message || error);
+            } catch (e) {
+              error = e;
+              console.warn('[FETCH] tentativa ' + attempt + '/3 exception:', e.message || e);
+            }
+            if (attempt < 3) await new Promise(r => setTimeout(r, 500 * attempt));
+          }
+          if (error) throw error;
+          if (page && page.length > 0) {
+            allData = allData.concat(page);
+            console.log('[SUPABASE] página ' + pageNum + ': ' + page.length + ' registros (acumulado: ' + allData.length + ')');
+          }
+          hasMore = !!(page && page.length === PAGE_SIZE);
+          from += PAGE_SIZE;
+          // [SAFETY] hard cap 50k registros (50 páginas) para evitar loop infinito
+          if (pageNum >= 50) { console.warn('[SUPABASE] hard cap 50 páginas atingido'); break; }
+        }
+
+        const data = allData;
+        const _qrMs = (performance.now() - _qrT0).toFixed(0);
+        console.log('[LOAD] Carregamento total: ' + data.length + ' registro(s) em ' + _qrMs + 'ms (' + pageNum + ' páginas)');
 
         if (data && data.length > 0) {
           // [v23 FIX] Preserva _uid do registro salvo (não usa índice sequencial que quebra o lookup por _uid)
           const rows = data.map((r) => ({ ...r, _uid: r._uid || r.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)) }));
           DB = typeof recalcDias === 'function' ? recalcDias(rows) : rows;
-          console.log('[público] ' + data.length + ' equipamento(s) carregado(s) do Supabase com sucesso');
+          console.log('[VIEWER] DB pronto: ' + DB.length + ' equipamento(s). Buscando ID="' + decodeURIComponent(viewId) + '"');
         } else {
           console.warn('[público] Tabela equipamentos vazia ou sem permissão de leitura anônima.');
         }
@@ -10097,9 +10140,24 @@ window.openPdfModalBulk = function(tbl) {
 
 function _buildQrPayload(r) {
     const id = encodeURIComponent(r.id || r._uid || '');
-    // BUG-12 FIX: URL fixa para GitHub Pages (não depende de window.location)
-    const BASE_URL = 'https://aplicativosrochling.github.io/equipment/';
-    return BASE_URL + '?view=' + id + '&v=v25';
+    // [v39 FIX] URL dinâmica: usa origem atual quando hospedado, fallback GitHub Pages
+    // Evita QR apontando para domínio errado se sistema for migrado de host.
+    let BASE_URL;
+    try {
+      const loc = window.location;
+      // Se estiver rodando em http(s) hospedado (não file://), usa origem dinâmica preservando o path /equipment/
+      if (loc && loc.origin && /^https?:/.test(loc.protocol)) {
+        // Mantém /equipment/ como subpath padrão do projeto
+        BASE_URL = loc.origin + '/equipment/';
+      } else {
+        BASE_URL = 'https://aplicativosrochling.github.io/equipment/';
+      }
+    } catch (e) {
+      BASE_URL = 'https://aplicativosrochling.github.io/equipment/';
+    }
+    // [v39] Cache-busting timestamp (a cada 1h) para evitar JS antigo em CDN do GitHub Pages
+    const v = 'v39_' + Math.floor(Date.now() / 3600000);
+    return BASE_URL + '?view=' + id + '&v=' + v;
 }
 
 let _qrUID = null;
