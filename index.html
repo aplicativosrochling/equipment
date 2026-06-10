@@ -5366,7 +5366,7 @@ async function initSupabase() {
   const _pubStart = Date.now();
   function waitAndRender() {
     if (typeof DB === 'undefined' || !DB.length) {
-      if (Date.now() - _pubStart > 8000) {
+      if (Date.now() - _pubStart > 15000) {
         // Timeout: mostra erro em vez de girar para sempre
         const ov = document.createElement('div');
         ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:8px';
@@ -5397,14 +5397,9 @@ async function initSupabase() {
     buildPublicView(r);
   }
 
-  // ══════════════════════════════════════════════════════════════
-  // ✅ FIX v25 — CREDENCIAIS SUPABASE PARA LEITURA PÚBLICA VIA QR
-  // Preencha abaixo com sua URL e Anon Key do Supabase.
-  // A Anon Key é PÚBLICA por design (leitura via RLS apenas).
-  // Sem isso, o QR não funciona em celulares que não fizeram login.
-  // ══════════════════════════════════════════════════════════════
-  const _QR_PUBLIC_SB_URL = ''; // ← Cole aqui: https://xxxxxx.supabase.co
-  const _QR_PUBLIC_SB_KEY = ''; // ← Cole aqui: eyJhbGciOi... (anon/public key)
+  
+  const _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co'; 
+  const _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw'; 
 
   // Oculta o login, lê a tabela 'equipamentos' no Supabase (anon key = leitura pública via RLS) e renderiza a ficha.
   // No Supabase: certifique-se de habilitar RLS com uma policy "allow SELECT for anon" na tabela 'equipamentos'.
