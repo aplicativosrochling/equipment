@@ -2,17 +2,20 @@
 <html lang="pt-BR" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0064b3">
 
-<meta http-equiv="Cache-Control" content="public, max-age=300">
+<!-- ✅ ANTI-CACHE + iOS COMPATIBILITY - Garante carregamento mas compatível com Safari/iPhone -->
+<meta http-equiv="Cache-Control" content="no-store, max-age=0, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<!-- 🍎 iOS Specific: Evita timeout em Safari -->
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v50 — Enterprise Hardened)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v38)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição - v36 Premium com melhorias avançadas.">
 
 
@@ -79,98 +82,64 @@ if (!Object.fromEntries) {
 // requestAnimationFrame polyfill
 window.requestAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || function(cb){ return setTimeout(cb, 16); };
 window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancelAnimationFrame || function(id){ clearTimeout(id); };
+
 /* ═══════════════════════════════════════════════════════════════════════
-   [v50 HARDENING] Z-INDEX MANAGER — Gerenciamento centralizado de camadas
+   [v38 iOS FIX] DETECÇÃO E TRATAMENTO ESPECIAL PARA iPhone/iPad/macOS
    ═══════════════════════════════════════════════════════════════════════ */
-window._zIndexManager = (function() {
-  const layers = {
-    'foundation': 1,
-    'sidebar': 10,
-    'content': 100,
-    'sticky-header': 200,
-    'notification': 300,
-    'modal': 400,
-    'dropdown': 500,
-    'tooltip': 600,
-    'overlay-dim': 900,
-    'overlay-processing': 9000,
-    'overlay-import': 9500,
-    'modal-qr': 800,
-    'modal-bulk': 850,
-    'toast': 10000
-  };
-  
-  const assigned = new Map();
-  
-  return {
-    get: function(layerName) {
-      if (layers[layerName] === undefined) {
-        console.warn('[zIndex] Layer desconhecido:', layerName);
-        return 100;
-      }
-      return layers[layerName];
-    },
-    
-    set: function(element, layerName) {
-      const zIndex = this.get(layerName);
-      if (element && typeof element.style !== 'undefined') {
-        element.style.zIndex = zIndex;
-        assigned.set(element, { layer: layerName, zIndex: zIndex });
-        _DEV && console.log('[zIndex] Atribuído', layerName, '=', zIndex);
-      }
-    },
-    
-    findConflicts: function() {
-      const conflicts = [];
-      const zIndexMap = {};
-      assigned.forEach((meta, el) => {
-        if (!zIndexMap[meta.zIndex]) {
-          zIndexMap[meta.zIndex] = [];
-        }
-        zIndexMap[meta.zIndex].push({ element: el, layer: meta.layer });
-      });
-      Object.entries(zIndexMap).forEach(([z, elements]) => {
-        if (elements.length > 1) {
-          conflicts.push({ zIndex: z, elements: elements });
-        }
-      });
-      return conflicts;
-    }
-  };
-})();
-
-
-/* ═══════════════════════════════════════════════
-   UTILITÁRIOS GLOBAIS: Fetch com timeout, localStorage seguro
-   ═══════════════════════════════════════════════ */
 (function() {
-  // Timeout robusto para fetch em qualquer plataforma
-  window._FETCH_TIMEOUT = 20000;
-
+  // Detectar iOS/Safari
+  var ua = navigator.userAgent.toLowerCase();
+  window._isIOS = /iphone|ipad|ipod|mac os x/.test(ua) && /safari/.test(ua) && !/chrome/.test(ua);
+  window._isAndroid = /android/.test(ua);
+  window._isMobile = window._isIOS || window._isAndroid;
+  
+  console.log('[iOS FIX] User-Agent: iOS=' + window._isIOS + ', Android=' + window._isAndroid);
+  
+  // Aumentar timeout padrão para iOS (30s em vez de 10s)
+  window._FETCH_TIMEOUT = window._isIOS ? 30000 : 15000;
+  
+  // Wrapper para fetch com timeout automático (especial para iOS)
   window.fetchWithTimeout = function(url, options) {
     options = options || {};
     var timeout = options.timeout || window._FETCH_TIMEOUT;
+    
     return new Promise(function(resolve, reject) {
       var timeoutId = setTimeout(function() {
         var err = new Error('Network timeout (' + timeout + 'ms)');
         err.name = 'TimeoutError';
+        console.warn('[FETCH TIMEOUT] iOS fix triggered:', url);
         reject(err);
       }, timeout);
+      
       fetch(url, options)
-        .then(function(response) { clearTimeout(timeoutId); resolve(response); })
-        .catch(function(error)   { clearTimeout(timeoutId); reject(error); });
+        .then(function(response) {
+          clearTimeout(timeoutId);
+          resolve(response);
+        })
+        .catch(function(error) {
+          clearTimeout(timeoutId);
+          reject(error);
+        });
     });
   };
-
-  // localStorage com fallback para sessionStorage (private browsing / iOS restrictions)
+  
+  // Melhorar comportamento de localStorage no iOS
   window.safeLocalStorage = {
     getItem: function(key) {
-      try { return localStorage.getItem(key); }
-      catch(e) { try { return sessionStorage.getItem(key); } catch(e2) { return null; } }
+      try {
+        return localStorage.getItem(key);
+      } catch(e) {
+        console.warn('[iOS FIX] localStorage indisponível, tentando sessionStorage');
+        try { return sessionStorage.getItem(key); } catch(e2) { return null; }
+      }
     },
     setItem: function(key, value) {
-      try { localStorage.setItem(key, value); }
-      catch(e) { try { sessionStorage.setItem(key, value); } catch(e2) { console.warn('Storage unavailable:', e2); } }
+      try {
+        localStorage.setItem(key, value);
+      } catch(e) {
+        console.warn('[iOS FIX] localStorage cheio, tentando sessionStorage');
+        try { sessionStorage.setItem(key, value); } catch(e2) { console.error('[iOS FIX] sessionStorage também falhou'); }
+      }
     },
     removeItem: function(key) {
       try { localStorage.removeItem(key); } catch(e) {}
@@ -178,6 +147,7 @@ window._zIndexManager = (function() {
     }
   };
   
+  console.log('[iOS FIX] Sistema carregado. Timeout: ' + window._FETCH_TIMEOUT + 'ms');
 })();
 
 /* ═══════════════════════════════════════════════
@@ -278,28 +248,6 @@ document.addEventListener('DOMContentLoaded', function() {
 /* ═══════════════════════════════════════════════════════════════════════
    [v36 NOVA] BULK ACTIONS - Selecionar e editar múltiplos registros
    ═══════════════════════════════════════════════════════════════════════ */
-
-/* ═══════════════════════════════════════════════════════════════════════
-   [v50 HARDENING] BULK SELECT COM DATASET FILTRADO
-   ═══════════════════════════════════════════════════════════════════════ */
-window._filtereddUIDs = new Set(); // Track UIDs filtrados
-window._currentPageUIDs = new Set(); // Track UIDs na página atual
-
-function updateFilteredUIDs() {
-  const filtered = new Set();
-  DB.forEach(r => {
-    if (window._currentQuery || window._currentFilters) {
-      const results = window.advancedSearch(window._currentQuery, window._currentFilters);
-      if (results.includes(r)) {
-        filtered.add(r._uid);
-      }
-    } else {
-      filtered.add(r._uid);
-    }
-  });
-  window._filtereddUIDs = filtered;
-  _DEV && console.log('[BulkSelect] Filtrados:', filtered.size, 'UIDs');
-}
 window._bulkSelectedIds = new Set();
 
 window.toggleBulkSelect = function(id, checkbox) {
@@ -622,28 +570,138 @@ window.clearAdvancedSearch = function() {
 };
 </script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-
-<!-- QR Code lib — carregamento síncrono, disponível antes de qualquer uso -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     [v40 iOS FIX] QR Code — qrcode.js v1.0.0 (cdnjs) com retry + fallback  
+     ═══════════════════════════════════════════════════════════════════════════ -->
 <script>
-// _qrWhenReady: como a lib já carregou de forma síncrona acima, executa imediatamente
-window._qrWhenReady = function(fn) { fn(); };
+(function(){
+  var MAX_RETRIES = 20; // 20 × 100 ms = 2s
+  var _retries = 0;
 
-window.gerarQRCode = function(elementId, texto) {
-  var el = (typeof elementId === 'string') ? document.getElementById(elementId) : elementId;
-  if (!el) return Promise.resolve();
-  return QRCode.toString(texto, {
-    type: 'svg', width: 260, margin: 4,
-    errorCorrectionLevel: 'H',
-    color: { dark: '#000000', light: '#ffffff' }
-  }).then(function(svg) {
-    el.innerHTML = svg.replace('<svg ', '<svg style="shape-rendering:crispEdges;display:block" ');
-  }).catch(function(err) {
-    console.error('[QR] Erro:', err);
-    el.innerHTML = '<div style="padding:16px;color:#dc2626;font-size:11px">Erro ao gerar QR</div>';
-  });
-};
+  function _initQRCode() {
+    if (typeof window.QRCode === 'undefined') {
+      _retries++;
+      if (_retries > MAX_RETRIES) {
+        console.error('[QR] qrcode.js não carregou — fallback ativado');
+        _setupFallbackQRCode();
+        return;
+      }
+      setTimeout(_initQRCode, 100);
+      return;
+    }
+    console.log('[QR] qrcode.js CDN carregada com sucesso');
+  }
+
+  // Fallback: renderizar QR como SVG via Google Charts
+  function _setupFallbackQRCode() {
+    var _OrigQR = window.QRCode;
+    if (!_OrigQR || _OrigQR._wrapped) return;
+    
+    window.QRCode = function(el, opts) {
+      if (typeof opts === 'string') opts = { text: opts };
+      opts = opts || {};
+      
+      var text = opts.text || '';
+      var w = opts.width || 220;
+      var h = opts.height || w;
+      
+      // Tenta usar a original se disponível
+      if (_OrigQR && typeof _OrigQR === 'function') {
+        try {
+          return new _OrigQR(el, {
+            text: text,
+            width: w,
+            height: h,
+            colorDark: opts.colorDark || '#000000',
+            colorLight: opts.colorLight || '#ffffff',
+            correctLevel: _OrigQR.CorrectLevel ? _OrigQR.CorrectLevel.M : 0
+          });
+        } catch (e) {
+          console.warn('[QR] Fallback necessário:', e.message);
+        }
+      }
+      
+      // Fallback final: Google Charts
+      var encoded = encodeURIComponent(text);
+      var img = document.createElement('img');
+      img.src = 'https://chart.googleapis.com/chart?chs=' + w + 'x' + h + '&chd=D:' + encoded + '&cht=qr';
+      img.style.width = w + 'px';
+      img.style.height = h + 'px';
+      
+      if (el && el.nodeType) {
+        el.appendChild(img);
+      }
+      
+      this.toDataURL = function() { return img.src; };
+    };
+    
+    window.QRCode.CorrectLevel = { L: 1, M: 0, Q: 3, H: 2 };
+    window.QRCode._wrapped = true;
+    console.log('[QR] Fallback QRCode (Google Charts) instalado');
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initQRCode);
+  } else {
+    _initQRCode();
+  }
+})();
+</script>
+
+<script>
+// Wrapper: garante compatibilidade com o .toDataURL() usado no restante do código.
+// CORREÇÃO v7: limite de 20 tentativas (2s máx.) para evitar loop infinito se CDN atrasar ou falhar.
+// Executa após DOMContentLoaded se o script ainda não tiver carregado (fallback de segurança).
+(function(){
+  var MAX_RETRIES = 20; // 20 × 100 ms = 2 s
+  var _retries = 0;
+
+  function _installQRWrapper() {
+    if (typeof window.QRCode === 'undefined') {
+      _retries++;
+      if (_retries > MAX_RETRIES) {
+        console.error('[QR] qrcode.min.js não carregou em ' + (MAX_RETRIES * 100) + ' ms — QR Code indisponível. Verifique a CDN ou o bloqueio de proxy.');
+        return; // Para definitivamente — sem loop infinito
+      }
+      setTimeout(_installQRWrapper, 100);
+      return;
+    }
+    var _OrigQR = window.QRCode;
+    // Evita dupla instalação
+    if (_OrigQR._wrapped) return;
+    window.QRCode = function(el, opts) {
+      if (typeof opts === 'string') opts = { text: opts };
+      var w = opts.width  || 220;
+      var h = opts.height || opts.width || 220;
+      var instance = new _OrigQR(el, {
+        text:         opts.text || '',
+        width:        w,
+        height:       h,
+        colorDark:    opts.colorDark  || '#000000',
+        colorLight:   opts.colorLight || '#ffffff',
+        correctLevel: _OrigQR.CorrectLevel.M
+      });
+      // Expõe .toDataURL() — qrcodejs cria um <canvas> dentro do el
+      this.toDataURL = function(type) {
+        var canvas = el.querySelector('canvas');
+        return canvas ? canvas.toDataURL(type || 'image/png') : '';
+      };
+      this._instance = instance;
+    };
+    window.QRCode.CorrectLevel = _OrigQR.CorrectLevel;
+    window.QRCode._wrapped = true;
+  }
+
+  // Tenta instalar imediatamente (script síncrono sem defer).
+  // Se o DOM ainda não tiver carregado, usa DOMContentLoaded como barreira adicional.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _installQRWrapper);
+  } else {
+    _installQRWrapper();
+  }
+})();
 </script>
 <!-- ── FONTS: 2 famílias apenas — Inter (UI) + JetBrains Mono (dados técnicos/IDs) ── -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -893,11 +951,6 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: 'ss01','cv01';
-}
-/* Safe-area support para Dynamic Island / home indicator do iPhone */
-.modal-ov, #v12-import-preview {
-  padding-top:    env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* ── HEADER — Röchling branded command bar ── */
@@ -4705,11 +4758,7 @@ function recalcDias(records) {
 (function _preseedSupabaseCfg() {
   try {
     const _PRE_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co';
-    // [v50 SECURITY FIX] Token antigo revogado - novo token com RLS ativo
-    // ⚠️ IMPORTANTE: Gerar novo token em: Supabase Console → Settings → API Keys → anon key
-    // Este token tem Row-Level Security ativo e é muito mais seguro
     const _PRE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw';
-    console.warn('[v50] ⚠️ Supabase token antigo foi revogado. Configure novo token em Configurações → Supabase Config');
     const saved = JSON.parse(localStorage.getItem('rochling_sb_cfg') || '{}');
     if (!saved.url || !saved.key) {
       localStorage.setItem('rochling_sb_cfg', JSON.stringify({ url: _PRE_URL, key: _PRE_KEY }));
@@ -8784,27 +8833,16 @@ function toggleCardCheck(uid, chkEl) {
 }
 
 function selectAllCards() {
-  // [v50 FIX] Usa dataset filtrado, não apenas DOM visível
-  const targetUIDs = window._filtereddUIDs.size > 0 
-    ? window._filtereddUIDs 
-    : new Set(DB.map(r => r._uid));
-  
-  targetUIDs.forEach(uid => {
+  // Select all currently visible (filtered+paginated) cards
+  document.querySelectorAll('.eq-card[data-uid]').forEach(card => {
+    const uid = parseInt(card.dataset.uid);
     _cardSelectedUIDs.add(uid);
-    const card = document.querySelector(`.eq-card[data-uid="${uid}"]`);
-    if (card) {
-      card.classList.add('card-selected');
-      const chk = card.querySelector('.eq-card-chk');
-      if (chk) chk.checked = true;
-    }
+    card.classList.add('card-selected');
+    const chk = card.querySelector('.eq-card-chk');
+    if (chk) chk.checked = true;
   });
-  
   const cnt = document.getElementById('bulk-count-cards');
   if (cnt) cnt.textContent = _cardSelectedUIDs.size;
-  
-  if(typeof showToast === 'function') {
-    showToast(`✅ ${_cardSelectedUIDs.size} equipamento(s) selecionado(s)`, 'success');
-  }
 }
 
 function clearCardSelection() {
@@ -8967,26 +9005,50 @@ async function printQrBulk(uids) {
 
   const fmt = v => fmtDateSafe(v);
 
-  // Gera QR como SVG vetorial com quiet zone de 4 módulos — nítido em qualquer resolução
+  // Gera todos os QR codes como base64 via canvas
+  const tmpArea = document.createElement('div');
+  tmpArea.style.cssText = 'position:fixed;left:-9999px;top:0;visibility:hidden';
+  document.body.appendChild(tmpArea);
+
   const qrDataList = [];
   for (const r of rows) {
     const payload = _buildQrPayload(r);
+    const box = document.createElement('div');
+    tmpArea.appendChild(box);
     try {
-      const _svg = await QRCode.toString(payload, {
-        type: 'svg', width: cfg.qrPx, margin: 4,
-        errorCorrectionLevel: 'H',
-        color: { dark: '#000000', light: '#ffffff' }
+      new QRCode(box, { text: payload, width: cfg.qrPx, height: cfg.qrPx,
+                        colorDark: '#000000', colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.M });
+      // [v38 FIX] Polling robusto: aguarda canvas ter pixels reais
+      await new Promise(function(resolve) {
+        var attempts = 0;
+        var maxAttempts = 40;
+        function poll() {
+          attempts++;
+          var canvas = box.querySelector('canvas');
+          var ready = false;
+          if (canvas && canvas.width > 0) {
+            try {
+              var px = canvas.getContext('2d').getImageData(2, 2, 1, 1).data;
+              ready = (px[0] < 250 || px[1] < 250 || px[2] < 250);
+            } catch(e) { ready = true; }
+          }
+          if (ready || attempts >= maxAttempts) resolve();
+          else setTimeout(poll, 50);
+        }
+        setTimeout(poll, 20);
       });
-      qrDataList.push({ r, svg: _svg.replace('<svg ', '<svg style="shape-rendering:crispEdges;display:block" ') });
+      const canvas = box.querySelector('canvas');
+      qrDataList.push({ r, src: canvas ? canvas.toDataURL('image/png') : '' });
     } catch(e) {
-      console.error('[QR BULK] Erro:', e);
-      qrDataList.push({ r, svg: '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#dc2626;font:700 6pt Arial">QR ERRO</div>' });
+      qrDataList.push({ r, src: '' });
     }
   }
+  document.body.removeChild(tmpArea);
 
   // Gera HTML de etiqueta para cada item
   function labelHtml(item) {
-    const { r, svg } = item;
+    const { r, src } = item;
     const id   = showId   ? esc(r.id || '—') : '';
     const desc = showDesc ? esc((r.descricao || r.tipo || '').slice(0, 32)) : '';
     const prox = showProx ? `Prx: ${fmt(r.prox_calib)}` : '';
@@ -9003,18 +9065,18 @@ async function printQrBulk(uids) {
       // Mini: faixa colorida no topo com o código (se showId)
       return `<div style="width:${cfg.w}mm;height:${cfg.h}mm;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff;page-break-inside:avoid;overflow:hidden">
         ${id?`<div style="width:100%;background:${idBg};color:#fff;font-family:Arial,sans-serif;font-size:3pt;font-weight:900;text-align:center;letter-spacing:.2px;padding:.3mm 0;line-height:1">${id}</div>`:''}
-        <div class="qr-svg" style="width:${id?cfg.w-2:cfg.w-1}mm;height:${id?cfg.h-4:cfg.h-1}mm;flex-shrink:0">${svg}</div>
+        <img src="${src}" style="width:${id?cfg.w-2:cfg.w-1}mm;height:${id?cfg.h-4:cfg.h-1}mm;image-rendering:crisp-edges;image-rendering:pixelated;flex-shrink:0">
       </div>`;
     }
     if (_qrBulkSize === 'pequena') {
       return `<div style="width:${cfg.w}mm;height:${cfg.h}mm;display:flex;flex-direction:column;align-items:center;justify-content:center;border:.3mm solid ${idBg};border-radius:.5mm;padding:.5mm;background:#fff;box-sizing:border-box;page-break-inside:avoid;overflow:hidden">
-        <div class="qr-svg" style="width:${cfg.w-5}mm;height:${cfg.h-7}mm">${svg}</div>
+        <img src="${src}" style="width:${cfg.w-5}mm;height:${cfg.h-7}mm;image-rendering:crisp-edges;image-rendering:pixelated">
         ${id?`<div style="width:100%;background:${idBg};color:#fff;font-family:Arial,sans-serif;font-size:4.5pt;font-weight:900;text-align:center;line-height:1.3;margin-top:.4mm;border-radius:.3mm;padding:.2mm 0">${id}</div>`:''}
       </div>`;
     }
     if (_qrBulkSize === 'media') {
       return `<div style="width:${cfg.w}mm;height:${cfg.h}mm;display:flex;flex-direction:column;align-items:center;border:.3mm solid ${idBg};border-radius:.8mm;padding:1mm;background:#fff;box-sizing:border-box;page-break-inside:avoid;overflow:hidden">
-        <div class="qr-svg" style="width:20mm;height:20mm">${svg}</div>
+        <img src="${src}" style="width:20mm;height:20mm;image-rendering:crisp-edges;image-rendering:pixelated">
         <div style="font-family:Arial,sans-serif;text-align:center;width:100%;margin-top:.5mm">
           ${id?`<div style="background:${idBg};color:#fff;font-size:5.5pt;font-weight:900;letter-spacing:.4px;border-radius:.5mm;padding:.3mm 0;margin-bottom:.3mm">${id}</div>`:''}
           ${desc?`<div style="font-size:4.5pt;color:#333;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:28mm">${desc}</div>`:''}
@@ -9025,7 +9087,7 @@ async function printQrBulk(uids) {
     }
     // grande
     return `<div style="width:${cfg.w}mm;height:${cfg.h}mm;display:flex;align-items:center;gap:1.5mm;border:.3mm solid ${idBg};border-radius:.8mm;padding:1.5mm;background:#fff;box-sizing:border-box;page-break-inside:avoid;overflow:hidden">
-      <div class="qr-svg" style="width:24mm;height:24mm;flex-shrink:0">${svg}</div>
+      <img src="${src}" style="width:24mm;height:24mm;flex-shrink:0;image-rendering:crisp-edges;image-rendering:pixelated">
       <div style="flex:1;font-family:Arial,sans-serif;overflow:hidden;min-width:0">
         ${id?`<div style="background:${idBg};color:#fff;font-size:7pt;font-weight:900;letter-spacing:.4px;border-radius:.7mm;padding:.5mm 1.5mm;display:inline-block;margin-bottom:1mm">${id}</div>`:''}
         ${desc?`<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${desc}</div>`:''}
@@ -9061,8 +9123,6 @@ async function printQrBulk(uids) {
   .grid { display: grid;
           grid-template-columns: repeat(${cfg.cols}, ${cfg.w}mm);
           gap: ${cfg.gap}mm }
-  .qr-svg { display:flex; align-items:center; justify-content:center; background:#fff; overflow:hidden }
-  .qr-svg svg { display:block; width:100% !important; height:100% !important; background:#fff; shape-rendering:crispEdges }
   @media print {
     .toolbar { display: none }
     body { background: #fff }
@@ -9958,69 +10018,16 @@ window.openPdfModalBulk = function(tbl) {
 // ═══════════════════════════════════════════════════════
 
 function _buildQrPayload(r) {
-  const id = encodeURIComponent(r.id || r._uid || '');
-  
-  // [v50 FIX 6] URL DINÂMICA baseada em environment — sem hardcoding
-  let BASE_URL;
-  
-  // 1. Tentar ler de localStorage (config do admin)
-  try {
-    const savedUrl = localStorage.getItem('qr-base-url');
-    if (savedUrl && savedUrl.startsWith('http')) {
-      BASE_URL = savedUrl;
-    }
-  } catch(e) {}
-  
-  // 2. Se não houver config, usar window.location como fallback
-  if (!BASE_URL) {
-    const isLocalhost = window.location.hostname === 'localhost' || 
-                       window.location.hostname === '127.0.0.1' ||
-                       window.location.hostname.endsWith('.local');
-    
-    const isGitHub = window.location.hostname.includes('github.io');
-    
-    if (isLocalhost) {
-      BASE_URL = window.location.origin + (window.location.pathname.includes('/equipment') 
-        ? window.location.pathname.replace(/\/[^\/]*$/, '') 
-        : window.location.pathname);
-    } else if (isGitHub) {
-      BASE_URL = window.location.origin + window.location.pathname.replace(/\/$/, '');
-    } else {
-      BASE_URL = window.location.origin + '/equipment';
-    }
-  }
-  
-  if (!BASE_URL.endsWith('/')) {
-    BASE_URL += '/';
-  }
-  
-  _DEV && console.log('[QR] BASE_URL detectada:', BASE_URL);
-  
-  return BASE_URL + '?view=' + id + '&v=v25';
+    const id = encodeURIComponent(r.id || r._uid || '');
+    // BUG-12 FIX: URL fixa para GitHub Pages (não depende de window.location)
+    const BASE_URL = 'https://aplicativosrochling.github.io/equipment/';
+    return BASE_URL + '?view=' + id + '&v=v25';
 }
-
-// [v50 NOVO] Funções para admin configurar URL dinamicamente
-window.setQrBaseUrl = function(url) {
-  try {
-    localStorage.setItem('qr-base-url', url);
-    if(typeof showToast === 'function') {
-      showToast('✅ URL base QR: ' + url, 'success');
-    }
-  } catch(e) {
-    if(typeof showToast === 'function') {
-      showToast('❌ Erro: ' + e.message, 'error');
-    }
-  }
-};
-
-window.getQrBaseUrl = function() {
-  return localStorage.getItem('qr-base-url') || window.location.origin;
-};
 
 let _qrUID = null;
 let _qrInstance = null;
 
-async function openQrModal(uid) {
+function openQrModal(uid) {
   _qrUID = uid;
   
   // 🔥 ADICIONAR ESTA LINHA - Limpa QR antigo
@@ -10058,9 +10065,12 @@ async function openQrModal(uid) {
   _DEV && console.log('[QR] URL gerada:', payload);
   
   try {
-    // Gera QR SVG vetorial nítido (quiet zone 4 módulos, crispEdges)
-    await gerarQRCode('qr-canvas-box', payload);
-    _qrInstance = { _svg: true };
+    _qrInstance = new QRCode(qrBox, {
+      text: payload,
+      width: 220, height: 220,
+      colorDark: '#000000', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
   } catch(e) {
     console.error('[QR] Erro:', e);
     qrBox.innerHTML = '<div style="padding:20px;color:red;font-size:11px">Erro ao gerar QR: '+e.message+'</div>';
@@ -10078,40 +10088,23 @@ async function openQrModal(uid) {
 // ═══════════════════════════════════════════════════════════════════
 // FUNÇÃO AUXILIAR PARA ATUALIZAR QR QUANDO O MODAL ESTIVER ABERTO
 // ═══════════════════════════════════════════════════════════════════
-let _qrRefreshTimeouts = [];
-let _qrRefreshRetries = 0;
-const _QR_REFRESH_MAX_RETRIES = 5;
-
 function refreshQrIfOpen() {
-  const ov = document.getElementById('qr-modal-ov');
-  
-  // [v50 FIX 7] Limpar timeouts anteriores para evitar múltiplos
-  _qrRefreshTimeouts.forEach(id => clearTimeout(id));
-  _qrRefreshTimeouts = [];
-  
+  var ov = document.getElementById('qr-modal-ov');
+  // [v35 FIX] Race condition - verificar se modal realmente está visível
   if (ov && ov.classList.contains('on') && ov.style.opacity !== '0' && typeof _qrUID !== 'undefined' && _qrUID) {
-    _qrRefreshRetries = 0;
-    console.log('[QR v50] Modal aberto, regenerando QR com dados atualizados...');
+    console.log('[QR] Modal QR aberto, regenerando com dados atualizados...');
     
+    // [v35 FIX] Usar requestAnimationFrame para garantir que DOM está pronto
     requestAnimationFrame(function() {
       if (typeof openQrModal === 'function') {
         openQrModal(_qrUID);
       }
     });
   } else if (ov && !ov.classList.contains('on')) {
-    // Modal está fechado — tentar novamente, MAS com limite máximo
-    _qrRefreshRetries++;
-    if (_qrRefreshRetries < _QR_REFRESH_MAX_RETRIES) {
-      console.log('[QR v50] Modal fechado, tentativa', _qrRefreshRetries, '/', _QR_REFRESH_MAX_RETRIES);
-      const timeoutId = setTimeout(() => {
-        refreshQrIfOpen();
-      }, 500);
-      _qrRefreshTimeouts.push(timeoutId);
-    } else {
-      // [v50 FIX 7] Máximo de tentativas atingido — PARAR de tentar (quebra loop infinito)
-      console.log('[QR v50] ✅ Máximo de tentativas atingido, parando refresh');
-      _qrRefreshRetries = 0;
-    }
+    // Se modal foi fechado, aguardar um pouco antes de tentar novamente
+    // Isto previne múltiplas tentativas simultâneas
+    console.log('[QR] Modal não está aberto - refresh agendado');
+    setTimeout(function() { refreshQrIfOpen(); }, 500);
   }
 }
 
@@ -10125,18 +10118,15 @@ function closeQrModal() {
   document.body.style.overflow = '';
 }
 
-
 function _qrModalHTML() {
   return `
-<div id="qr-modal-ov" style="position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:800;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .18s;padding:max(env(safe-area-inset-top,12px),12px) max(env(safe-area-inset-right,12px),12px) max(env(safe-area-inset-bottom,12px),12px) max(env(safe-area-inset-left,12px),12px)" onclick="if(event.target===this)closeQrModal()">
+<div id="qr-modal-ov" style="position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:800;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .18s" onclick="if(event.target===this)closeQrModal()">
 <style>
 #qr-modal-ov.on{opacity:1;pointer-events:all}
 #qr-modal{background:var(--surf);border:1px solid var(--bdr2);border-radius:14px;width:460px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.5);padding:24px}
 .qr-size-btn{padding:6px 13px;border-radius:6px;border:1px solid var(--bdr2);background:var(--surf2);color:var(--tx2);font-size:11px;font-weight:700;cursor:pointer;transition:all .12s;font-family:var(--font)}
 .qr-size-btn:hover,.qr-size-btn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
 .qr-preview-label{font-size:9px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
-/* QR SVG: renderização vetorial nítida, sem blur em qualquer DPR/Retina */
-#qr-canvas-box svg{display:block;width:260px;height:260px;background:#fff;shape-rendering:crispEdges}
 </style>
 <div id="qr-modal">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
@@ -10240,20 +10230,44 @@ function printQrLabel() {
   if (!_printWin) { alert('Permita popups para imprimir etiquetas.'); return; }
   _printWin.document.write('<html><head><title>Aguarde...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial;color:#555;font-size:14px">⏳ Gerando etiqueta...</body></html>');
 
-  // Gera QR vetorial com quiet zone correta (4 módulos) — nítido em Retina/Safari
-  const payload = _buildQrPayload(r);
-  QRCode.toString(payload, {
-    type: 'svg', width: 400, margin: 4,
-    errorCorrectionLevel: 'H',
-    color: { dark: '#000000', light: '#ffffff' }
-  }).then(function(qrSvg) {
-    _doPrint(qrSvg.replace('<svg ', '<svg style="shape-rendering:crispEdges;display:block" '), _printWin);
-  }).catch(function(e) {
-    console.error('QR gen error:', e);
-    _doPrint('<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#dc2626;font:700 8pt Arial">QR ERRO</div>', _printWin);
-  });
+  // Gera QR em alta resolução para impressão com polling robusto
+  const payload = _buildQrPayload(r);  // ✅ QR com dados ATUAIS
+  const _qrGenBox = document.createElement('div');
+  _qrGenBox.style.cssText = 'position:absolute;left:-9999px;top:-9999px';
+  document.body.appendChild(_qrGenBox);
+  try {
+    new QRCode(_qrGenBox, { text: payload, width: 400, height: 400,
+                            correctLevel: QRCode.CorrectLevel.M });
+  } catch(e) { console.error('QR gen error:', e); }
 
-  function _doPrint(qrSvg, win) {
+  // [v38 FIX] Polling robusto: aguarda o canvas ter pixels reais (não branco)
+  // Evita QR em branco causado pelo setTimeout fixo de 80ms ser insuficiente
+  var _qrPollAttempts = 0;
+  var _qrMaxAttempts  = 40; // 40 × 50ms = 2s máx.
+  function _waitForQrCanvas() {
+    _qrPollAttempts++;
+    var _qrCanvas = _qrGenBox.querySelector('canvas');
+    var ready = false;
+    if (_qrCanvas && _qrCanvas.width > 0) {
+      // Verifica se o canvas tem conteúdo real (pixel não é branco puro)
+      try {
+        var ctx = _qrCanvas.getContext('2d');
+        var px  = ctx.getImageData(2, 2, 1, 1).data; // pixel no canto superior
+        ready = (px[0] < 250 || px[1] < 250 || px[2] < 250); // pelo menos 1 canal escuro
+      } catch(e) { ready = true; } // CORS fallback: assume pronto
+    }
+    if (ready || _qrPollAttempts >= _qrMaxAttempts) {
+      var qrSrc = (_qrCanvas && ready) ? _qrCanvas.toDataURL('image/png') : '';
+      if (!ready) console.warn('[QR] Canvas não ficou pronto após ' + _qrMaxAttempts + ' tentativas');
+      document.body.removeChild(_qrGenBox);
+      _doPrint(qrSrc, _printWin);
+    } else {
+      setTimeout(_waitForQrCanvas, 50);
+    }
+  }
+  setTimeout(_waitForQrCanvas, 30); // primeiro check após 30ms
+
+  function _doPrint(qrSrc, win) {
 
   // ── Layout de cada tamanho ──────────────────────────────────────
   function singleLabel() {
@@ -10267,7 +10281,7 @@ function printQrLabel() {
       return `
         <div style="width:12mm;height:12mm;display:flex;align-items:center;justify-content:center;
                     page-break-inside:avoid;background:#fff">
-          <div class="qr-svg" style="width:11mm;height:11mm">${qrSvg}</div>
+          <img src="${qrSrc}" style="width:11mm;height:11mm;image-rendering:crisp-edges;image-rendering:pixelated">
         </div>`;
     }
 
@@ -10277,7 +10291,7 @@ function printQrLabel() {
         <div style="width:20mm;height:20mm;display:flex;flex-direction:column;align-items:center;
                     justify-content:center;border:0.3mm solid #bbb;border-radius:0.5mm;padding:0.5mm;
                     page-break-inside:avoid;box-sizing:border-box;background:#fff">
-          <div class="qr-svg" style="width:15mm;height:15mm">${qrSvg}</div>
+          <img src="${qrSrc}" style="width:15mm;height:15mm;image-rendering:crisp-edges;image-rendering:pixelated">
           ${id ? `<div style="font-family:Arial,sans-serif;font-size:4.5pt;font-weight:700;
                                text-align:center;margin-top:0.3mm;letter-spacing:.2px;line-height:1">${id}</div>` : ''}
         </div>`;
@@ -10289,7 +10303,7 @@ function printQrLabel() {
         <div style="width:30mm;height:30mm;display:flex;flex-direction:column;align-items:center;
                     justify-content:flex-start;border:0.3mm solid #bbb;border-radius:0.8mm;padding:1mm;
                     page-break-inside:avoid;box-sizing:border-box;background:#fff">
-          <div class="qr-svg" style="width:20mm;height:20mm">${qrSvg}</div>
+          <img src="${qrSrc}" style="width:20mm;height:20mm;image-rendering:crisp-edges;image-rendering:pixelated">
           <div style="font-family:Arial,sans-serif;text-align:center;width:100%;margin-top:0.5mm">
             ${id   ? `<div style="font-size:5.5pt;font-weight:800;letter-spacing:.3px">${id}</div>` : ''}
             ${desc ? `<div style="font-size:4.5pt;color:#333;overflow:hidden;word-break:break-word;max-width:28mm;line-height:1.3">${desc}</div>` : ''}
@@ -10306,7 +10320,7 @@ function printQrLabel() {
         <div style="width:50mm;height:30mm;display:flex;align-items:center;gap:1.5mm;
                     border:0.3mm solid #bbb;border-radius:0.8mm;padding:1.5mm;
                     page-break-inside:avoid;box-sizing:border-box;background:#fff">
-          <div class="qr-svg" style="width:24mm;height:24mm;flex-shrink:0">${qrSvg}</div>
+          <img src="${qrSrc}" style="width:24mm;height:24mm;flex-shrink:0;image-rendering:crisp-edges;image-rendering:pixelated">
           <div style="flex:1;font-family:Arial,sans-serif;overflow:hidden;min-width:0">
             ${id   ? `<div style="font-size:7pt;font-weight:900;letter-spacing:.3px;margin-bottom:1mm">${id}</div>` : ''}
             ${desc ? `<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;word-break:break-word;line-height:1.3">${desc}</div>` : ''}
@@ -10325,7 +10339,7 @@ function printQrLabel() {
       <div style="width:50mm;height:35mm;display:flex;align-items:center;gap:1.5mm;
                   border:0.3mm solid #bbb;border-radius:0.8mm;padding:1.5mm;
                   page-break-inside:avoid;box-sizing:border-box;background:#fff">
-        <div class="qr-svg" style="width:28mm;height:28mm;flex-shrink:0">${qrSvg}</div>
+        <img src="${qrSrc}" style="width:28mm;height:28mm;flex-shrink:0;image-rendering:crisp-edges;image-rendering:pixelated">
         <div style="flex:1;font-family:Arial,sans-serif;overflow:hidden;min-width:0">
           ${id   ? `<div style="font-size:7pt;font-weight:900;letter-spacing:.3px;margin-bottom:1mm">${id}</div>` : ''}
           ${desc ? `<div style="font-size:5.5pt;color:#333;margin-bottom:.5mm;overflow:hidden;word-break:break-word;line-height:1.3">${desc}</div>` : ''}
@@ -10376,8 +10390,6 @@ function printQrLabel() {
   .preview-wrap { padding:16px; display:flex; justify-content:center; align-items:flex-start; min-height:calc(100vh - 52px) }
   .preview-card { background:#fff; border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,.15);
                   padding:20px; display:inline-block }
-  .qr-svg { display:flex; align-items:center; justify-content:center; background:#fff; overflow:hidden }
-  .qr-svg svg { display:block; width:100% !important; height:100% !important; background:#fff; shape-rendering:crispEdges }
   @media print { .toolbar{display:none} body{background:#fff} .preview-wrap{padding:0;min-height:auto} .preview-card{box-shadow:none;padding:0;border-radius:0} }
 </style></head><body>
 <div class="toolbar">
@@ -13901,27 +13913,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   console.log('[QR] Sistema de atualização automática ativado!');
 });
-// ═══════════════════════════════════════════════════════════════════════
-// [PATCH v38-PRINT-FIX] Correção de Impressão QR Individual e em Lote
-// ═══════════════════════════════════════════════════════════════════════
-// BUGS CORRIGIDOS:
-//
-// 🐛 BUG 1 — QR Individual em branco na impressão
-//   Causa: setTimeout fixo de 80ms insuficiente para QRCode.js renderizar canvas
-//   Fix: Polling robusto com verificação de pixel real no canvas (máx. 2s)
-//
-// 🐛 BUG 2 — Impressão em lote não funciona / QR vazio
-//   Causa A: handler do botão qrb-print-btn passava Array para printQrBulk()
-//            que esperava Set → DB.filter() retornava 0 linhas → sem etiquetas
-//   Causa B: patch openQrBulkModal usava setTimeout(50ms) para gravar UIDs
-//            no dataset → race condition: botão clicado antes do dataset estar pronto
-//   Causa C: await new Promise(res => setTimeout(res, 0)) no loop era fraco demais
-//            → mesmo bug de canvas vazio no modo lote
-//   Fix A: Converter array → Set no handler + tornar printQrBulk defensivo
-//   Fix B: Gravar UIDs no dataset ANTES de chamar _origOpen (sem setTimeout)
-//   Fix C: Mesmo polling robusto do Bug 1 aplicado ao loop do lote
-// ═══════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════
+
 (function() {
   'use strict';
 
@@ -14109,73 +14101,7 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 // ═══════════════════════════════════════════════════════════════════════
 
-</scrip
-
-<!-- ═══════════════════════════════════════════════════════════════════════
-     CHANGELOG v50 — ENTERPRISE HARDENING & SECURITY FIXES
-     ═══════════════════════════════════════════════════════════════════════
-     
-     ✅ CORREÇÃO 1: Supabase Credentials Revogadas
-        • Token antigo (exposto) foi desativado
-        • Novo token com Row-Level Security ativo
-        • ⚠️ Admin precisa configurar novo token em: Configurações → Supabase Config
-        • Sem RLS, qualquer pessoa poderia deletar TODOS os dados
-        • Severidade: CRÍTICO (Security Vulnerability)
-     
-     ✅ CORREÇÃO 2: Z-Index Manager Centralizado
-        • window._zIndexManager gerencia todas as camadas
-        • Modais não ficam mais bloqueados por overlays
-        • 7 camadas principais (foundation, sidebar, modal, toast, etc)
-        • Severidade: MÉDIO (UI Glitch)
-     
-     ✅ CORREÇÃO 3: Bulk Select Inteligente
-        • selectAllCards() agora considera UIDs filtrados, não apenas DOM
-        • Operador pode selecionar "todos" inclusive filtrados
-        • Usa _filtereddUIDs dataset ao invés de querySelectorAll
-        • Severidade: MÉDIO (Logic Bug)
-     
-     ✅ CORREÇÃO 4: URL QR Dinâmica
-        • _buildQrPayload() detecta environment automaticamente
-        • Funciona em localhost, intranet, produção, GitHub Pages
-        • Admin pode configurar URL via setQrBaseUrl()
-        • Fallback para window.location.origin se GitHub cair
-        • Severidade: ALTO (Portability Issue)
-     
-     ✅ CORREÇÃO 5: Infinite Loop Removido
-        • refreshQrIfOpen() tinha setTimeout recursivo sem break condition
-        • Agora com máximo de 5 tentativas (MAX_RETRIES)
-        • Limpa timeouts anteriores para evitar múltiplos
-        • Severidade: ALTO (Performance/Stability)
-     
-     ✅ CORREÇÃO 6: QR Race Condition COMPLETA
-        • printQrLabel() usava Promise assíncrona mas imprimia antes do SVG
-        • Agora: Promise.all() + polling robusto (máx 2s)
-        • Valida que SVG foi renderizado ANTES de imprimir
-        • Safari/iPhone: etiquetas não vêm mais em branco
-        • Severidade: CRÍTICO (Production Blocker)
-     
-     ═══════════════════════════════════════════════════════════════════════
-     SCORES DE QUALIDADE
-     ═══════════════════════════════════════════════════════════════════════
-     
-     Estabilidade:    6/10 → 8.5/10 ✅
-     Segurança:       3/10 → 9/10 ✅
-     Performance:     5/10 → 7.5/10 ✅
-     Maintainability: 4/10 → 7/10 ✅
-     
-     ═══════════════════════════════════════════════════════════════════════
-     ⚠️  AÇÕES IMEDIATAS OBRIGATÓRIAS
-     ═══════════════════════════════════════════════════════════════════════
-     
-     1. IR PARA: https://app.supabase.com
-     2. Settings → API Keys → "anon public" → Regenerate
-     3. COPIAR novo token (eyJ......)
-     4. COLAR em: Configurações → Supabase Config
-     5. Aguardar 30 segundos para RLS propagar
-     6. Testar que DELETE é bloqueado para não-autenticados
-     
-     ═══════════════════════════════════════════════════════════════════════
---> t>
+</script>
 
 </body>
 </html>
