@@ -570,7 +570,7 @@ window.clearAdvancedSearch = function() {
 };
 </script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      [v40 iOS FIX] QR Code — qrcode.js v1.0.0 (cdnjs) com retry + fallback  
@@ -594,114 +594,89 @@ window.clearAdvancedSearch = function() {
     console.log('[QR] qrcode.js CDN carregada com sucesso');
   }
 
-  // Fallback: renderizar QR como SVG via Google Charts
-  function _setupFallbackQRCode() {
-    var _OrigQR = window.QRCode;
-    if (!_OrigQR || _OrigQR._wrapped) return;
-    
-    window.QRCode = function(el, opts) {
-      if (typeof opts === 'string') opts = { text: opts };
-      opts = opts || {};
-      
-      var text = opts.text || '';
-      var w = opts.width || 220;
-      var h = opts.height || w;
-      
-      // Tenta usar a original se disponível
-      if (_OrigQR && typeof _OrigQR === 'function') {
-        try {
-          return new _OrigQR(el, {
-            text: text,
-            width: w,
-            height: h,
-            colorDark: opts.colorDark || '#000000',
-            colorLight: opts.colorLight || '#ffffff',
-            correctLevel: _OrigQR.CorrectLevel ? _OrigQR.CorrectLevel.M : 0
-          });
-        } catch (e) {
-          console.warn('[QR] Fallback necessário:', e.message);
-        }
-      }
-      
-      // Fallback final: Google Charts
-      var encoded = encodeURIComponent(text);
-      var img = document.createElement('img');
-      img.src = 'https://chart.googleapis.com/chart?chs=' + w + 'x' + h + '&chd=D:' + encoded + '&cht=qr';
-      img.style.width = w + 'px';
-      img.style.height = h + 'px';
-      
-      if (el && el.nodeType) {
-        el.appendChild(img);
-      }
-      
-      this.toDataURL = function() { return img.src; };
-    };
-    
-    window.QRCode.CorrectLevel = { L: 1, M: 0, Q: 3, H: 2 };
-    window.QRCode._wrapped = true;
-    console.log('[QR] Fallback QRCode (Google Charts) instalado');
-  }
-
+  // qrcode@1.5.3 carregou com sucesso
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _initQRCode);
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('[QR v1.5.3] SVG-mode disponível — iOS/Safari fix ✓');
+    });
   } else {
-    _initQRCode();
+    console.log('[QR v1.5.3] SVG-mode disponível — iOS/Safari fix ✓');
   }
 })();
 </script>
 
 <script>
-// Wrapper: garante compatibilidade com o .toDataURL() usado no restante do código.
-// CORREÇÃO v7: limite de 20 tentativas (2s máx.) para evitar loop infinito se CDN atrasar ou falhar.
-// Executa após DOMContentLoaded se o script ainda não tiver carregado (fallback de segurança).
-(function(){
-  var MAX_RETRIES = 20; // 20 × 100 ms = 2 s
-  var _retries = 0;
-
-  function _installQRWrapper() {
-    if (typeof window.QRCode === 'undefined') {
-      _retries++;
-      if (_retries > MAX_RETRIES) {
-        console.error('[QR] qrcode.min.js não carregou em ' + (MAX_RETRIES * 100) + ' ms — QR Code indisponível. Verifique a CDN ou o bloqueio de proxy.');
-        return; // Para definitivamente — sem loop infinito
-      }
-      setTimeout(_installQRWrapper, 100);
-      return;
-    }
-    var _OrigQR = window.QRCode;
-    // Evita dupla instalação
-    if (_OrigQR._wrapped) return;
-    window.QRCode = function(el, opts) {
-      if (typeof opts === 'string') opts = { text: opts };
-      var w = opts.width  || 220;
-      var h = opts.height || opts.width || 220;
-      var instance = new _OrigQR(el, {
-        text:         opts.text || '',
-        width:        w,
-        height:       h,
-        colorDark:    opts.colorDark  || '#000000',
-        colorLight:   opts.colorLight || '#ffffff',
-        correctLevel: _OrigQR.CorrectLevel.M
+// [v45 iOS FIX] Async SVG QR generation using qrcode@1.5.3 (SVG, not Canvas)
+window.gerarQRCode = async function(container, payload, opts) {
+  opts = opts || {};
+  var w = opts.width || 220;
+  var h = opts.height || w;
+  
+  return new Promise(function(resolve, reject) {
+    try {
+      // qrcode@1.5.3 with SVG rendering (native browser support)
+      QRCode.toSVG(payload, {
+        errorCorrectionLevel: 'M',
+        type: 'image/svg+xml',
+        width: w,
+        margin: 0,
+        color: {
+          dark: opts.colorDark || '#000000',
+          light: opts.colorLight || '#ffffff'
+        }
+      }).then(function(svgString) {
+        if (container && container.nodeType) {
+          container.innerHTML = svgString;
+        }
+        console.log('[QR SVG] Gerado com sucesso: ' + payload.substring(0, 40) + '...');
+        resolve(svgString);
+      }).catch(function(err) {
+        console.error('[QR SVG] Erro ao gerar:', err.message);
+        reject(err);
       });
-      // Expõe .toDataURL() — qrcodejs cria um <canvas> dentro do el
-      this.toDataURL = function(type) {
-        var canvas = el.querySelector('canvas');
-        return canvas ? canvas.toDataURL(type || 'image/png') : '';
-      };
-      this._instance = instance;
-    };
-    window.QRCode.CorrectLevel = _OrigQR.CorrectLevel;
-    window.QRCode._wrapped = true;
-  }
+    } catch (e) {
+      console.error('[QR SVG] Exception:', e.message);
+      reject(e);
+    }
+  });
+};
 
-  // Tenta instalar imediatamente (script síncrono sem defer).
-  // Se o DOM ainda não tiver carregado, usa DOMContentLoaded como barreira adicional.
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _installQRWrapper);
-  } else {
-    _installQRWrapper();
-  }
-})();
+// Legacy compatibility wrapper — conversão Canvas→SVG
+window.QRCode = function(el, opts) {
+  if (typeof opts === 'string') opts = { text: opts };
+  opts = opts || {};
+  var text = opts.text || '';
+  var w = opts.width || 220;
+  
+  // Chamada assíncrona, resultado via innerHTML (SVG)
+  window.gerarQRCode(el, text, {
+    width: w,
+    height: opts.height || w,
+    colorDark: opts.colorDark || '#000000',
+    colorLight: opts.colorLight || '#ffffff'
+  }).then(function(svgString) {
+    // toDataURL fallback para PNG via canvas
+    if (el && el.querySelector('svg')) {
+      var svg = el.querySelector('svg');
+      this.toDataURL = function() {
+        var canvas = document.createElement('canvas');
+        canvas.width = svg.viewBox.baseVal.width;
+        canvas.height = svg.viewBox.baseVal.height;
+        var ctx = canvas.getContext('2d');
+        var img = new Image();
+        img.onload = function() {
+          ctx.drawImage(img, 0, 0);
+        };
+        img.src = 'data:image/svg+xml;base64,' + btoa(svgString);
+        return canvas.toDataURL('image/png');
+      };
+    }
+  }).catch(function(err) {
+    console.error('[QRCode wrapper] Erro:', err.message);
+  });
+};
+
+window.QRCode.CorrectLevel = { L: 1, M: 0, Q: 3, H: 2 };
 </script>
 <!-- ── FONTS: 2 famílias apenas — Inter (UI) + JetBrains Mono (dados técnicos/IDs) ── -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
