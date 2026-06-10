@@ -5473,7 +5473,13 @@ async function initSupabase() {
 
   // Oculta o login, lê a tabela 'equipamentos' no Supabase (anon key = leitura pública via RLS) e renderiza a ficha.
   // No Supabase: certifique-se de habilitar RLS com uma policy "allow SELECT for anon" na tabela 'equipamentos'.
-  window.addEventListener('DOMContentLoaded', () => {
+  // [v44 iOS FIX] CAUSA RAIZ #1: window.addEventListener('DOMContentLoaded') sem
+  // verificar readyState. Quando o Safari abre via QR (câmera → link), o DOM pode
+  // já estar carregado (readyState = 'interactive' ou 'complete') antes deste
+  // listener ser registrado. Resultado: o callback NUNCA dispara, _publicLoadDone
+  // nunca vira true, e após 45s aparece "Falha ao carregar dados / Load failed".
+  // FIX: usar document.addEventListener + verificar readyState imediatamente.
+  function _runPublicQR() {
     // Esconde o login overlay — modo somente-leitura público
     const lo = document.getElementById('login-overlay');
     if (lo) lo.style.display = 'none';
@@ -5481,10 +5487,17 @@ async function initSupabase() {
     if (typeof initDB === 'function') initDB();
     (async () => {
       try {
-        const saved = JSON.parse(localStorage.getItem('rochling_sb_cfg') || '{}');
+        // [v44 iOS FIX] CAUSA RAIZ #2: localStorage.getItem sem try/catch.
+        // No Safari em modo privado (ou quando aberto via câmera), o acesso ao
+        // localStorage lança SecurityError e mata silenciosamente toda a IIFE async.
+        // FIX: envolver em try/catch e usar as credenciais hardcoded como fallback.
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem('rochling_sb_cfg') || '{}'); } catch(e) {
+          console.warn('[público v44] localStorage bloqueado (modo privado?), usando credenciais padrão:', e.message || e);
+        }
         // ✅ FIX v25: Usa credenciais hardcoded como fallback quando localStorage está vazio (ex: celular)
-        const sbUrl = saved.url || _QR_PUBLIC_SB_URL;
-        const sbKey = saved.key || _QR_PUBLIC_SB_KEY;
+        const sbUrl = (saved && saved.url) || _QR_PUBLIC_SB_URL;
+        const sbKey = (saved && saved.key) || _QR_PUBLIC_SB_KEY;
         if (!sbUrl || !sbKey) {
           console.warn('[público] Supabase não configurado — adicione _QR_PUBLIC_SB_URL e _QR_PUBLIC_SB_KEY no código para acesso via QR em celulares.');
           waitAndRender();
@@ -5545,14 +5558,19 @@ async function initSupabase() {
             const res = await fetch(url, {
               method: 'GET',
               mode: 'cors',
+              // [v44 iOS FIX] CAUSA RAIZ #3: 'Cache-Control' e 'Pragma' são headers
+              // não-simples que disparam um CORS preflight OPTIONS no Safari.
+              // Se o Supabase não retornar Access-Control-Allow-Headers para esses
+              // headers, o Safari rejeita silenciosamente com "Load failed".
+              // FIX: remover esses headers do fetch; usar apenas apikey e Authorization
+              // (que o Supabase já declara no CORS). O cache é controlado pelo
+              // atributo 'cache: no-store' do RequestInit, sem disparar preflight.
               cache: 'no-store',
               signal: ctrl ? ctrl.signal : undefined,
               headers: {
                 'apikey': sbKey,
                 'Authorization': 'Bearer ' + sbKey,
-                'Accept': 'application/json',
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
+                'Accept': 'application/json'
               }
             });
             const text = await res.text();
@@ -5634,17 +5652,30 @@ async function initSupabase() {
         }
       } catch(e) {
         _publicLoadError = e;
-        console.error('[público] erro consulta pública:', e.message || e);
+        console.error('[público v44] erro consulta pública:', e.message || e);
+        console.error('[público v44] stack:', e && e.stack);
+        console.error('[público v44] iOS:', window._isIOS, '| UA:', navigator.userAgent.slice(0,80));
         if (typeof DB !== 'undefined' && DB.length > 0) {
-          console.log('[público] Usando dados do localStorage como fallback após erro público');
+          console.log('[público v44] Usando dados do localStorage como fallback após erro público');
         } else {
-          console.warn('[público] Nenhum fallback disponível — exibindo erro direto, sem timeout de 45s');
+          console.warn('[público v44] Nenhum fallback disponível — exibindo erro direto');
         }
       }
       _publicLoadDone = true;
       waitAndRender();
     })();
-  });
+  } // fim _runPublicQR
+
+  // [v44 iOS FIX] Padrão seguro: verifica readyState ANTES de registrar o listener.
+  // Isso garante que o callback execute mesmo se o DOM já estiver pronto
+  // (situação comum no Safari iOS quando a página é aberta via câmera/QR).
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _runPublicQR);
+  } else {
+    // DOM já está pronto (readyState = 'interactive' ou 'complete')
+    // Usar setTimeout(0) para não bloquear a thread principal
+    setTimeout(_runPublicQR, 0);
+  }
 })();
 
 // ══════════════════════════════════════════════════════
