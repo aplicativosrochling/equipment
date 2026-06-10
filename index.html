@@ -11,8 +11,63 @@
 <meta http-equiv="Cache-Control" content="public, max-age=300">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
+
 <title>Röchling Automotive — Controle de Equipamentos de Medição (v48)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição - v36 Premium com melhorias avançadas.">
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     CHANGELOG v36 - ALL ENHANCEMENTS IMPLEMENTED ✨
+     ═══════════════════════════════════════════════════════════════════════════
+     
+     ✅ BASE v35: Todos os 5 bugs críticos + 7 moderados corrigidos
+     
+     ✨ NOVAS MELHORIAS v36 (8 IMPLEMENTADAS):
+     
+     1. 🌙 DARK MODE COMPLETO
+        • Toggle tema light/dark no header
+        • Preferência persistida em localStorage
+        • Transições suaves entre temas
+        • Contraste otimizado para acessibilidade
+     
+     2. 📜 VIRTUAL SCROLLING
+        • Renderização lazy para tabelas > 1000 linhas
+        • Scroll infinito com intersection observer
+        • Performance mantida mesmo com 50k registros
+     
+     3. ✅ BULK ACTIONS
+        • Selecionar múltiplos equipamentos (checkboxes)
+        • Ações em lote: Marcar calibrado, Deletar, Exportar
+        • Progresso visual durante operações
+     
+     4. 📊 EXPORT COMPLETO (SQL + JSON)
+        • Export SQL: INSERT INTO equipamentos...
+        • Export JSON: Backup estruturado
+        • Export CSV aprimorado com todas as colunas
+     
+     5. 🎯 DRAG-AND-DROP
+        • Reordenar responsáveis na dashboard
+        • Drag-and-drop de arquivos CSV para import
+        • Visual feedback durante drag
+     
+     6. 🔍 BUSCA AVANÇADA
+        • Full-text search em equipamento, responsável, tipo
+        • Filtros por data (De...Até)
+        • Filtros por status (Vencido, OK, Próximo a vencer)
+        • Operadores lógicos (AND, OR, NOT)
+     
+     7. 📱 RESPONSIVE IMPROVEMENTS
+        • Layout mobile aprimorado
+        • Touch-friendly buttons (48x48px mínimo)
+        • Collapse de sections em mobile
+     
+     8. 🎨 UX ENHANCEMENTS
+        • Animações suaves em transições
+        • Confirmação de ações críticas (delete)
+        • Progress bars para operações longas
+        • Tooltips em hover
+     
+═══════════════════════════════════════════════════════════════════════════ -->
+
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <!-- ⚠️ SECURITY NOTE: 'unsafe-inline' is required for a standalone HTML file.
@@ -601,14 +656,16 @@ window.clearAdvancedSearch = function() {
           margin: 4,
           errorCorrectionLevel: 'H',
           color: { dark: '#000000', light: '#ffffff' }
-        }).then(function(svg) {
+        }, function(err, svg) {
+          if (err || !svg) {
+            console.error('[QR] Erro ao gerar SVG:', err);
+            el.innerHTML = '<div style="padding:16px;color:#dc2626;font-size:11px">Erro ao gerar QR</div>';
+            reject(err || new Error('empty svg'));
+            return;
+          }
           var crispSvg = svg.replace('<svg ', '<svg style="shape-rendering:crispEdges;display:block" ');
           el.innerHTML = crispSvg;
           resolve();
-        }).catch(function(err) {
-          console.error('[QR] Erro ao gerar SVG:', err);
-          el.innerHTML = '<div style="padding:16px;color:#dc2626;font-size:11px">Erro ao gerar QR</div>';
-          reject(err);
         });
       });
     });
@@ -8928,24 +8985,24 @@ async function printQrBulk(uids) {
   const qrDataList = [];
   for (const r of rows) {
     const payload = _buildQrPayload(r);
-    try {
-      await new Promise((res, rej) => {
-        window._qrWhenReady(function() {
-          QRCode.toString(payload, {
-            type: 'svg', width: cfg.qrPx, margin: 4,
-            errorCorrectionLevel: 'H',
-            color: { dark: '#000000', light: '#ffffff' }
-          }).then(function(_svg) {
+    await new Promise((res) => {
+      window._qrWhenReady(function() {
+        QRCode.toString(payload, {
+          type: 'svg', width: cfg.qrPx, margin: 4,
+          errorCorrectionLevel: 'H',
+          color: { dark: '#000000', light: '#ffffff' }
+        }, function(err, _svg) {
+          if (err || !_svg) {
+            console.error('[QR BULK] Erro:', err);
+            qrDataList.push({ r, svg: '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#dc2626;font:700 6pt Arial">QR ERRO</div>' });
+          } else {
             const crispSvg = _svg.replace('<svg ', '<svg style="shape-rendering:crispEdges;display:block" ');
             qrDataList.push({ r, svg: crispSvg });
-            res();
-          }).catch(function(e) { rej(e); });
+          }
+          res();
         });
       });
-    } catch(e) {
-      console.error('[QR BULK] Erro ao gerar SVG:', e);
-      qrDataList.push({ r, svg: '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#dc2626;font:700 6pt Arial">QR ERRO</div>' });
-    }
+    });
   }
 
   // Gera HTML de etiqueta para cada item
@@ -10137,20 +10194,20 @@ function printQrLabel() {
   // Gera QR vetorial com quiet zone correta (4 módulos) — nítido em Retina/Safari
   const payload = _buildQrPayload(r);
   window._qrWhenReady(function() {
-  QRCode.toString(payload, {
-    type: 'svg',
-    width: 400,
-    margin: 4,
-    errorCorrectionLevel: 'H',
-    color: { dark: '#000000', light: '#ffffff' }
-  }).then(function(qrSvg){
-    const crispSvg = qrSvg.replace('<svg ', '<svg style="shape-rendering:crispEdges;display:block" ');
-    _doPrint(crispSvg, _printWin);
-  }).catch(function(e){
-    console.error('QR gen error:', e);
-    _doPrint('<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#dc2626;font:700 8pt Arial">QR ERRO</div>', _printWin);
+    QRCode.toString(payload, {
+      type: 'svg', width: 400, margin: 4,
+      errorCorrectionLevel: 'H',
+      color: { dark: '#000000', light: '#ffffff' }
+    }, function(err, qrSvg) {
+      if (err || !qrSvg) {
+        console.error('QR gen error:', err);
+        _doPrint('<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#dc2626;font:700 8pt Arial">QR ERRO</div>', _printWin);
+      } else {
+        const crispSvg = qrSvg.replace('<svg ', '<svg style="shape-rendering:crispEdges;display:block" ');
+        _doPrint(crispSvg, _printWin);
+      }
+    });
   });
-  }); // end _qrWhenReady
 
   function _doPrint(qrSvg, win) {
 
