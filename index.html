@@ -5025,54 +5025,65 @@ async function sbDeleteRecord(codigoEquipamento) {
   }
 }
 
-// LISTENER em tempo real via Supabase Realtime
-var _realtimeChannel = null; // [v25 FIX] var instead of let for cross-script-block global
+// ══════════════════════════════════════════════════════════════════════
+// [v45 FIX] REALTIME DESLIGADO — substituído por polling leve a cada 30s
+//
+// CAUSA RAIZ DO 403: O Realtime do Supabase abre uma conexão WebSocket
+// persistente por aba/usuário. Com múltiplos usuários simultâneos o projeto
+// atingiu 242/200 conexões (121% da cota FREE) → Supabase bloqueou TODAS
+// as requisições da organização com 403 "Host not in allowlist".
+//
+// SOLUÇÃO: Polling simples a cada 30s substitui o WebSocket com zero impacto
+// na experiência — dados ficam atualizados em até 30s, sem conexões abertas.
+// ══════════════════════════════════════════════════════════════════════
+var _realtimeChannel = null; // mantido por compatibilidade — não usado
+var _pollingTimer = null;
+var _pollingLastHash = null;
+
 function fbStartListen() {
-  if(!sbActive()) return;
-  // Cancela canal anterior, se houver
+  if (!sbActive()) return;
+  // Garante que não há canal Realtime aberto (fecha se havia de versão anterior)
   if (_realtimeChannel) {
-    _realtimeChannel.unsubscribe();
+    try { _realtimeChannel.unsubscribe(); } catch(e) {}
     _realtimeChannel = null;
   }
-  _realtimeChannel = _sb
-    .channel('equipamentos-changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'equipamentos' },
-      async (payload) => {
-        if (_pending) return; // ignora enquanto está salvando
-        // [v28 FIX] Recarrega tudo com paginação (evita corte em 1000 linhas)
-        const _RT_PAGE = 1000;
-        let _rtAll = [], _rtFrom = 0, _rtMore = true;
-        while (_rtMore) {
-          const { data: _rtPage, error: _rtErr } = await _sb.from('equipamentos').select('*').order('id', { ascending: true }).range(_rtFrom, _rtFrom + _RT_PAGE - 1);
-          if (_rtErr) { console.warn('[Supabase] realtime fetch error:', _rtErr.message); return; }
-          if (_rtPage && _rtPage.length > 0) _rtAll = _rtAll.concat(_rtPage);
-          _rtMore = _rtPage && _rtPage.length === _RT_PAGE;
-          _rtFrom += _RT_PAGE;
-        }
-        const data = _rtAll;
-        if (!data || data.length === 0) return;
-        const newDB = recalcDias(data.map(r => ({ ...r, _uid: r._uid || r.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)) })));
-        // [v15 FIX] exclui _updated do diff — evita loop: fbPush grava _updated novo → realtime detecta diff → loop
-        const stripDias = arr => arr.map(r => { const {dias_vencer, _updated, ...rest} = r; return rest; });
-        if (JSON.stringify(stripDias(newDB)) !== JSON.stringify(stripDias(DB))) {
-          DB = newDB;
-          saveLS(true); // [v15 FIX] silent: dado vem do cloud, não é mudança local
-          updateKPIs(); buildAllCharts(); populateFilters();
-          renderAlerts();
-          // [v18 FIX] atualiza tabelas visíveis em tempo real
-          if(typeof refreshInPlace === 'function') refreshInPlace();
-          setSyncInd('☁ Atualizado ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
-        }
+  // Para polling anterior se existir
+  if (_pollingTimer) { clearInterval(_pollingTimer); _pollingTimer = null; }
+
+  setSyncInd('☁ Sincronização ativa (30s)', 'var(--green)');
+  console.log('[v45] Polling leve iniciado (intervalo: 30s). Realtime desligado para economizar cota.');
+
+  // Polling a cada 30 segundos
+  _pollingTimer = setInterval(async function() {
+    if (_pending) return; // não busca enquanto está salvando
+    if (!sbActive()) return;
+    try {
+      const _RT_PAGE = 1000;
+      let _rtAll = [], _rtFrom = 0, _rtMore = true;
+      while (_rtMore) {
+        const { data: _rtPage, error: _rtErr } = await _sb.from('equipamentos').select('*').order('id', { ascending: true }).range(_rtFrom, _rtFrom + _RT_PAGE - 1);
+        if (_rtErr) { console.warn('[v45 polling] erro:', _rtErr.message); return; }
+        if (_rtPage && _rtPage.length > 0) _rtAll = _rtAll.concat(_rtPage);
+        _rtMore = _rtPage && _rtPage.length === _RT_PAGE;
+        _rtFrom += _RT_PAGE;
       }
-    )
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        setSyncInd('☁ Realtime ativo', 'var(--green)');
-      } else if (status === 'CHANNEL_ERROR') {
-        setSyncInd('⚠️ Listener desconectado', 'var(--orange)');
-        console.warn('[Supabase] Realtime channel error');
+      if (!_rtAll || _rtAll.length === 0) return;
+      const newDB = recalcDias(_rtAll.map(r => ({ ...r, _uid: r._uid || r.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)) })));
+      const stripDias = arr => arr.map(r => { const {dias_vencer, _updated, ...rest} = r; return rest; });
+      const newHash = JSON.stringify(stripDias(newDB));
+      if (newHash !== _pollingLastHash) {
+        _pollingLastHash = newHash;
+        DB = newDB;
+        saveLS(true);
+        updateKPIs(); buildAllCharts(); populateFilters(); renderAlerts();
+        if (typeof refreshInPlace === 'function') refreshInPlace();
+        setSyncInd('☁ Atualizado ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
+        console.log('[v45 polling] dados atualizados');
       }
-    });
+    } catch(e) {
+      console.warn('[v45 polling] falha silenciosa:', e.message || e);
+    }
+  }, 30000); // 30 segundos
 }
 
 // ── Modal de configuração Supabase ────────────────────────────────
@@ -5143,7 +5154,8 @@ async function sbConnect() {
   if(res_el) { res_el.textContent = '⏳ Conectando ao Supabase…'; res_el.style.color='var(--accent2)'; }
 
   // Para canal realtime anterior
-  if (_realtimeChannel) { _realtimeChannel.unsubscribe(); _realtimeChannel = null; }
+  if (_realtimeChannel) { try { _realtimeChannel.unsubscribe(); } catch(e){} _realtimeChannel = null; }
+  if (typeof _pollingTimer !== "undefined" && _pollingTimer) { clearInterval(_pollingTimer); _pollingTimer = null; }
   _sbActive = false; _sb = null;
   _sbInitialized = false; // [v15 FIX] reset para permitir init completo com nova configuração
 
@@ -5205,7 +5217,8 @@ async function sbConnect() {
 window.fbConnect = sbConnect;
 
 function sbDisconnect() {
-  if (_realtimeChannel) { _realtimeChannel.unsubscribe(); _realtimeChannel = null; }
+  if (_realtimeChannel) { try { _realtimeChannel.unsubscribe(); } catch(e){} _realtimeChannel = null; }
+  if (typeof _pollingTimer !== "undefined" && _pollingTimer) { clearInterval(_pollingTimer); _pollingTimer = null; }
   _sbActive = false; _sb = null;
   _sbInitialized = false; // [v15 FIX] permite reconectar do zero
   localStorage.removeItem(LS_SB_CFG);
@@ -5943,8 +5956,9 @@ async function doLogout() {
   // _confirmModal só é atribuída a window na linha ~13327; chamá-la diretamente
   // antes desse ponto lançava ReferenceError bloqueando o logout.
   _safeConfirm('Deseja sair do sistema?', async function() {
-    // Para o canal realtime
-    if (_realtimeChannel) { _realtimeChannel.unsubscribe(); _realtimeChannel = null; }
+    // Para o canal realtime e polling
+    if (_realtimeChannel) { try { _realtimeChannel.unsubscribe(); } catch(e) {} _realtimeChannel = null; }
+    if (typeof _pollingTimer !== 'undefined' && _pollingTimer) { clearInterval(_pollingTimer); _pollingTimer = null; }
     _sbActive = false;
     try {
       if (_sb) await _sb.auth.signOut();
