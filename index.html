@@ -592,36 +592,85 @@ window.clearAdvancedSearch = function() {
 </script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-<!-- QR Code — qrcode.js via CDN, renderizado em Canvas 2D de Alta Resolução (DPR) para telas Retina -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<!-- QR Code — carregamento com garantia de disponibilidade antes de qualquer uso -->
 <script>
-/**
- * gerarQRCode — gera QR em SVG vetorial nítido: contraste puro #000/#FFF,
- * quiet zone de 4 módulos, shape-rendering:crispEdges.
- * Compatível com Safari/iOS sem qualquer hack.
- */
-async function gerarQRCode(elementId, texto) {
-  const el = (typeof elementId === 'string')
-    ? document.getElementById(elementId)
-    : elementId;
-  if (!el) return;
-  try {
-    const svg = await QRCode.toString(texto, {
-      type: 'svg',
-      width: 260,
-      margin: 4,           // quiet zone exata de 4 módulos (ISO 18004)
-      errorCorrectionLevel: 'H',
-      color: { dark: '#000000', light: '#ffffff' }
-    });
-    // Injectar atributo de renderização nítida no SVG gerado
-    const crispSvg = svg.replace('<svg ', '<svg style="shape-rendering:crispEdges;display:block" ');
-    el.innerHTML = crispSvg;
-  } catch (err) {
-    console.error('[QR] Erro ao gerar SVG:', err);
-    el.innerHTML = '<div style="padding:16px;color:var(--red);font-size:11px">Erro ao gerar QR</div>';
+(function() {
+  // Fila de chamadas pendentes enquanto a lib carrega
+  var _qrQueue = [];
+  var _qrReady = false;
+
+  function _doLoad() {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';
+    s.onload = function() {
+      _qrReady = true;
+      // Esvaziar fila
+      _qrQueue.forEach(function(fn) { try { fn(); } catch(e) { console.error(e); } });
+      _qrQueue = [];
+    };
+    s.onerror = function() {
+      // Fallback: tentar CDN alternativo
+      var s2 = document.createElement('script');
+      s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+      s2.onload = function() {
+        // cdnjs expõe QRCode como construtor, não como a API .toString()
+        // Criar wrapper compatível
+        if (!window.QRCode || !window.QRCode.toString) {
+          console.warn('[QR] Fallback CDN carregado mas sem API toString — usando geração básica');
+        }
+        _qrReady = true;
+        _qrQueue.forEach(function(fn) { try { fn(); } catch(e) { console.error(e); } });
+        _qrQueue = [];
+      };
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s);
   }
-}
-window.gerarQRCode = gerarQRCode;
+
+  // Aguarda QRCode estar disponível, depois executa callback
+  window._qrWhenReady = function(fn) {
+    if (_qrReady && window.QRCode && window.QRCode.toString) { fn(); }
+    else { _qrQueue.push(fn); }
+  };
+
+  /**
+   * gerarQRCode — SVG vetorial, quiet zone 4 módulos (ISO 18004),
+   * contraste puro #000/#fff, shape-rendering:crispEdges para Retina.
+   */
+  window.gerarQRCode = function(elementId, texto) {
+    return new Promise(function(resolve, reject) {
+      var el = (typeof elementId === 'string')
+        ? document.getElementById(elementId)
+        : elementId;
+      if (!el) { resolve(); return; }
+
+      window._qrWhenReady(function() {
+        if (!window.QRCode || !window.QRCode.toString) {
+          el.innerHTML = '<div style="padding:16px;color:#dc2626;font-size:11px">Biblioteca QR não carregada. Verifique a conexão.</div>';
+          reject(new Error('QRCode lib not available'));
+          return;
+        }
+        QRCode.toString(texto, {
+          type: 'svg',
+          width: 260,
+          margin: 4,
+          errorCorrectionLevel: 'H',
+          color: { dark: '#000000', light: '#ffffff' }
+        }).then(function(svg) {
+          var crispSvg = svg.replace('<svg ', '<svg style="shape-rendering:crispEdges;display:block" ');
+          el.innerHTML = crispSvg;
+          resolve();
+        }).catch(function(err) {
+          console.error('[QR] Erro ao gerar SVG:', err);
+          el.innerHTML = '<div style="padding:16px;color:#dc2626;font-size:11px">Erro ao gerar QR</div>';
+          reject(err);
+        });
+      });
+    });
+  };
+
+  _doLoad();
+})();
 </script>
 <!-- ── FONTS: 2 famílias apenas — Inter (UI) + JetBrains Mono (dados técnicos/IDs) ── -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2496,7 +2545,6 @@ input[type="checkbox"], input[type="radio"] {
     <button class="btn-g" onclick="exportJSON()" title="Export JSON Backup" style="font-size:11px">📄 JSON</button>
     <button class="btn-g" onclick="exportSQL()" title="Export SQL Insert" style="font-size:11px">🗄️ SQL</button>
     <button class="btn-g" onclick="exportCSVAdvanced()" title="Export CSV Completo" style="font-size:11px">📊 CSV+</button>
-    <button class="btn-g" onclick="openQrScanner()" title="Escanear QR Code com câmera" style="font-size:11px">📷 Scanner</button>
     <button class="btn-g" id="btn-font-picker" title="Trocar fonte" aria-label="Trocar fonte" style="font-size:11px">𝐀 Fonte</button>
     <button class="btn-g" onclick="openGsConfig()" id="btn-gs-cfg" title="Supabase config" aria-label="Configurar Supabase" style="font-size:11px">☁</button>
     <button class="btn-g" onclick="resetDB()" title="Reset to original data" aria-label="Resetar para dados originais" style="font-size:11px">↺</button>
@@ -8936,15 +8984,19 @@ async function printQrBulk(uids) {
   for (const r of rows) {
     const payload = _buildQrPayload(r);
     try {
-      const _svg = await QRCode.toString(payload, {
-        type: 'svg',
-        width: cfg.qrPx,
-        margin: 4,
-        errorCorrectionLevel: 'H',
-        color: { dark: '#000000', light: '#ffffff' }
+      await new Promise((res, rej) => {
+        window._qrWhenReady(function() {
+          QRCode.toString(payload, {
+            type: 'svg', width: cfg.qrPx, margin: 4,
+            errorCorrectionLevel: 'H',
+            color: { dark: '#000000', light: '#ffffff' }
+          }).then(function(_svg) {
+            const crispSvg = _svg.replace('<svg ', '<svg style="shape-rendering:crispEdges;display:block" ');
+            qrDataList.push({ r, svg: crispSvg });
+            res();
+          }).catch(function(e) { rej(e); });
+        });
       });
-      const crispSvg = _svg.replace('<svg ', '<svg style="shape-rendering:crispEdges;display:block" ');
-      qrDataList.push({ r, svg: crispSvg });
     } catch(e) {
       console.error('[QR BULK] Erro ao gerar SVG:', e);
       qrDataList.push({ r, svg: '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#dc2626;font:700 6pt Arial">QR ERRO</div>' });
@@ -10022,228 +10074,6 @@ function closeQrModal() {
   document.body.style.overflow = '';
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// QR SCANNER — Camera reader via jsQR + getUserMedia
-// Compatível com iOS Safari/WebViews:
-//  • facingMode:"environment" → câmera traseira correta no iPhone
-//  • playsinline, muted, autoplay → evita fullscreen nativo do Safari
-//  • safe-area-inset CSS → respeita Dynamic Island / home indicator
-// ═══════════════════════════════════════════════════════════════════
-(function() {
-  'use strict';
-
-  var _scanStream = null;
-  var _scanRaf    = null;
-  var _jsQRLoaded = false;
-
-  function _loadJsQR(cb) {
-    if (window.jsQR) { _jsQRLoaded = true; cb(); return; }
-    var s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
-    s.onload = function() { _jsQRLoaded = true; cb(); };
-    s.onerror = function() { console.error('[SCANNER] Falha ao carregar jsQR'); cb(new Error('load')); };
-    document.head.appendChild(s);
-  }
-
-  window.openQrScanner = function() {
-    // Remove instância anterior se existir
-    var existing = document.getElementById('qr-scanner-ov');
-    if (existing) existing.remove();
-
-    var html = [
-      '<div id="qr-scanner-ov" style="',
-        'position:fixed;inset:0;z-index:1200;',
-        'background:#000;',
-        'display:flex;flex-direction:column;align-items:center;justify-content:center;',
-        'padding:',
-          'max(env(safe-area-inset-top,0px),0px) ',
-          'max(env(safe-area-inset-right,0px),0px) ',
-          'max(env(safe-area-inset-bottom,0px),0px) ',
-          'max(env(safe-area-inset-left,0px),0px)',
-        '">',
-
-      '<div style="width:100%;max-width:480px;display:flex;flex-direction:column;gap:0;height:100%;max-height:100%">',
-
-        /* header */
-        '<div style="display:flex;align-items:center;justify-content:space-between;',
-             'padding:12px 16px;background:rgba(0,0,0,.6);flex-shrink:0;',
-             'padding-top:max(env(safe-area-inset-top,12px),12px)">',
-          '<div style="color:#fff;font-family:var(--font);font-weight:700;font-size:14px">📷 Scanner QR</div>',
-          '<button id="qr-scan-close" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);',
-            'color:#fff;font-size:16px;border-radius:6px;padding:4px 10px;cursor:pointer;font-family:var(--font)">✕ Fechar</button>',
-        '</div>',
-
-        /* viewfinder */
-        '<div style="flex:1;position:relative;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center">',
-          /* video — playsinline e muted obrigatórios para iOS Safari não abrir fullscreen */
-          '<video id="qr-scan-video" playsinline muted autoplay ',
-            'style="width:100%;height:100%;object-fit:cover;display:block"></video>',
-          /* overlay canvas para decodificação (oculto) */
-          '<canvas id="qr-scan-canvas" style="display:none"></canvas>',
-          /* guia visual */
-          '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">',
-            '<div style="width:220px;height:220px;border:3px solid #fff;border-radius:16px;',
-                 'box-shadow:0 0 0 9999px rgba(0,0,0,.45)">',
-              '<div style="position:absolute;top:0;left:0;width:28px;height:28px;border-top:4px solid #0064b3;border-left:4px solid #0064b3;border-radius:12px 0 0 0"></div>',
-              '<div style="position:absolute;top:0;right:0;width:28px;height:28px;border-top:4px solid #0064b3;border-right:4px solid #0064b3;border-radius:0 12px 0 0"></div>',
-              '<div style="position:absolute;bottom:0;left:0;width:28px;height:28px;border-bottom:4px solid #0064b3;border-left:4px solid #0064b3;border-radius:0 0 0 12px"></div>',
-              '<div style="position:absolute;bottom:0;right:0;width:28px;height:28px;border-bottom:4px solid #0064b3;border-right:4px solid #0064b3;border-radius:0 0 12px 0"></div>',
-            '</div>',
-          '</div>',
-        '</div>',
-
-        /* status bar */
-        '<div id="qr-scan-status" style="',
-          'padding:12px 16px;background:rgba(0,0,0,.7);color:#ccc;',
-          'font-family:var(--font);font-size:12px;text-align:center;flex-shrink:0;',
-          'padding-bottom:max(env(safe-area-inset-bottom,12px),12px)">',
-          '⏳ Iniciando câmera...',
-        '</div>',
-
-      '</div>',
-      '</div>'
-    ].join('');
-
-    document.body.insertAdjacentHTML('beforeend', html);
-
-    document.getElementById('qr-scan-close').addEventListener('click', window.closeQrScanner);
-
-    _loadJsQR(function(err) {
-      if (err) {
-        _setStatus('❌ Erro ao carregar biblioteca de leitura. Verifique a conexão.', 'var(--red)');
-        return;
-      }
-      _startCamera();
-    });
-  };
-
-  function _setStatus(msg, color) {
-    var el = document.getElementById('qr-scan-status');
-    if (el) { el.textContent = msg; if (color) el.style.color = color; }
-  }
-
-  function _startCamera() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      _setStatus('❌ Câmera não suportada neste navegador.', '#fc8585');
-      return;
-    }
-
-    // facingMode:"environment" → câmera traseira (evita bug do Safari que abre frontal ou lente ultra-wide)
-    var constraints = {
-      video: {
-        facingMode: { ideal: 'environment' },
-        width:  { ideal: 1280 },
-        height: { ideal: 720 }
-      },
-      audio: false
-    };
-
-    navigator.mediaDevices.getUserMedia(constraints)
-      .then(function(stream) {
-        _scanStream = stream;
-        var video = document.getElementById('qr-scan-video');
-        if (!video) { _stopCamera(); return; }
-
-        // Atributos críticos para iOS Safari — sem eles o Safari pode abrir fullscreen nativo
-        video.setAttribute('playsinline', '');
-        video.setAttribute('muted', '');
-        video.setAttribute('autoplay', '');
-        video.srcObject = stream;
-
-        video.onloadedmetadata = function() {
-          video.play().then(function() {
-            _setStatus('🔍 Aponte para o QR Code...', '#fff');
-            _tick();
-          }).catch(function(e) {
-            _setStatus('❌ Erro ao iniciar vídeo: ' + e.message, '#fc8585');
-          });
-        };
-      })
-      .catch(function(e) {
-        var msg = '❌ Câmera indisponível.';
-        if (e.name === 'NotAllowedError')  msg = '❌ Permissão de câmera negada. Habilite nas configurações.';
-        if (e.name === 'NotFoundError')    msg = '❌ Nenhuma câmera traseira encontrada.';
-        if (e.name === 'NotReadableError') msg = '❌ Câmera em uso por outro app.';
-        _setStatus(msg, '#fc8585');
-        console.warn('[SCANNER]', e.name, e.message);
-      });
-  }
-
-  function _tick() {
-    var video  = document.getElementById('qr-scan-video');
-    var canvas = document.getElementById('qr-scan-canvas');
-    if (!video || !canvas || !window.jsQR) return;
-
-    // Verificar se overlay ainda existe (usuário pode ter fechado)
-    if (!document.getElementById('qr-scanner-ov')) { _stopCamera(); return; }
-
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      canvas.width  = video.videoWidth;
-      canvas.height = video.videoHeight;
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      var code = window.jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: 'dontInvert'
-      });
-
-      if (code) {
-        _onScanSuccess(code.data);
-        return; // para o loop
-      }
-    }
-    _scanRaf = requestAnimationFrame(_tick);
-  }
-
-  function _onScanSuccess(data) {
-    _setStatus('✅ QR lido: ' + data.slice(0, 60) + (data.length > 60 ? '…' : ''), '#4ade80');
-    _stopCamera();
-
-    // Extrair parâmetro ?view= da URL lida
-    try {
-      var url = new URL(data);
-      var viewId = url.searchParams.get('view');
-      if (viewId) {
-        var decoded = decodeURIComponent(viewId);
-        var rec = DB.find(function(r) { return r.id === decoded || String(r._uid) === decoded; });
-        setTimeout(function() {
-          window.closeQrScanner();
-          if (rec) {
-            if (typeof openEquipView === 'function') openEquipView(rec._uid);
-            else if (typeof showToast === 'function') showToast('Equipamento: ' + (rec.descricao || rec.id), 'success');
-          } else {
-            if (typeof showToast === 'function') showToast('QR lido — equipamento não encontrado no sistema: ' + decoded, 'info');
-          }
-        }, 800);
-        return;
-      }
-    } catch(e) { /* não é URL — tratar como texto livre */ }
-
-    // Fallback: abrir URL externa ou exibir toast
-    setTimeout(function() {
-      window.closeQrScanner();
-      if (typeof showToast === 'function') showToast('QR lido: ' + data.slice(0, 80), 'info');
-    }, 800);
-  }
-
-  function _stopCamera() {
-    if (_scanRaf) { cancelAnimationFrame(_scanRaf); _scanRaf = null; }
-    if (_scanStream) {
-      _scanStream.getTracks().forEach(function(t) { t.stop(); });
-      _scanStream = null;
-    }
-    var video = document.getElementById('qr-scan-video');
-    if (video) { video.srcObject = null; }
-  }
-
-  window.closeQrScanner = function() {
-    _stopCamera();
-    var ov = document.getElementById('qr-scanner-ov');
-    if (ov) ov.remove();
-  };
-
-})();
 
 function _qrModalHTML() {
   return `
@@ -10316,7 +10146,6 @@ function _qrModalHTML() {
 
   <div style="display:flex;gap:8px;justify-content:flex-end">
     <button onclick="closeQrModal()" style="padding:8px 18px;border-radius:7px;border:1px solid var(--bdr2);background:var(--surf2);color:var(--tx2);font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>
-    <button onclick="openQrScanner()" style="padding:8px 18px;border-radius:7px;border:1px solid var(--bdr2);background:var(--surf2);color:var(--tx2);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">📷 Escanear QR</button>
     <button onclick="printQrLabel()" style="padding:8px 18px;border-radius:7px;border:none;background:var(--brand);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">🖨️ Imprimir Etiqueta</button>
   </div>
 </div>
@@ -10362,6 +10191,7 @@ function printQrLabel() {
 
   // Gera QR vetorial com quiet zone correta (4 módulos) — nítido em Retina/Safari
   const payload = _buildQrPayload(r);
+  window._qrWhenReady(function() {
   QRCode.toString(payload, {
     type: 'svg',
     width: 400,
@@ -10375,6 +10205,7 @@ function printQrLabel() {
     console.error('QR gen error:', e);
     _doPrint('<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#dc2626;font:700 8pt Arial">QR ERRO</div>', _printWin);
   });
+  }); // end _qrWhenReady
 
   function _doPrint(qrSvg, win) {
 
