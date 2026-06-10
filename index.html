@@ -5548,70 +5548,136 @@ async function initSupabase() {
           } catch(e) {}
         }
 
+        // ════════════════════════════════════════════════════════════
+        // [v44 CORREÇÃO DEFINITIVA iOS/Safari]
+        //
+        // CAUSA RAIZ DO "Load failed":
+        // O fetch() com headers 'Authorization' e 'apikey' dispara CORS preflight
+        // (OPTIONS). No Safari iOS com ITP ativo, requests cross-site com headers
+        // customizados para domínios nunca visitados diretamente são bloqueados
+        // silenciosamente pelo WebKit com TypeError: "Load failed".
+        //
+        // SOLUÇÃO:
+        // 1. apikey movido para QUERY PARAMETER (não header) → request vira
+        //    "simple CORS request" sem preflight — o Safari aceita.
+        // 2. Header Authorization REMOVIDO — substituído pelo apikey na URL.
+        // 3. Header Accept removido (default já é */*, não dispara preflight).
+        // 4. cache: 'no-store' REMOVIDO — causa "Load failed" no Safari iOS 15-.
+        // 5. Coluna _uid REMOVIDA das queries — não existe no Supabase, gera HTTP 400
+        //    que pode aparecer como "Load failed" no Safari.
+        // 6. Fallback XMLHttpRequest para o caso improvável de fetch ainda falhar.
+        // 7. Busca SEQUENCIAL em vez de Promise.all paralelo — evita race conditions
+        //    do WebKit com múltiplos fetches simultâneos ao mesmo host.
+        // ════════════════════════════════════════════════════════════
+
+        function _qrRestFetchXHR(url) {
+          // Fallback XHR — não sofre de ITP da mesma forma que fetch()
+          return new Promise(function(resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            var done = false;
+            var timer = setTimeout(function() {
+              if (done) return;
+              done = true;
+              xhr.abort();
+              reject(new Error('XHR timeout (' + sbFetchTimeoutMs + 'ms)'));
+            }, sbFetchTimeoutMs);
+            xhr.open('GET', url, true);
+            xhr.onload = function() {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              try {
+                var json = JSON.parse(xhr.responseText || '[]');
+                if (xhr.status >= 400) {
+                  reject(new Error('HTTP ' + xhr.status + ': ' + (json.message || xhr.responseText)));
+                } else {
+                  resolve(Array.isArray(json) ? json : []);
+                }
+              } catch(e) {
+                reject(new Error('JSON parse error: ' + e.message));
+              }
+            };
+            xhr.onerror = function() {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              reject(new Error('XHR network error'));
+            };
+            xhr.send();
+          });
+        }
+
         async function _qrRestFetch(column, value) {
           const base = String(sbUrl || '').replace(/\/+$/, '');
-          const url = base + '/rest/v1/equipamentos?select=*&' + encodeURIComponent(column) + '=eq.' + encodeURIComponent(value) + '&limit=1';
-          const hasAbort = typeof AbortController !== 'undefined';
-          const ctrl = hasAbort ? new AbortController() : null;
-          const timer = setTimeout(function(){ try { if (ctrl) ctrl.abort(); } catch(e) {} }, sbFetchTimeoutMs);
+          // [v44] apikey como QUERY PARAM — evita preflight CORS e ITP do Safari iOS
+          // O Supabase PostgREST aceita autenticação via ?apikey= na URL.
+          // Não usar Authorization header nem apikey header — ambos disparam preflight.
+          const url = base + '/rest/v1/equipamentos?select=*'
+            + '&' + column + '=eq.' + encodeURIComponent(value)
+            + '&apikey=' + encodeURIComponent(sbKey)
+            + '&limit=1';
+
+          // Tentar fetch() primeiro; fallback para XHR se falhar (Safari bug)
           try {
-            const res = await fetch(url, {
-              method: 'GET',
-              mode: 'cors',
-              // [v44 iOS FIX] CAUSA RAIZ #3: 'Cache-Control' e 'Pragma' são headers
-              // não-simples que disparam um CORS preflight OPTIONS no Safari.
-              // Se o Supabase não retornar Access-Control-Allow-Headers para esses
-              // headers, o Safari rejeita silenciosamente com "Load failed".
-              // FIX: remover esses headers do fetch; usar apenas apikey e Authorization
-              // (que o Supabase já declara no CORS). O cache é controlado pelo
-              // atributo 'cache: no-store' do RequestInit, sem disparar preflight.
-              cache: 'no-store',
-              signal: ctrl ? ctrl.signal : undefined,
-              headers: {
-                'apikey': sbKey,
-                'Authorization': 'Bearer ' + sbKey,
-                'Accept': 'application/json'
+            const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const timer = setTimeout(function(){ try { if (ctrl) ctrl.abort(); } catch(e){} }, sbFetchTimeoutMs);
+            try {
+              const res = await fetch(url, {
+                method: 'GET',
+                mode: 'cors',
+                signal: ctrl ? ctrl.signal : undefined
+                // [v44] SEM headers customizados — request simples, sem preflight
+                // SEM cache: 'no-store' — causa Load failed no Safari iOS 15-
+              });
+              const text = await res.text();
+              let json = null;
+              try { json = text ? JSON.parse(text) : []; } catch(pe) { json = []; }
+              if (!res.ok) {
+                const msg = (json && json.message) ? json.message : ('HTTP ' + res.status);
+                throw new Error(column + ': ' + msg);
               }
-            });
-            const text = await res.text();
-            let json = null;
-            try { json = text ? JSON.parse(text) : []; } catch(parseErr) { json = text; }
-            if (!res.ok) {
-              const msg = json && json.message ? json.message : (text || ('HTTP ' + res.status));
-              throw new Error(column + ': ' + msg);
+              return Array.isArray(json) ? json : [];
+            } finally {
+              clearTimeout(timer);
             }
-            return Array.isArray(json) ? json : [];
-          } finally {
-            clearTimeout(timer);
+          } catch(fetchErr) {
+            // Se fetch() falhou com "Load failed" ou similar, tenta XHR
+            const isFetchFail = /load failed|failed to fetch|network/i.test(fetchErr.message || '');
+            if (isFetchFail) {
+              console.warn('[v44] fetch() falhou ("' + (fetchErr.message||fetchErr) + '"), tentando XHR para: ' + column);
+              return _qrRestFetchXHR(url);
+            }
+            throw fetchErr;
           }
         }
 
         async function _qrTargetedFetchV43() {
+          // [v44] Apenas colunas que EXISTEM no Supabase: 'id' e 'cod_lab'
+          // _uid foi removido — é campo virtual JS, não existe na tabela, gera HTTP 400
           const valuesText = _qrUnique([_rawId, _rawId.toUpperCase(), _rawId.toLowerCase()]);
           const jobs = [];
           valuesText.forEach(function(v) {
             jobs.push({ column: 'id', value: v });
             jobs.push({ column: 'cod_lab', value: v });
           });
-          if (/^\d+$/.test(_rawId)) jobs.push({ column: '_uid', value: _rawId });
 
-          const settled = await Promise.all(jobs.map(function(job) {
-            return _qrRestFetch(job.column, job.value)
-              .then(function(data) { return { ok: true, job: job, data: data }; })
-              .catch(function(error) { return { ok: false, job: job, error: error }; });
-          }));
-
-          for (let i = 0; i < settled.length; i++) {
-            const r = settled[i];
-            if (r.ok && r.data && r.data.length > 0) {
-              console.log('[FAST v43] hit por ' + r.job.column + '=' + r.job.value);
-              return r.data[0];
+          // [v44] Busca SEQUENCIAL em vez de Promise.all paralelo
+          // Evita race conditions do WebKit com múltiplos fetches simultâneos ao mesmo host
+          let lastError = null;
+          for (let i = 0; i < jobs.length; i++) {
+            const job = jobs[i];
+            try {
+              const data = await _qrRestFetch(job.column, job.value);
+              if (data && data.length > 0) {
+                console.log('[v44] hit por ' + job.column + '=' + job.value);
+                return data[0];
+              }
+            } catch(e) {
+              lastError = e;
+              console.warn('[v44] consulta ' + job.column + '=' + job.value + ' falhou:', e.message || e);
             }
           }
-
-          const failures = settled.filter(function(r) { return !r.ok; });
-          if (failures.length === settled.length && failures[0]) throw failures[0].error;
-          if (failures[0]) console.warn('[FAST v43] algumas consultas falharam:', failures[0].error && (failures[0].error.message || failures[0].error));
+          if (lastError) throw lastError;
           return null;
         }
 
