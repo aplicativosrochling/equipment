@@ -2662,6 +2662,10 @@ input[type="checkbox"], input[type="radio"] {
   <div class="tab" role="tab" tabindex="0" aria-selected="false" data-tab="responsaveis">
     <span class="tab-icon">👤</span> Responsáveis
   </div>
+  <!-- [v48] Nova aba: Admin Plantas — visível apenas para Diretores -->
+  <div class="tab" role="tab" tabindex="0" aria-selected="false" data-tab="admin" id="admin-tab-btn" style="display:none">
+    <span class="tab-icon">🌎</span> Admin Plantas
+  </div>
 </nav>
 
 <div class="main">
@@ -3680,6 +3684,99 @@ input[type="checkbox"], input[type="radio"] {
           <tr><td colspan="8" style="padding:24px;text-align:center;color:var(--tx3)">Carregando...</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ ADMIN PLANTAS (v48) ═══════════════ -->
+<div id="tab-admin" class="page">
+  <div class="tbl-card" style="margin-bottom:16px">
+    <div class="tbl-hdr" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <span class="tbl-title">🌎 Administração de Plantas</span>
+      <button class="btn-g" onclick="adminLoadUsers()" style="font-size:12px">🔄 Atualizar Lista</button>
+    </div>
+    <div style="padding:16px">
+
+      <!-- Setup SQL -->
+      <details style="margin-bottom:16px;border:1px solid var(--bdr2);border-radius:8px;overflow:hidden">
+        <summary style="cursor:pointer;color:var(--accent);font-size:12px;font-weight:600;padding:10px 14px;background:var(--surf2);list-style:none;display:flex;align-items:center;gap:6px">
+          📋 Configuração inicial — clique para ver o SQL necessário
+        </summary>
+        <div style="padding:14px;background:var(--surf)">
+          <p style="color:var(--tx2);font-size:12px;margin:0 0 10px">Execute este SQL no <b>Supabase → SQL Editor</b> uma única vez para criar a tabela de perfis:</p>
+          <pre id="admin-sql-pre" style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:8px;overflow-x:auto;font-size:10.5px;line-height:1.6;white-space:pre-wrap;margin:0 0 10px">-- [v48] Tabela de perfis de usuário (plantas)
+CREATE TABLE IF NOT EXISTS user_profiles (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  unidade TEXT NOT NULL,
+  display_name TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Habilitar Row Level Security
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+
+-- Política: usuários autenticados podem ler e editar perfis
+CREATE POLICY "auth_manage_profiles"
+ON user_profiles FOR ALL
+TO authenticated
+USING (true)
+WITH CHECK (true);</pre>
+          <button class="btn-g" onclick="adminCopySql()" style="font-size:11px">📋 Copiar SQL</button>
+        </div>
+      </details>
+
+      <!-- Formulário para adicionar/atualizar -->
+      <div style="background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:14px;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:10px">➕ Adicionar / Atualizar Usuário</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:2;min-width:200px">
+            <label style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">E-mail do usuário</label>
+            <input id="admin-email" type="email" placeholder="usuario@empresa.com"
+              style="width:100%;padding:8px 10px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf);color:var(--tx);font-size:12px;box-sizing:border-box">
+          </div>
+          <div style="flex:1;min-width:150px">
+            <label style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Planta</label>
+            <select id="admin-unidade"
+              style="width:100%;padding:8px 10px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf);color:var(--tx);font-size:12px;box-sizing:border-box">
+              <option value="">Selecionar planta...</option>
+              <option value="SP">🇧🇷 São Paulo (SP)</option>
+              <option value="MX">🇲🇽 México (MX)</option>
+              <option value="USA">🇺🇸 EUA (USA)</option>
+              <option value="DIRECTOR">🌎 Diretor (todas as plantas)</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:140px">
+            <label style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Nome (opcional)</label>
+            <input id="admin-display-name" type="text" placeholder="Nome do usuário"
+              style="width:100%;padding:8px 10px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf);color:var(--tx);font-size:12px;box-sizing:border-box">
+          </div>
+          <button class="btn-p" onclick="adminSaveUser()" style="padding:8px 18px;font-size:12px;white-space:nowrap;align-self:flex-end">💾 Salvar</button>
+        </div>
+      </div>
+
+      <!-- Tabela de usuários -->
+      <div class="tbl-wrap" style="max-height:420px;overflow-y:auto;border:1px solid var(--bdr2);border-radius:8px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead>
+            <tr>
+              <th style="padding:9px 12px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0;text-align:left">E-mail</th>
+              <th style="padding:9px 12px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0;text-align:left">Nome</th>
+              <th style="padding:9px 12px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0;text-align:left">Planta</th>
+              <th style="padding:9px 12px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0;text-align:center">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="admin-users-tbody">
+            <tr><td colspan="4" style="padding:24px;text-align:center;color:var(--tx3);font-size:12px">Clique em <b>Atualizar Lista</b> para carregar os usuários.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Nota informativa -->
+      <p style="font-size:10.5px;color:var(--tx3);margin:12px 0 0;line-height:1.5">
+        ℹ️ Após salvar, o usuário precisa fazer <b>logout e login novamente</b> para a nova planta ser aplicada.<br>
+        Esta tabela funciona como fallback — se o usuário tiver <code>unidade</code> nos metadados do Supabase Auth, esse valor tem prioridade.
+      </p>
     </div>
   </div>
 </div>
@@ -4980,6 +5077,9 @@ function _setUnidade(unidade) {
   // Diretores veem seletor de planta
   const sel = document.getElementById('planta-selector');
   if (sel) sel.style.display = _isDirector ? 'inline-block' : 'none';
+  // [v48] Aba Admin visível apenas para Diretores
+  const adminTab = document.getElementById('admin-tab-btn');
+  if (adminTab) adminTab.style.display = _isDirector ? '' : 'none';
 }
 
 window.switchPlanta = function(unidade) {
@@ -5019,6 +5119,121 @@ window._loadPlantasDisponiveis = async function() {
   } catch(e) { console.warn('[v47] _loadPlantasDisponiveis:', e.message || e); }
 };
 // ──────────────────────────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════════
+// [v48] ADMIN PLANTAS — Gerenciar usuários e plantas sem acessar Supabase
+// ═══════════════════════════════════════════════════════════════════
+window.adminLoadUsers = async function() {
+  const sb = window._globalSupabaseClient || window._sb;
+  if (!sb || !_isDirector) {
+    showToast('⚠️ Apenas diretores podem acessar esta área.', 'error');
+    return;
+  }
+  const tbody = document.getElementById('admin-users-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--tx3)">⏳ Carregando...</td></tr>';
+
+  try {
+    const { data, error } = await sb.from('user_profiles').select('*').order('email');
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--tx3);font-size:12px">Nenhum perfil cadastrado ainda. Use o formulário acima para adicionar.</td></tr>';
+      return;
+    }
+
+    const thStyle = 'padding:9px 12px;border-bottom:1px solid var(--bdr2);';
+    tbody.innerHTML = data.map(function(u) {
+      const unidadeLabel = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DIRECTOR: '🌎 Diretor' };
+      const opts = ['SP','MX','USA','DIRECTOR'].map(function(v) {
+        return '<option value="' + v + '"' + (u.unidade === v ? ' selected' : '') + '>' + (unidadeLabel[v] || v) + '</option>';
+      }).join('');
+      return '<tr style="border-bottom:1px solid var(--bdr2)">'
+        + '<td style="' + thStyle + '">' + (u.email || '—') + '</td>'
+        + '<td style="' + thStyle + '">' + (u.display_name || '<span style="color:var(--tx3)">—</span>') + '</td>'
+        + '<td style="' + thStyle + '"><select onchange="adminUpdateUnidade(\'' + u.email + '\',this.value)" style="padding:4px 8px;border:1px solid var(--bdr2);border-radius:5px;background:var(--surf2);color:var(--tx);font-size:11px">' + opts + '</select></td>'
+        + '<td style="' + thStyle + 'text-align:center"><button class="btn-g" onclick="adminDeleteUser(\'' + u.email + '\')" style="font-size:10px;padding:4px 10px;background:var(--red,#dc2626);border-color:var(--red,#dc2626);color:#fff">🗑 Remover</button></td>'
+        + '</tr>';
+    }).join('');
+  } catch(e) {
+    const isNotFound = e.message && (e.message.includes('does not exist') || e.message.includes('42P01'));
+    tbody.innerHTML = '<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--red,#dc2626);font-size:12px">'
+      + (isNotFound
+        ? '❌ Tabela <code>user_profiles</code> não existe ainda.<br><span style="color:var(--tx2)">Expanda "Configuração inicial" acima e execute o SQL no Supabase.</span>'
+        : '❌ Erro: ' + (e.message || 'Verifique a conexão com o Supabase.'))
+      + '</td></tr>';
+  }
+};
+
+window.adminSaveUser = async function() {
+  const sb = window._globalSupabaseClient || window._sb;
+  if (!sb || !_isDirector) return;
+  const email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
+  const unidade     = document.getElementById('admin-unidade').value;
+  const displayName = (document.getElementById('admin-display-name').value || '').trim();
+
+  if (!email || !unidade) { showToast('⚠️ Preencha e-mail e planta.', 'warning'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('⚠️ E-mail inválido.', 'warning'); return; }
+
+  try {
+    const { error } = await sb.from('user_profiles').upsert(
+      { email: email, unidade: unidade, display_name: displayName || null, updated_at: new Date().toISOString() },
+      { onConflict: 'email' }
+    );
+    if (error) throw error;
+    showToast('✅ Perfil salvo: ' + email + ' → ' + unidade, 'success');
+    document.getElementById('admin-email').value = '';
+    document.getElementById('admin-unidade').value = '';
+    document.getElementById('admin-display-name').value = '';
+    window.adminLoadUsers();
+  } catch(e) {
+    const isNotFound = e.message && (e.message.includes('does not exist') || e.message.includes('42P01'));
+    showToast(isNotFound ? '❌ Tabela não criada ainda. Execute o SQL de configuração.' : ('❌ Erro: ' + (e.message || '')), 'error');
+  }
+};
+
+window.adminUpdateUnidade = async function(email, unidade) {
+  const sb = window._globalSupabaseClient || window._sb;
+  if (!sb || !_isDirector) return;
+  try {
+    const { error } = await sb.from('user_profiles')
+      .update({ unidade: unidade, updated_at: new Date().toISOString() })
+      .eq('email', email);
+    if (error) throw error;
+    showToast('✅ Planta atualizada: ' + email + ' → ' + unidade, 'success');
+  } catch(e) {
+    showToast('❌ Erro ao atualizar: ' + (e.message || ''), 'error');
+  }
+};
+
+window.adminDeleteUser = async function(email) {
+  const sb = window._globalSupabaseClient || window._sb;
+  if (!sb || !_isDirector) return;
+  if (!confirm('Remover perfil de ' + email + '?\n\nO usuário perderá o acesso à planta configurada.')) return;
+  try {
+    const { error } = await sb.from('user_profiles').delete().eq('email', email);
+    if (error) throw error;
+    showToast('🗑 Perfil removido: ' + email, 'success');
+    window.adminLoadUsers();
+  } catch(e) {
+    showToast('❌ Erro ao remover: ' + (e.message || ''), 'error');
+  }
+};
+
+window.adminCopySql = function() {
+  const pre = document.getElementById('admin-sql-pre');
+  const text = pre ? pre.textContent : '';
+  if (navigator.clipboard && text) {
+    navigator.clipboard.writeText(text).then(function() {
+      showToast('📋 SQL copiado para a área de transferência!', 'success');
+    }).catch(function() {
+      showToast('Selecione e copie o SQL manualmente.', 'info');
+    });
+  } else {
+    showToast('Selecione e copie o SQL manualmente.', 'info');
+  }
+};
+// ══════════════════════════════════════════════════════════════════
 
 // Inicializa o cliente Supabase (lê config do localStorage se disponível)
 function _initSupabaseClient() {
@@ -6016,7 +6231,32 @@ function showApp(user) {
   // Para configurar: no Supabase Dashboard → Auth → Users → Edit user → user_metadata → { "unidade": "MX" }
   // Valores válidos: "SP", "MX", "USA" (ou qualquer sigla) / "DIRECTOR" para ver tudo
   const meta = (user.user_metadata || user.app_metadata || {});
-  _setUnidade(meta.unidade || null);
+  if (meta.unidade) {
+    _setUnidade(meta.unidade);
+  } else {
+    // [v48] Fallback: busca a planta na tabela user_profiles pelo e-mail
+    (async function() {
+      try {
+        if (window._globalSupabaseClient && user.email) {
+          const { data } = await window._globalSupabaseClient
+            .from('user_profiles')
+            .select('unidade')
+            .eq('email', user.email)
+            .maybeSingle();
+          if (data && data.unidade) {
+            _setUnidade(data.unidade);
+          } else {
+            _setUnidade(null);
+          }
+        } else {
+          _setUnidade(null);
+        }
+      } catch(e) {
+        console.warn('[v48] user_profiles fallback:', e.message || e);
+        _setUnidade(null);
+      }
+    })();
+  }
   // Diretores: carrega lista dinâmica de plantas após conectar ao Supabase
   if (_isDirector) {
     setTimeout(function() { if (typeof window._loadPlantasDisponiveis === 'function') window._loadPlantasDisponiveis(); }, 2000);
