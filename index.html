@@ -5369,6 +5369,12 @@ async function sbPull() {
         _uid: r._uid || r.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)),
       })));
       saveLS(true); // [v15 FIX] silent=true: pull do cloud não é mudança local, não marcar como unsaved
+    } else if (data && data.length === 0 && !_isDirector && _currentUnidade) {
+      // [v48 FIX] Planta sem equipamentos cadastrados — limpa cache local para não
+      // exibir dados de outra planta vindos do localStorage
+      DB = [];
+      saveLS(true);
+      if (typeof updateAll === 'function') updateAll();
     }
     setSyncInd('☁ Sync ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
     return true;
@@ -6250,6 +6256,11 @@ function showApp(user) {
           }
         } else {
           _setUnidade(null);
+        }
+        // [v48 FIX] Re-pull com o filtro de planta correto — initSupabase() já rodou
+        // sem o filtro porque este bloco é async. Precisamos recarregar os dados.
+        if (typeof sbPull === 'function' && typeof window.sbActive === 'function' && window.sbActive()) {
+          sbPull().then(function(ok) { if (ok && typeof updateAll === 'function') updateAll(); });
         }
       } catch(e) {
         console.warn('[v48] user_profiles fallback:', e.message || e);
