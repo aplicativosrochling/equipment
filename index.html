@@ -570,7 +570,7 @@ window.clearAdvancedSearch = function() {
 };
 </script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      [v40 iOS FIX] QR Code — qrcode.js v1.0.0 (cdnjs) com retry + fallback  
@@ -594,89 +594,114 @@ window.clearAdvancedSearch = function() {
     console.log('[QR] qrcode.js CDN carregada com sucesso');
   }
 
-  // qrcode@1.5.3 carregou com sucesso
+  // Fallback: renderizar QR como SVG via Google Charts
+  function _setupFallbackQRCode() {
+    var _OrigQR = window.QRCode;
+    if (!_OrigQR || _OrigQR._wrapped) return;
+    
+    window.QRCode = function(el, opts) {
+      if (typeof opts === 'string') opts = { text: opts };
+      opts = opts || {};
+      
+      var text = opts.text || '';
+      var w = opts.width || 220;
+      var h = opts.height || w;
+      
+      // Tenta usar a original se disponível
+      if (_OrigQR && typeof _OrigQR === 'function') {
+        try {
+          return new _OrigQR(el, {
+            text: text,
+            width: w,
+            height: h,
+            colorDark: opts.colorDark || '#000000',
+            colorLight: opts.colorLight || '#ffffff',
+            correctLevel: _OrigQR.CorrectLevel ? _OrigQR.CorrectLevel.M : 0
+          });
+        } catch (e) {
+          console.warn('[QR] Fallback necessário:', e.message);
+        }
+      }
+      
+      // Fallback final: Google Charts
+      var encoded = encodeURIComponent(text);
+      var img = document.createElement('img');
+      img.src = 'https://chart.googleapis.com/chart?chs=' + w + 'x' + h + '&chd=D:' + encoded + '&cht=qr';
+      img.style.width = w + 'px';
+      img.style.height = h + 'px';
+      
+      if (el && el.nodeType) {
+        el.appendChild(img);
+      }
+      
+      this.toDataURL = function() { return img.src; };
+    };
+    
+    window.QRCode.CorrectLevel = { L: 1, M: 0, Q: 3, H: 2 };
+    window.QRCode._wrapped = true;
+    console.log('[QR] Fallback QRCode (Google Charts) instalado');
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log('[QR v1.5.3] SVG-mode disponível — iOS/Safari fix ✓');
-    });
+    document.addEventListener('DOMContentLoaded', _initQRCode);
   } else {
-    console.log('[QR v1.5.3] SVG-mode disponível — iOS/Safari fix ✓');
+    _initQRCode();
   }
 })();
 </script>
 
 <script>
-// [v45 iOS FIX] Async SVG QR generation using qrcode@1.5.3 (SVG, not Canvas)
-window.gerarQRCode = async function(container, payload, opts) {
-  opts = opts || {};
-  var w = opts.width || 220;
-  var h = opts.height || w;
-  
-  return new Promise(function(resolve, reject) {
-    try {
-      // qrcode@1.5.3 with SVG rendering (native browser support)
-      QRCode.toSVG(payload, {
-        errorCorrectionLevel: 'M',
-        type: 'image/svg+xml',
-        width: w,
-        margin: 0,
-        color: {
-          dark: opts.colorDark || '#000000',
-          light: opts.colorLight || '#ffffff'
-        }
-      }).then(function(svgString) {
-        if (container && container.nodeType) {
-          container.innerHTML = svgString;
-        }
-        console.log('[QR SVG] Gerado com sucesso: ' + payload.substring(0, 40) + '...');
-        resolve(svgString);
-      }).catch(function(err) {
-        console.error('[QR SVG] Erro ao gerar:', err.message);
-        reject(err);
+// Wrapper: garante compatibilidade com o .toDataURL() usado no restante do código.
+// CORREÇÃO v7: limite de 20 tentativas (2s máx.) para evitar loop infinito se CDN atrasar ou falhar.
+// Executa após DOMContentLoaded se o script ainda não tiver carregado (fallback de segurança).
+(function(){
+  var MAX_RETRIES = 20; // 20 × 100 ms = 2 s
+  var _retries = 0;
+
+  function _installQRWrapper() {
+    if (typeof window.QRCode === 'undefined') {
+      _retries++;
+      if (_retries > MAX_RETRIES) {
+        console.error('[QR] qrcode.min.js não carregou em ' + (MAX_RETRIES * 100) + ' ms — QR Code indisponível. Verifique a CDN ou o bloqueio de proxy.');
+        return; // Para definitivamente — sem loop infinito
+      }
+      setTimeout(_installQRWrapper, 100);
+      return;
+    }
+    var _OrigQR = window.QRCode;
+    // Evita dupla instalação
+    if (_OrigQR._wrapped) return;
+    window.QRCode = function(el, opts) {
+      if (typeof opts === 'string') opts = { text: opts };
+      var w = opts.width  || 220;
+      var h = opts.height || opts.width || 220;
+      var instance = new _OrigQR(el, {
+        text:         opts.text || '',
+        width:        w,
+        height:       h,
+        colorDark:    opts.colorDark  || '#000000',
+        colorLight:   opts.colorLight || '#ffffff',
+        correctLevel: _OrigQR.CorrectLevel.M
       });
-    } catch (e) {
-      console.error('[QR SVG] Exception:', e.message);
-      reject(e);
-    }
-  });
-};
-
-// Legacy compatibility wrapper — conversão Canvas→SVG
-window.QRCode = function(el, opts) {
-  if (typeof opts === 'string') opts = { text: opts };
-  opts = opts || {};
-  var text = opts.text || '';
-  var w = opts.width || 220;
-  
-  // Chamada assíncrona, resultado via innerHTML (SVG)
-  window.gerarQRCode(el, text, {
-    width: w,
-    height: opts.height || w,
-    colorDark: opts.colorDark || '#000000',
-    colorLight: opts.colorLight || '#ffffff'
-  }).then(function(svgString) {
-    // toDataURL fallback para PNG via canvas
-    if (el && el.querySelector('svg')) {
-      var svg = el.querySelector('svg');
-      this.toDataURL = function() {
-        var canvas = document.createElement('canvas');
-        canvas.width = svg.viewBox.baseVal.width;
-        canvas.height = svg.viewBox.baseVal.height;
-        var ctx = canvas.getContext('2d');
-        var img = new Image();
-        img.onload = function() {
-          ctx.drawImage(img, 0, 0);
-        };
-        img.src = 'data:image/svg+xml;base64,' + btoa(svgString);
-        return canvas.toDataURL('image/png');
+      // Expõe .toDataURL() — qrcodejs cria um <canvas> dentro do el
+      this.toDataURL = function(type) {
+        var canvas = el.querySelector('canvas');
+        return canvas ? canvas.toDataURL(type || 'image/png') : '';
       };
-    }
-  }).catch(function(err) {
-    console.error('[QRCode wrapper] Erro:', err.message);
-  });
-};
+      this._instance = instance;
+    };
+    window.QRCode.CorrectLevel = _OrigQR.CorrectLevel;
+    window.QRCode._wrapped = true;
+  }
 
-window.QRCode.CorrectLevel = { L: 1, M: 0, Q: 3, H: 2 };
+  // Tenta instalar imediatamente (script síncrono sem defer).
+  // Se o DOM ainda não tiver carregado, usa DOMContentLoaded como barreira adicional.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _installQRWrapper);
+  } else {
+    _installQRWrapper();
+  }
+})();
 </script>
 <!-- ── FONTS: 2 famílias apenas — Inter (UI) + JetBrains Mono (dados técnicos/IDs) ── -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -5000,37 +5025,26 @@ async function sbDeleteRecord(codigoEquipamento) {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════
+// LISTENER em tempo real via Supabase Realtime
 // [v45 FIX] REALTIME DESLIGADO — substituído por polling leve a cada 30s
-//
-// CAUSA RAIZ DO 403: O Realtime do Supabase abre uma conexão WebSocket
-// persistente por aba/usuário. Com múltiplos usuários simultâneos o projeto
-// atingiu 242/200 conexões (121% da cota FREE) → Supabase bloqueou TODAS
-// as requisições da organização com 403 "Host not in allowlist".
-//
-// SOLUÇÃO: Polling simples a cada 30s substitui o WebSocket com zero impacto
-// na experiência — dados ficam atualizados em até 30s, sem conexões abertas.
-// ══════════════════════════════════════════════════════════════════════
-var _realtimeChannel = null; // mantido por compatibilidade — não usado
+// CAUSA RAIZ DO 403: Realtime abria WebSocket persistente por aba/usuário.
+// Com múltiplos usuários simultâneos: 242/200 conexões (121% da cota FREE)
+// → Supabase bloqueou TODAS as requisições com 403 "Host not in allowlist".
+var _realtimeChannel = null; // mantido por compatibilidade
 var _pollingTimer = null;
 var _pollingLastHash = null;
 
 function fbStartListen() {
   if (!sbActive()) return;
-  // Garante que não há canal Realtime aberto (fecha se havia de versão anterior)
   if (_realtimeChannel) {
     try { _realtimeChannel.unsubscribe(); } catch(e) {}
     _realtimeChannel = null;
   }
-  // Para polling anterior se existir
   if (_pollingTimer) { clearInterval(_pollingTimer); _pollingTimer = null; }
-
   setSyncInd('☁ Sincronização ativa (30s)', 'var(--green)');
-  console.log('[v45] Polling leve iniciado (intervalo: 30s). Realtime desligado para economizar cota.');
-
-  // Polling a cada 30 segundos
+  console.log('[v45] Polling leve iniciado (30s). Realtime desligado para economizar cota.');
   _pollingTimer = setInterval(async function() {
-    if (_pending) return; // não busca enquanto está salvando
+    if (_pending) return;
     if (!sbActive()) return;
     try {
       const _RT_PAGE = 1000;
@@ -5058,7 +5072,7 @@ function fbStartListen() {
     } catch(e) {
       console.warn('[v45 polling] falha silenciosa:', e.message || e);
     }
-  }, 30000); // 30 segundos
+  }, 30000);
 }
 
 // ── Modal de configuração Supabase ────────────────────────────────
@@ -5129,8 +5143,7 @@ async function sbConnect() {
   if(res_el) { res_el.textContent = '⏳ Conectando ao Supabase…'; res_el.style.color='var(--accent2)'; }
 
   // Para canal realtime anterior
-  if (_realtimeChannel) { try { _realtimeChannel.unsubscribe(); } catch(e){} _realtimeChannel = null; }
-  if (typeof _pollingTimer !== "undefined" && _pollingTimer) { clearInterval(_pollingTimer); _pollingTimer = null; }
+  if (_realtimeChannel) { try { _realtimeChannel.unsubscribe(); } catch(e){} _realtimeChannel = null; } if (typeof _pollingTimer !== "undefined" && _pollingTimer) { clearInterval(_pollingTimer); _pollingTimer = null; }
   _sbActive = false; _sb = null;
   _sbInitialized = false; // [v15 FIX] reset para permitir init completo com nova configuração
 
@@ -5192,8 +5205,7 @@ async function sbConnect() {
 window.fbConnect = sbConnect;
 
 function sbDisconnect() {
-  if (_realtimeChannel) { try { _realtimeChannel.unsubscribe(); } catch(e){} _realtimeChannel = null; }
-  if (typeof _pollingTimer !== "undefined" && _pollingTimer) { clearInterval(_pollingTimer); _pollingTimer = null; }
+  if (_realtimeChannel) { try { _realtimeChannel.unsubscribe(); } catch(e){} _realtimeChannel = null; } if (typeof _pollingTimer !== "undefined" && _pollingTimer) { clearInterval(_pollingTimer); _pollingTimer = null; }
   _sbActive = false; _sb = null;
   _sbInitialized = false; // [v15 FIX] permite reconectar do zero
   localStorage.removeItem(LS_SB_CFG);
@@ -5459,46 +5471,27 @@ async function initSupabase() {
   const _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co'; 
   const _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw'; 
 
-  // Oculta o login, lê a tabela 'equipamentos' no Supabase (anon key = leitura pública via RLS) e renderiza a ficha.
-  // No Supabase: certifique-se de habilitar RLS com uma policy "allow SELECT for anon" na tabela 'equipamentos'.
-  // [v44 iOS FIX] CAUSA RAIZ #1: window.addEventListener('DOMContentLoaded') sem
-  // verificar readyState. Quando o Safari abre via QR (câmera → link), o DOM pode
-  // já estar carregado (readyState = 'interactive' ou 'complete') antes deste
-  // listener ser registrado. Resultado: o callback NUNCA dispara, _publicLoadDone
-  // nunca vira true, e após 45s aparece "Falha ao carregar dados / Load failed".
-  // FIX: usar document.addEventListener + verificar readyState imediatamente.
+  // Oculta o login, lê a tabela 'equipamentos' no Supabase e renderiza a ficha.
+  // [v45] Padrão seguro: verifica readyState ANTES de registrar o listener.
   function _runPublicQR() {
-    // Esconde o login overlay — modo somente-leitura público
     const lo = document.getElementById('login-overlay');
     if (lo) lo.style.display = 'none';
-    // Inicializa DB local (sem auth)
     if (typeof initDB === 'function') initDB();
     (async () => {
       try {
-        // [v44 iOS FIX] CAUSA RAIZ #2: localStorage.getItem sem try/catch.
-        // No Safari em modo privado (ou quando aberto via câmera), o acesso ao
-        // localStorage lança SecurityError e mata silenciosamente toda a IIFE async.
-        // FIX: envolver em try/catch e usar as credenciais hardcoded como fallback.
+        // [v45] localStorage com try/catch — Safari modo privado lança SecurityError
         let saved = {};
         try { saved = JSON.parse(localStorage.getItem('rochling_sb_cfg') || '{}'); } catch(e) {
-          console.warn('[público v44] localStorage bloqueado (modo privado?), usando credenciais padrão:', e.message || e);
+          console.warn('[v45 QR] localStorage bloqueado, usando credenciais padrão');
         }
-        // ✅ FIX v25: Usa credenciais hardcoded como fallback quando localStorage está vazio (ex: celular)
         const sbUrl = (saved && saved.url) || _QR_PUBLIC_SB_URL;
         const sbKey = (saved && saved.key) || _QR_PUBLIC_SB_KEY;
         if (!sbUrl || !sbKey) {
-          console.warn('[público] Supabase não configurado — adicione _QR_PUBLIC_SB_URL e _QR_PUBLIC_SB_KEY no código para acesso via QR em celulares.');
+          console.warn('[público] Supabase não configurado.');
           waitAndRender();
           return;
         }
-        
-        // ════════════════════════════════════════════════════════════
-        // ✅ FIX v43 DEFINITIVO iPhone/Safari — QR público sem CDN pesada
-        // Causa real v42: o filtro .or(id,_uid,_docId) misturava TEXT com BIGINT e coluna inexistente.
-        // Ex.: _uid.eq.PA-031 gera erro no PostgREST; depois caía na paginação
-        // completa e o Safari iPhone estourava 45s. Agora a busca é direta via
-        // REST por coluna: id/cod_lab; _uid só é consultado quando o QR é numérico.
-        // ════════════════════════════════════════════════════════════
+
         const sbFetchTimeoutMs = window._isIOS ? 12000 : 8000;
         const _qrT0 = performance.now();
         const _rawId = decodeURIComponent(viewId || '').trim();
@@ -5522,90 +5515,49 @@ async function initSupabase() {
         function _qrLoadCached() {
           try {
             const cached = JSON.parse(localStorage.getItem(_qrCacheKey()) || 'null');
-            if (cached && cached.record) {
-              console.log('[QR CACHE] equipamento recuperado do cache local');
-              return cached.record;
-            }
+            if (cached && cached.record) return cached.record;
           } catch(e) {}
           return null;
         }
 
         function _qrSaveCached(record) {
-          try {
-            localStorage.setItem(_qrCacheKey(), JSON.stringify({ ts: Date.now(), record: record }));
-          } catch(e) {}
+          try { localStorage.setItem(_qrCacheKey(), JSON.stringify({ ts: Date.now(), record: record })); } catch(e) {}
         }
 
-        // ════════════════════════════════════════════════════════════
-        // [v44 CORREÇÃO DEFINITIVA iOS/Safari]
-        //
-        // CAUSA RAIZ DO "Load failed":
-        // O fetch() com headers 'Authorization' e 'apikey' dispara CORS preflight
-        // (OPTIONS). No Safari iOS com ITP ativo, requests cross-site com headers
-        // customizados para domínios nunca visitados diretamente são bloqueados
-        // silenciosamente pelo WebKit com TypeError: "Load failed".
-        //
-        // SOLUÇÃO:
-        // 1. apikey movido para QUERY PARAMETER (não header) → request vira
-        //    "simple CORS request" sem preflight — o Safari aceita.
-        // 2. Header Authorization REMOVIDO — substituído pelo apikey na URL.
-        // 3. Header Accept removido (default já é */*, não dispara preflight).
-        // 4. cache: 'no-store' REMOVIDO — causa "Load failed" no Safari iOS 15-.
-        // 5. Coluna _uid REMOVIDA das queries — não existe no Supabase, gera HTTP 400
-        //    que pode aparecer como "Load failed" no Safari.
-        // 6. Fallback XMLHttpRequest para o caso improvável de fetch ainda falhar.
-        // 7. Busca SEQUENCIAL em vez de Promise.all paralelo — evita race conditions
-        //    do WebKit com múltiplos fetches simultâneos ao mesmo host.
-        // ════════════════════════════════════════════════════════════
-
-        function _qrRestFetchXHR(url) {
-          // Fallback XHR — não sofre de ITP da mesma forma que fetch()
+        // [v45] Fallback XHR — não sofre de ITP do Safari como fetch()
+        function _qrXHR(url) {
           return new Promise(function(resolve, reject) {
             var xhr = new XMLHttpRequest();
             var done = false;
             var timer = setTimeout(function() {
-              if (done) return;
-              done = true;
-              xhr.abort();
-              reject(new Error('XHR timeout (' + sbFetchTimeoutMs + 'ms)'));
+              if (done) return; done = true; xhr.abort();
+              reject(new Error('XHR timeout'));
             }, sbFetchTimeoutMs);
             xhr.open('GET', url, true);
             xhr.onload = function() {
-              if (done) return;
-              done = true;
-              clearTimeout(timer);
+              if (done) return; done = true; clearTimeout(timer);
               try {
                 var json = JSON.parse(xhr.responseText || '[]');
-                if (xhr.status >= 400) {
-                  reject(new Error('HTTP ' + xhr.status + ': ' + (json.message || xhr.responseText)));
-                } else {
-                  resolve(Array.isArray(json) ? json : []);
-                }
-              } catch(e) {
-                reject(new Error('JSON parse error: ' + e.message));
-              }
+                if (xhr.status >= 400) reject(new Error('HTTP ' + xhr.status + ': ' + (json.message || '')));
+                else resolve(Array.isArray(json) ? json : []);
+              } catch(e) { reject(new Error('JSON parse error')); }
             };
             xhr.onerror = function() {
-              if (done) return;
-              done = true;
-              clearTimeout(timer);
+              if (done) return; done = true; clearTimeout(timer);
               reject(new Error('XHR network error'));
             };
             xhr.send();
           });
         }
 
+        // [v45] apikey como QUERY PARAM (não header) → evita CORS preflight e ITP do Safari
+        // SEM Authorization header, SEM Cache-Control, SEM Pragma, SEM cache:'no-store'
         async function _qrRestFetch(column, value) {
           const base = String(sbUrl || '').replace(/\/+$/, '');
-          // [v44] apikey como QUERY PARAM — evita preflight CORS e ITP do Safari iOS
-          // O Supabase PostgREST aceita autenticação via ?apikey= na URL.
-          // Não usar Authorization header nem apikey header — ambos disparam preflight.
           const url = base + '/rest/v1/equipamentos?select=*'
             + '&' + column + '=eq.' + encodeURIComponent(value)
             + '&apikey=' + encodeURIComponent(sbKey)
             + '&limit=1';
-
-          // Tentar fetch() primeiro; fallback para XHR se falhar (Safari bug)
           try {
             const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
             const timer = setTimeout(function(){ try { if (ctrl) ctrl.abort(); } catch(e){} }, sbFetchTimeoutMs);
@@ -5614,55 +5566,44 @@ async function initSupabase() {
                 method: 'GET',
                 mode: 'cors',
                 signal: ctrl ? ctrl.signal : undefined
-                // [v44] SEM headers customizados — request simples, sem preflight
-                // SEM cache: 'no-store' — causa Load failed no Safari iOS 15-
               });
               const text = await res.text();
               let json = null;
-              try { json = text ? JSON.parse(text) : []; } catch(pe) { json = []; }
-              if (!res.ok) {
-                const msg = (json && json.message) ? json.message : ('HTTP ' + res.status);
-                throw new Error(column + ': ' + msg);
-              }
+              try { json = text ? JSON.parse(text) : []; } catch(e) { json = []; }
+              if (!res.ok) throw new Error(column + ': HTTP ' + res.status + ' ' + (json && json.message || ''));
               return Array.isArray(json) ? json : [];
-            } finally {
-              clearTimeout(timer);
-            }
+            } finally { clearTimeout(timer); }
           } catch(fetchErr) {
-            // Se fetch() falhou com "Load failed" ou similar, tenta XHR
-            const isFetchFail = /load failed|failed to fetch|network/i.test(fetchErr.message || '');
-            if (isFetchFail) {
-              console.warn('[v44] fetch() falhou ("' + (fetchErr.message||fetchErr) + '"), tentando XHR para: ' + column);
-              return _qrRestFetchXHR(url);
+            // Se fetch falhou com erro de rede, tenta XHR
+            if (/load failed|failed to fetch|network/i.test(fetchErr.message || '')) {
+              console.warn('[v45] fetch falhou, tentando XHR para: ' + column);
+              return _qrXHR(url);
             }
             throw fetchErr;
           }
         }
 
+        // [v45] Busca SEQUENCIAL (não paralela) — evita race conditions do WebKit
+        // Apenas colunas reais: 'id' e 'cod_lab'. '_uid' removido (não existe na tabela).
         async function _qrTargetedFetchV43() {
-          // [v44] Apenas colunas que EXISTEM no Supabase: 'id' e 'cod_lab'
-          // _uid foi removido — é campo virtual JS, não existe na tabela, gera HTTP 400
           const valuesText = _qrUnique([_rawId, _rawId.toUpperCase(), _rawId.toLowerCase()]);
           const jobs = [];
           valuesText.forEach(function(v) {
             jobs.push({ column: 'id', value: v });
             jobs.push({ column: 'cod_lab', value: v });
           });
-
-          // [v44] Busca SEQUENCIAL em vez de Promise.all paralelo
-          // Evita race conditions do WebKit com múltiplos fetches simultâneos ao mesmo host
           let lastError = null;
           for (let i = 0; i < jobs.length; i++) {
             const job = jobs[i];
             try {
               const data = await _qrRestFetch(job.column, job.value);
               if (data && data.length > 0) {
-                console.log('[v44] hit por ' + job.column + '=' + job.value);
+                console.log('[v45] hit por ' + job.column + '=' + job.value);
                 return data[0];
               }
             } catch(e) {
               lastError = e;
-              console.warn('[v44] consulta ' + job.column + '=' + job.value + ' falhou:', e.message || e);
+              console.warn('[v45] consulta ' + job.column + '=' + job.value + ' falhou:', e.message || e);
             }
           }
           if (lastError) throw lastError;
@@ -5675,17 +5616,17 @@ async function initSupabase() {
             try {
               fastHit = await _qrTargetedFetchV43();
               if (fastHit) break;
-              console.log('[FAST v43] tentativa ' + attempt + ': sem resultado');
+              console.log('[v45] tentativa ' + attempt + ': sem resultado');
               break;
             } catch (e) {
               lastFetchError = e;
-              console.warn('[FAST v43] tentativa ' + attempt + ' falhou:', e.message || e);
+              console.warn('[v45] tentativa ' + attempt + ' falhou:', e.message || e);
               if (attempt < 2) await new Promise(function(r) { setTimeout(r, 700 * attempt); });
             }
           }
         } catch(e) {
           lastFetchError = e;
-          console.warn('[FAST v43] erro:', e.message || e);
+          console.warn('[v45] erro:', e.message || e);
         }
 
         if (!fastHit && lastFetchError) {
@@ -5695,39 +5636,31 @@ async function initSupabase() {
 
         if (fastHit) {
           const _fastMs = (performance.now() - _qrT0).toFixed(0);
-          console.log('[FAST v43] equipamento carregado em ' + _fastMs + 'ms (1 registro)');
+          console.log('[v45] equipamento carregado em ' + _fastMs + 'ms');
           const r = { ...fastHit, _uid: fastHit._uid || fastHit.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)) };
           _qrSaveCached(r);
           DB = typeof recalcDias === 'function' ? recalcDias([r]) : [r];
         } else {
           _publicLoadNoHit = !lastFetchError;
           _publicLoadError = lastFetchError || null;
-          console.warn(lastFetchError ? '[FAST v43] falha na consulta pública' : '[FAST v43] consulta concluída sem hit');
+          console.warn(lastFetchError ? '[v45] falha na consulta pública' : '[v45] consulta concluída sem hit');
         }
       } catch(e) {
         _publicLoadError = e;
-        console.error('[público v44] erro consulta pública:', e.message || e);
-        console.error('[público v44] stack:', e && e.stack);
-        console.error('[público v44] iOS:', window._isIOS, '| UA:', navigator.userAgent.slice(0,80));
-        if (typeof DB !== 'undefined' && DB.length > 0) {
-          console.log('[público v44] Usando dados do localStorage como fallback após erro público');
-        } else {
-          console.warn('[público v44] Nenhum fallback disponível — exibindo erro direto');
-        }
+        console.error('[v45] erro consulta pública:', e.message || e);
+        console.error('[v45] stack:', e && e.stack);
+        console.error('[v45] iOS:', window._isIOS, '| UA:', navigator.userAgent.slice(0,80));
       }
       _publicLoadDone = true;
       waitAndRender();
     })();
-  } // fim _runPublicQR
+  }
 
-  // [v44 iOS FIX] Padrão seguro: verifica readyState ANTES de registrar o listener.
-  // Isso garante que o callback execute mesmo se o DOM já estiver pronto
-  // (situação comum no Safari iOS quando a página é aberta via câmera/QR).
+  // [v45] Verifica readyState ANTES de registrar — garante execução mesmo se DOM
+  // já estiver pronto (situação comum no Safari iOS via câmera QR)
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _runPublicQR);
   } else {
-    // DOM já está pronto (readyState = 'interactive' ou 'complete')
-    // Usar setTimeout(0) para não bloquear a thread principal
     setTimeout(_runPublicQR, 0);
   }
 })();
@@ -5931,9 +5864,8 @@ async function doLogout() {
   // _confirmModal só é atribuída a window na linha ~13327; chamá-la diretamente
   // antes desse ponto lançava ReferenceError bloqueando o logout.
   _safeConfirm('Deseja sair do sistema?', async function() {
-    // Para o canal realtime e polling
-    if (_realtimeChannel) { try { _realtimeChannel.unsubscribe(); } catch(e) {} _realtimeChannel = null; }
-    if (typeof _pollingTimer !== 'undefined' && _pollingTimer) { clearInterval(_pollingTimer); _pollingTimer = null; }
+    // Para o canal realtime
+    if (_realtimeChannel) { try { _realtimeChannel.unsubscribe(); } catch(e){} _realtimeChannel = null; } if (typeof _pollingTimer !== "undefined" && _pollingTimer) { clearInterval(_pollingTimer); _pollingTimer = null; }
     _sbActive = false;
     try {
       if (_sb) await _sb.auth.signOut();
