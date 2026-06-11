@@ -15,7 +15,7 @@
 <!-- 🍎 iOS Specific: Evita timeout em Safari -->
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v43)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v47)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição - v36 Premium com melhorias avançadas.">
 
 
@@ -5456,11 +5456,14 @@ async function initSupabase() {
       const dbCount = (typeof DB !== 'undefined' && DB) ? DB.length : 0;
       ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:6px;padding:24px;text-align:center';
       const _loadErrMsg = _publicLoadError ? String(_publicLoadError.message || _publicLoadError) : '';
+      const _isNetworkErr = /network|timeout|failed to fetch|load failed|XHR/i.test(_loadErrMsg);
       ov.innerHTML = '<div style="font-size:36px">' + (_publicLoadError ? '📡' : '🔍') + '</div>'
         + '<div style="font-size:16px;font-weight:700;color:#1a1a1a">' + (_publicLoadError ? 'Falha ao carregar dados' : 'Equipamento não encontrado') + '</div>'
         + '<div style="font-size:12px;color:#6b7280;font-family:monospace">ID buscado: <b>' + _escPub(decodeURIComponent(viewId)) + '</b></div>'
         + (_publicLoadError
             ? '<div style="font-size:11px;color:#dc2626;margin-top:6px">⚠️ Não foi possível consultar o servidor agora.<br>Erro: ' + _escPub(_loadErrMsg.slice(0, 160)) + '</div>'
+              + (_isNetworkErr ? '<div style="font-size:10.5px;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:8px 10px;margin-top:8px;max-width:300px;text-align:left">💡 <b>Possíveis causas:</b><br>• Projeto Supabase pausado (plano gratuito pausa após 1 semana)<br>• Sem conexão à internet<br>• Servidor temporariamente indisponível<br><br>Se for administrador, acesse <b>supabase.com/dashboard</b> e reative o projeto.</div>' : '')
+              + '<div style="margin-top:14px"><button onclick="location.reload()" style="background:#0064b3;color:#fff;border:none;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">↺ Tentar novamente</button></div>'
             : (dbCount === 0
                 ? '<div style="font-size:11px;color:#6b7280;margin-top:6px">Consulta concluída em modo rápido. Nenhum registro corresponde a este QR.</div>'
                 : '<div style="font-size:11px;color:#6b7280;margin-top:4px">Base carregada com ' + dbCount + ' registro(s). ID não encontrado.</div>'));
@@ -5530,7 +5533,7 @@ async function initSupabase() {
           try { localStorage.setItem(_qrCacheKey(), JSON.stringify({ ts: Date.now(), record: record })); } catch(e) {}
         }
 
-        // [v45] Fallback XHR — não sofre de ITP do Safari como fetch()
+        // [v47] XHR com headers de autenticação explícitos (apikey + Authorization)
         function _qrXHR(url) {
           return new Promise(function(resolve, reject) {
             var xhr = new XMLHttpRequest();
@@ -5540,6 +5543,9 @@ async function initSupabase() {
               reject(new Error('XHR timeout'));
             }, sbFetchTimeoutMs);
             xhr.open('GET', url, true);
+            try { xhr.setRequestHeader('apikey', sbKey); } catch(e) {}
+            try { xhr.setRequestHeader('Authorization', 'Bearer ' + sbKey); } catch(e) {}
+            try { xhr.setRequestHeader('Accept', 'application/json'); } catch(e) {}
             xhr.onload = function() {
               if (done) return; done = true; clearTimeout(timer);
               try {
@@ -5556,21 +5562,49 @@ async function initSupabase() {
           });
         }
 
-        // [v45] apikey como QUERY PARAM (não header) → evita CORS preflight e ITP do Safari
-        // SEM Authorization header, SEM Cache-Control, SEM Pragma, SEM cache:'no-store'
+        // [v47] USA SUPABASE JS SDK como método principal — compatibilidade máxima iOS/Safari.
+        // O SDK define automaticamente apikey + Authorization e lida com CORS corretamente.
+        // Fallback 1: fetch com headers explícitos. Fallback 2: XHR com headers.
         async function _qrRestFetch(column, value) {
           const base = String(sbUrl || '').replace(/\/+$/, '');
-          const url = base + '/rest/v1/equipamentos?select=*'
+
+          // ── Método 1: Supabase JS SDK (melhor para iOS) ──
+          if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
+            try {
+              // Reutiliza ou cria client público (sem persistir sessão — evita bugs de storage no iOS)
+              if (!window._qrPublicSbClient || window._qrPublicSbClientUrl !== sbUrl) {
+                window._qrPublicSbClient = window.supabase.createClient(sbUrl, sbKey, {
+                  auth: { persistSession: false, autoRefreshToken: false, storageKey: 'sb-qr-pub' }
+                });
+                window._qrPublicSbClientUrl = sbUrl;
+              }
+              const sdkResult = await Promise.race([
+                window._qrPublicSbClient.from('equipamentos').select('*').eq(column, value).limit(1),
+                new Promise(function(_, rej) { setTimeout(function() { rej(new Error('SDK timeout')); }, sbFetchTimeoutMs); })
+              ]);
+              const { data: sdkData, error: sdkError } = sdkResult;
+              if (sdkError) {
+                console.warn('[v47] SDK error em ' + column + ':', sdkError.message || sdkError);
+                // Cai no fallback abaixo
+              } else {
+                return Array.isArray(sdkData) ? sdkData : [];
+              }
+            } catch(sdkErr) {
+              console.warn('[v47] SDK falhou em ' + column + ':', sdkErr.message || sdkErr, '— tentando fetch');
+            }
+          }
+
+          // ── Método 2: fetch com headers explícitos ──
+          const urlWithKey = base + '/rest/v1/equipamentos?select=*'
             + '&' + column + '=eq.' + encodeURIComponent(value)
-            + '&apikey=' + encodeURIComponent(sbKey)
             + '&limit=1';
           try {
             const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
             const timer = setTimeout(function(){ try { if (ctrl) ctrl.abort(); } catch(e){} }, sbFetchTimeoutMs);
             try {
-              const res = await fetch(url, {
+              const res = await fetch(urlWithKey, {
                 method: 'GET',
-                mode: 'cors',
+                headers: { 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey, 'Accept': 'application/json' },
                 signal: ctrl ? ctrl.signal : undefined
               });
               const text = await res.text();
@@ -5580,10 +5614,10 @@ async function initSupabase() {
               return Array.isArray(json) ? json : [];
             } finally { clearTimeout(timer); }
           } catch(fetchErr) {
-            // Se fetch falhou com erro de rede, tenta XHR
-            if (/load failed|failed to fetch|network/i.test(fetchErr.message || '')) {
-              console.warn('[v45] fetch falhou, tentando XHR para: ' + column);
-              return _qrXHR(url);
+            // ── Método 3: XHR com headers ──
+            if (/load failed|failed to fetch|network|abort/i.test(fetchErr.message || '')) {
+              console.warn('[v47] fetch falhou, tentando XHR para: ' + column);
+              return _qrXHR(urlWithKey);
             }
             throw fetchErr;
           }
