@@ -437,7 +437,7 @@ window.exportSQL = function() {
   a.href = url;
   a.download = 'equipamentos_' + new Date().toISOString().slice(0, 10) + '.sql';
   a.click();
-  URL.revokeObjectURL(blob);
+  URL.revokeObjectURL(url); // [BUG1 FIX] era revokeObjectURL(blob) — blob é um Blob, não uma URL; a URL vazava memória
   
   showToast('✅ ' + DB.length + ' registros exportados (SQL)', 'success');
 };
@@ -595,13 +595,16 @@ window.clearAdvancedSearch = function() {
       setTimeout(_initQRCode, 100);
       return;
     }
-    console.log('[QR] qrcode.js CDN carregada com sucesso');
+    _DEV && console.log('[QR] qrcode.js CDN carregada com sucesso'); // [BUG22 FIX]
   }
 
   // Fallback: renderizar QR como SVG via Google Charts
   function _setupFallbackQRCode() {
     var _OrigQR = window.QRCode;
-    if (!_OrigQR || _OrigQR._wrapped) return;
+    // [BUG21 FIX] Era `if (!_OrigQR || _OrigQR._wrapped) return;` — quando a CDN falha,
+    // `_OrigQR` é undefined → `!_OrigQR` é true → retornava sem instalar o fallback.
+    // Corrigido: só pula se QRCode já foi envolvido (wrapped), nunca por ser undefined.
+    if (_OrigQR && _OrigQR._wrapped) return;
     
     window.QRCode = function(el, opts) {
       if (typeof opts === 'string') opts = { text: opts };
@@ -643,7 +646,7 @@ window.clearAdvancedSearch = function() {
     
     window.QRCode.CorrectLevel = { L: 1, M: 0, Q: 3, H: 2 };
     window.QRCode._wrapped = true;
-    console.log('[QR] Fallback QRCode (Google Charts) instalado');
+    _DEV && console.log('[QR] Fallback QRCode (Google Charts) instalado'); // [BUG22 FIX]
   }
 
   if (document.readyState === 'loading') {
@@ -4389,7 +4392,7 @@ function setLang(lang) {
 
 // Apply language to all static DOM elements
 function applyLang() {
-  const L = lang => (el, key) => { if(el) el.textContent = t(key); };
+  // [BUG15 FIX] Removida declaração `const L = ...` — função nunca era chamada (código morto)
   const s = (id, key) => { const el=document.getElementById(id); if(el) el.textContent=t(key); };
   const q = (sel, key) => { document.querySelectorAll(sel).forEach(el=>{ if(!el.dataset.orig) el.dataset.orig=el.textContent; el.textContent=t(key); }); };
   const a = (sel, attr, key) => { document.querySelectorAll(sel).forEach(el=>el.setAttribute(attr, t(key))); };
@@ -4626,11 +4629,8 @@ function applyLang() {
   // Gauge "em dia" / "on time" label
   const gaugeLabel = document.getElementById('gauge-label');
   if(gaugeLabel) gaugeLabel.textContent = t('ch_in_day');
-  // Reset modal title if open
-  const mTitle = document.getElementById('m-title');
-  if(mTitle && mTitle.textContent) {
-    const isEdit = mTitle.textContent !== t('m_new_title');
-  }
+  // [BUG14 FIX] Removido bloco inútil: `const isEdit = ...` era declarada mas nunca lida.
+  // O if estava vazio e não executava nenhuma ação.
 }
 
 
@@ -4696,18 +4696,19 @@ const COL_DEFS = {
 // Per-table column widths (px) — mutable
 let colWidths = {};
 
+// [BUG12 FIX] Parâmetro renomeado de `t` para `tbl` em ambos os forEach — `t` é a função global de i18n
 function initColWidths() {
-  Object.entries(COL_DEFS).forEach(([t, cols]) => {
-    colWidths[t] = {};
-    cols.forEach(c => { colWidths[t][c.k] = c.w; });
+  Object.entries(COL_DEFS).forEach(([tbl, cols]) => {
+    colWidths[tbl] = {};
+    cols.forEach(c => { colWidths[tbl][c.k] = c.w; });
   });
 }
 
 let colVis = {};
 function initColVis() {
-  Object.entries(COL_DEFS).forEach(([t, cols]) => {
-    colVis[t] = {};
-    cols.forEach(c => { colVis[t][c.k] = c.def; });
+  Object.entries(COL_DEFS).forEach(([tbl, cols]) => {
+    colVis[tbl] = {};
+    cols.forEach(c => { colVis[tbl][c.k] = c.def; });
   });
 }
 function buildColPanel(tbl) { /* rebuilt by showColMenu */ }
@@ -4845,11 +4846,12 @@ const CC = ['#0064b3','#f59e0b','#16a34a','#1a1a1a','#7c3aed','#ea580c','#0d9488
 const CC_LIGHT = ['rgba(0,100,179,.15)','rgba(245,158,11,.15)','rgba(22,163,74,.15)','rgba(26,26,26,.15)'];
 let charts = {};
 
-function setTheme(t) {
-  document.documentElement.setAttribute('data-theme', t);
-  document.getElementById('th-dk').classList.toggle('on', t==='dark');
-  document.getElementById('th-lt').classList.toggle('on', t==='light');
-  StorageService.set('rochling_theme', t);
+// [BUG11 FIX] Parâmetro renomeado de `t` para `themeMode` — `t` é o nome da função global de i18n
+function setTheme(themeMode) {
+  document.documentElement.setAttribute('data-theme', themeMode);
+  document.getElementById('th-dk').classList.toggle('on', themeMode==='dark');
+  document.getElementById('th-lt').classList.toggle('on', themeMode==='light');
+  StorageService.set('rochling_theme', themeMode);
   buildAllCharts(); buildRelatorios();
 }
 // Restore saved theme on load (default: light)
@@ -5030,6 +5032,9 @@ function recalcDias(records) {
 // [v27] Credenciais pré-configuradas — salvas automaticamente no localStorage na primeira carga.
 (function _preseedSupabaseCfg() {
   try {
+    // [BUG19 AVISO DE SEGURANÇA] Credenciais Supabase hardcodadas em HTML estático.
+    // Qualquer pessoa com acesso ao "Ver código-fonte" do navegador pode ver a URL e a chave anon.
+    // Para produção: injete via variável de ambiente no servidor (nunca embutida no HTML).
     const _PRE_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co';
     const _PRE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw';
     const saved = JSON.parse(localStorage.getItem('rochling_sb_cfg') || '{}');
@@ -5352,9 +5357,8 @@ async function sbPull() {
       from += PAGE_SIZE;
     }
     const data = allData;
-    const error = null;
-
-    if (error) throw error;
+    // [BUG2 FIX] Removido código morto: `const error = null; if (error) throw error;`
+    // O erro real é capturado como pageErr dentro do laço while e lançado via `throw pageErr`.
 
     if (data && data.length > 0) {
       if (_pending) {
@@ -5519,7 +5523,11 @@ function fbStartListen() {
       const _RT_PAGE = 1000;
       let _rtAll = [], _rtFrom = 0, _rtMore = true;
       while (_rtMore) {
-        const { data: _rtPage, error: _rtErr } = await _sb.from('equipamentos').select('*').order('id', { ascending: true }).range(_rtFrom, _rtFrom + _RT_PAGE - 1);
+        // [BUG3 FIX] Adicionado filtro .eq('unidade', _currentUnidade) — sem ele o polling buscava
+        // TODOS os equipamentos de TODAS as plantas, podendo sobrescrever DB com dados de outra planta.
+        let _rtQ = _sb.from('equipamentos').select('*').order('id', { ascending: true }).range(_rtFrom, _rtFrom + _RT_PAGE - 1);
+        if (!_isDirector && _currentUnidade) _rtQ = _rtQ.eq('unidade', _currentUnidade);
+        const { data: _rtPage, error: _rtErr } = await _rtQ;
         if (_rtErr) { console.warn('[v45 polling] erro:', _rtErr.message); return; }
         if (_rtPage && _rtPage.length > 0) _rtAll = _rtAll.concat(_rtPage);
         _rtMore = _rtPage && _rtPage.length === _RT_PAGE;
@@ -5940,8 +5948,10 @@ async function initSupabase() {
   // ══════════════════════════════════════════════════════════════
 // ✅ FIX v25 — CREDENCIAIS SUPABASE PARA LEITURA PÚBLICA VIA QR
 // ══════════════════════════════════════════════════════════════
-  const _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co'; 
-  const _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw'; 
+  // [BUG19 AVISO DE SEGURANÇA] Segunda ocorrência de credenciais Supabase no código de leitura pública QR.
+  // Para produção: use um backend proxy ou variáveis de ambiente — nunca exponha chaves em HTML.
+  const _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co';
+  const _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw';
 
   // Oculta o login, lê a tabela 'equipamentos' no Supabase e renderiza a ficha.
   // [v45] Padrão seguro: verifica readyState ANTES de registrar o listener.
@@ -7426,10 +7436,14 @@ function _buildMultiDd(ddId, canonicalId, values) {
   actDiv.onclick = function(e){ e.stopPropagation(); };
   var btnTodos = document.createElement('button');
   btnTodos.textContent = 'Todos';
-  btnTodos.onclick = function(){ _multiClearOne(canonicalId); };
+  btnTodos.onclick = function(){ _multiClearOne(canonicalId); }; // Remove filtro → mostra todos
   var btnLimpar = document.createElement('button');
   btnLimpar.textContent = 'Limpar';
-  btnLimpar.onclick = function(){ _multiClearOne(canonicalId); };
+  // [BUG4 FIX] Era também _multiClearOne (idêntico a "Todos"). Agora limpa apenas o campo de busca interno.
+  btnLimpar.onclick = function(){
+    var dd2 = document.getElementById(canonicalId + '-dd') || document.getElementById(canonicalId.replace('f-','ft-') + '-dd');
+    if (dd2) { var s = dd2.querySelector('.mtd-search'); if (s) { s.value = ''; s.dispatchEvent(new Event('input')); } }
+  };
   actDiv.appendChild(btnTodos);
   actDiv.appendChild(btnLimpar);
 
@@ -7583,10 +7597,14 @@ function _buildTipoDropdown(ddId) {
   actDiv.className = 'mtd-actions';
   const btnTodos = document.createElement('button');
   btnTodos.textContent = 'Todos';
-  btnTodos.onclick = _tipoSelectAll;
+  btnTodos.onclick = _tipoSelectAll; // Remove filtro de tipo → mostra todos
   const btnLimpar = document.createElement('button');
   btnLimpar.textContent = 'Limpar';
-  btnLimpar.onclick = _tipoSelectAll;
+  // [BUG5 FIX] Era _tipoSelectAll (idêntico a "Todos"). Agora limpa o campo de busca interno do dropdown.
+  btnLimpar.onclick = function() {
+    const ddEl = document.getElementById('f-tipo-dd') || document.getElementById('ft-tipo-dd');
+    if (ddEl) { const s = ddEl.querySelector('.mtd-search'); if (s) { s.value = ''; _tipoSearch('', listDiv); } }
+  };
   actDiv.onclick = function(e) { e.stopPropagation(); };
   actDiv.appendChild(btnTodos);
   actDiv.appendChild(btnLimpar);
@@ -10033,10 +10051,10 @@ function applyBulkEdit(tbl) {
 
   // Persist
   saveLS();
-  // Deleta do Supabase pelo campo 'id' (código do equipamento)
-  if(sbActive() && r.id) {
-    sbDeleteRecord(r.id).catch(e => console.warn('[Supabase] delete record:', r.id, e));
-  }
+  // [BUG7 FIX] Era `if(sbActive() && r.id) { sbDeleteRecord(r.id)... }` mas `r` estava fora
+  // do escopo do .map() acima → ReferenceError. Além disso, bulk-edit não deve DELETAR registros.
+  // Substitui por sbSchedulePush() que envia as edições ao Supabase corretamente.
+  if (sbActive()) sbSchedulePush();
 
   // Re-render only the changed rows — don't jump page or re-filter
   uids.forEach(uid => rerenderRow(uid, tbl));
@@ -10865,7 +10883,7 @@ function refreshQrIfOpen() {
   var ov = document.getElementById('qr-modal-ov');
   // [v35 FIX] Race condition - verificar se modal realmente está visível
   if (ov && ov.classList.contains('on') && ov.style.opacity !== '0' && typeof _qrUID !== 'undefined' && _qrUID) {
-    console.log('[QR] Modal QR aberto, regenerando com dados atualizados...');
+    _DEV && console.log('[QR] Modal QR aberto, regenerando com dados atualizados...'); // [BUG22 FIX]
     
     // [v35 FIX] Usar requestAnimationFrame para garantir que DOM está pronto
     requestAnimationFrame(function() {
@@ -10873,12 +10891,9 @@ function refreshQrIfOpen() {
         openQrModal(_qrUID);
       }
     });
-  } else if (ov && !ov.classList.contains('on')) {
-    // Se modal foi fechado, aguardar um pouco antes de tentar novamente
-    // Isto previne múltiplas tentativas simultâneas
-    console.log('[QR] Modal não está aberto - refresh agendado');
-    setTimeout(function() { refreshQrIfOpen(); }, 500);
   }
+  // [BUG8 FIX] Removido o `else if` que chamava `setTimeout(refreshQrIfOpen, 500)` quando
+  // o modal estava fechado — criava loop infinito de timers sem condição de parada.
 }
 
 // Depois continua com a próxima função (geralmente closeQrModal)
@@ -13474,7 +13489,8 @@ window.validateImportData = function(rows) {
     ['responsavel', 'equipamento', 'id'].forEach(function(field) {
       if (row[field]) {
         var val = String(row[field]);
-        if (/<script|javascript:|onerror|onload|onclick/i.test(val)) {
+        // [BUG20 FIX] Blocklist XSS expandida: inclui onfocus/onblur/onmouseover e vetores data:/vbscript:
+        if (/<script|javascript:|vbscript:|data:text|onerror|onload|onclick|onfocus|onblur|onmouseover/i.test(val)) {
           errors.push('L' + rowNum + ': ' + field + ' contém caracteres suspeitos (segurança)');
         }
       }
@@ -13535,35 +13551,13 @@ window.calculateCpkSafe = function(values, lsl, usl) {
   return { cpk: cpk, sigma: sigma, error: null };
 };
 
-/* ═══════════════════════════════════════════════════════════════════════
-   [v35 FIX] FUNÇÕES UNDO/REDO COMPLETAS
-   ═══════════════════════════════════════════════════════════════════════ */
-window.undoAction = function() {
-  if (window._undoRedoManager && window._undoRedoManager.undo()) {
-    if (typeof updateAll === 'function') updateAll();
-    return true;
-  }
-  return false;
-};
+// [BUG9 FIX] Bloco "FUNÇÕES UNDO/REDO COMPLETAS" removido — sobrescrevia a implementação
+// original funcional (lines ~8645-8668) com uma versão incompleta que dependia de
+// `window._undoRedoManager` (nunca definido), retornando false silenciosamente.
+// A implementação original usa _undoStack/_redoStack com toasts e sbSchedulePush, que é correta.
 
-window.redoAction = function() {
-  if (window._undoRedoManager && window._undoRedoManager.redo()) {
-    if (typeof updateAll === 'function') updateAll();
-    return true;
-  }
-  return false;
-};
-
-// Keyboard shortcuts: Ctrl+Z (undo), Ctrl+Y ou Ctrl+Shift+Z (redo)
-document.addEventListener('keydown', function(e) {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-    e.preventDefault();
-    window.undoAction();
-  } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-    e.preventDefault();
-    window.redoAction();
-  }
-});
+// [BUG10 FIX] Listener duplicado de Ctrl+Z/Ctrl+Y removido — o listener original (line ~8691)
+// já trata esses atalhos corretamente. Dois listeners causavam DOIS undoAction() por Ctrl+Z.
 
 // Wrappear saveRecord original para registrar mudanças
 var _origSaveRecord = window.saveRecord;
@@ -13801,6 +13795,9 @@ window.v12ConfirmImport = function() {
 
   // ── window.onbeforeunload — impede fecho acidental com alterações ────
   window.addEventListener('beforeunload', function(e) {
+    // [BUG23 FIX] Limpa intervalos persistentes ao fechar a aba para evitar vazamentos de timers.
+    if (typeof _autoNotifInterval !== 'undefined' && _autoNotifInterval) { clearInterval(_autoNotifInterval); }
+    if (typeof _pollingTimer !== 'undefined' && _pollingTimer) { clearInterval(_pollingTimer); }
     if (_unsavedChanges) {
       var msg = 'Tem alterações não exportadas. Se fechar agora, poderá perder dados se o browser apagar o cache.';
       e.returnValue = msg;
@@ -14126,7 +14123,8 @@ document.addEventListener('DOMContentLoaded', function() {
       return [r.id,r.descricao,r.tipo,r.localizacao,r.responsavel,r.cod_lab].join(' ').toLowerCase().includes(q);
     }).slice(0, 12);
     if (!matches.length) { res.innerHTML = '<div style="padding:24px;text-align:center;color:var(--tx3);font-size:12px">Nenhum resultado encontrado.</div>'; return; }
-    var d = matches[0].dias_vencer;
+    // [BUG13 FIX] Removida `var d = matches[0].dias_vencer;` — variável morta imediatamente
+    // sombreada pelo `var d = r.dias_vencer` dentro do .map() abaixo.
     res.innerHTML = matches.map(function(r) {
       var d = r.dias_vencer;
       var color = d===null?'var(--tx3)':d<0?'var(--red)':d<=30?'var(--orange)':d<=90?'var(--accent)':'var(--green)';
@@ -14284,7 +14282,7 @@ window.renderAuditLog = function() {
     return [e.action,e.code,e.desc,e.user].join(' ').toLowerCase().includes(q);
   });
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="padding:32px;text-align:center;color:var(--tx3);font-size:12px">Nenhum evento encontrado.nte</td></td>';
+    tbody.innerHTML = '<tr><td colspan="5" style="padding:32px;text-align:center;color:var(--tx3);font-size:12px">Nenhum evento encontrado.</td></td>';
     return;
   }
   var actionMap = { add:'<span class="badge b-ok">+ Adição</span>', edit:'<span class="badge b-info">✏ Edição</span>', del:'<span class="badge b-err">✕ Exclusão</span>', import:'<span class="badge b-teal">&#8595; Import</span>' };
@@ -14671,7 +14669,7 @@ document.addEventListener('DOMContentLoaded', function() {
       setTimeout(refreshQrIfOpen, 500);
       return result;
     };
-    console.log('[QR] Hook saveRecord instalado');
+    _DEV && console.log('[QR] Hook saveRecord instalado'); // [BUG22 FIX]
   }
 
   if (typeof window.v12ConfirmImport === 'function') {
@@ -14681,10 +14679,10 @@ document.addEventListener('DOMContentLoaded', function() {
       setTimeout(refreshQrIfOpen, 500);
       return result;
     };
-    console.log('[QR] Hook v12ConfirmImport instalado');
+    _DEV && console.log('[QR] Hook v12ConfirmImport instalado'); // [BUG22 FIX]
   }
 
-  console.log('[QR] Sistema de atualização automática ativado!');
+  _DEV && console.log('[QR] Sistema de atualização automática ativado!'); // [BUG22 FIX]
 });
 
 (function() {
@@ -14697,11 +14695,11 @@ document.addEventListener('DOMContentLoaded', function() {
   function _syncV12ToV19() {
     try {
       var v12raw = localStorage.getItem(V12_KEY);
-      if (!v12raw) { console.log('[AUDIT FIX] Nenhum log v12 encontrado.'); return; }
+      if (!v12raw) { _DEV && console.log('[AUDIT FIX] Nenhum log v12 encontrado.'); return; } // [BUG22 FIX]
       var v12logs = JSON.parse(v12raw);
-      if (!v12logs.length) { console.log('[AUDIT FIX] Log v12 vazio.'); return; }
+      if (!v12logs.length) { _DEV && console.log('[AUDIT FIX] Log v12 vazio.'); return; } // [BUG22 FIX]
 
-      console.log('[AUDIT FIX] Encontrados ' + v12logs.length + ' logs v12. Sincronizando...');
+      _DEV && console.log('[AUDIT FIX] Encontrados ' + v12logs.length + ' logs v12. Sincronizando...'); // [BUG22 FIX]
 
       var v19raw = localStorage.getItem(V19_KEY);
       var v19logs = v19raw ? JSON.parse(v19raw) : [];
@@ -14751,7 +14749,7 @@ document.addEventListener('DOMContentLoaded', function() {
         v19logs.forEach(function(e) { _AUDIT_LOG.push(e); });
       }
 
-      console.log('[AUDIT FIX] Sincronização completa: ' + newEntries + ' novos logs. Total v19: ' + v19logs.length + ' (antes: ' + v19countBefore + ')');
+      _DEV && console.log('[AUDIT FIX] Sincronização completa: ' + newEntries + ' novos logs. Total v19: ' + v19logs.length + ' (antes: ' + v19countBefore + ')'); // [BUG22 FIX]
     } catch(e) {
       console.warn('[AUDIT FIX] Erro na sincronização:', e);
     }
@@ -14855,7 +14853,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // ── 7. Inicialização ────────────────────────────────────────────────
   function _init() {
-    console.log('[AUDIT FIX] Iniciando sincronização v12 → v19...');
+    _DEV && console.log('[AUDIT FIX] Iniciando sincronização v12 → v19...'); // [BUG22 FIX]
     _syncV12ToV19();
     setTimeout(function() {
       if (typeof renderAuditLog === 'function') renderAuditLog();
@@ -14870,7 +14868,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(_init, 200);
   }
 
-  console.log('[AUDIT FIX] Patch v37-AUDIT-FIX-v2 carregado.');
+  _DEV && console.log('[AUDIT FIX] Patch v37-AUDIT-FIX-v2 carregado.'); // [BUG22 FIX]
 })();
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -15081,7 +15079,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* ── QR detectado: interpreta, salva no histórico e abre o equipamento ─ */
   function _onDetected(raw) {
-    console.log('[QR Scanner] Detectado:', raw);
+    _DEV && console.log('[QR Scanner] Detectado:', raw); // [BUG22 FIX]
     _stopCamera();
     window.closeQrScannerModal();
 
@@ -15289,7 +15287,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (ov2 && e.target === ov2) { window.closeScanHistoryModal && window.closeScanHistoryModal(); }
   });
 
-  console.log('[QR Scanner v46] Carregado — jsQR + getUserMedia com fallback iOS + histórico de sessão.');
+  _DEV && console.log('[QR Scanner v46] Carregado — jsQR + getUserMedia com fallback iOS + histórico de sessão.'); // [BUG22 FIX]
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
