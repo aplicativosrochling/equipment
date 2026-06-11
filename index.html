@@ -2599,10 +2599,7 @@ input[type="checkbox"], input[type="radio"] {
     <!-- Divider -->
     <div class="hdr-divider"></div>
 
-    <!-- Bell + CTA -->
-    <button class="btn-ic" id="notif-bell" onclick="toggleNotif()" title="Notifications" aria-label="Notificações">
-      🔔<span id="notif-badge" style="display:none;position:absolute;top:2px;right:2px;background:var(--red);color:#fff;font-size:8px;font-weight:800;border-radius:8px;padding:1px 4px;min-width:13px;text-align:center;line-height:1.5">0</span>
-    </button>
+    <!-- Bell removido a pedido do usuário -->
     <!-- [v20 FIX] Legacy import input removed - use v12-import-modal instead -->
 
     <!-- Divider -->
@@ -3481,20 +3478,7 @@ input[type="checkbox"], input[type="radio"] {
     <span id="v10-proc-msg">Processando…</span>
   </div>
 </div>
-<div class="notif-panel" id="notif-panel">
-  <div style="padding:10px 14px;border-bottom:1px solid var(--bdr2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--surf2)">
-    <div style="font-size:12px;font-weight:700;letter-spacing:.3px">🔔 Notificações</div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button onclick="markAllRead()" style="font-size:10px;color:var(--accent2);background:none;border:none;cursor:pointer;font-family:var(--font)">Marcar lidas</button>
-      <button onclick="toggleNotif()" style="background:none;border:none;cursor:pointer;color:var(--tx3);font-size:16px">×</button>
-    </div>
-  </div>
-  <div id="notif-list" style="overflow-y:auto;flex:1"></div>
-  <div style="padding:8px 14px;border-top:1px solid var(--bdr2);text-align:center;flex-shrink:0">
-    <button class="btn-g" style="width:100%;font-size:11px" onclick="toggleNotif();showTab('alertas',document.querySelectorAll('.tab')[1])">Ver todos os alertas →</button>
-  </div>
-</div>
-<div id="notif-ov" onclick="toggleNotif()" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:499"></div>
+<!-- notif-panel e notif-ov removidos a pedido do usuário -->
 
 
 <!-- PDF PRINT OVERLAY -->
@@ -4367,7 +4351,7 @@ function t(key) { return (T[LANG] || T.pt)[key] || (T.pt)[key] || key; }
 })();
 
 // [v47] mapeamento planta → idioma (automático no login)
-const _PLANT_LANG = { SP:'pt', MX:'es', USA:'en' };
+const _PLANT_LANG = { SP:'pt', MX:'es', USA:'en', DUNCAN:'en', AKRON:'en' };
 
 // Helper: retorna o locale BCP-47 do idioma atual (para toLocaleString)
 function _locale() {
@@ -4385,6 +4369,10 @@ function setLang(lang) {
   // Full re-render: badges use t() so tables must rebuild
   pag.eq.rows = DB.slice(); pag.eq.p = 1;
   applyLang();
+  // [BUG-C FIX] Re-renderiza tabelas ao trocar idioma — antes apenas applyLang() era chamado,
+  // mas as células da tabela (status, tipo, campos dinâmicos) são geradas por renderTable()
+  // e não atualizavam. Agora força rebuild completo das tabelas principal e de alertas.
+  if (typeof renderTable === 'function') { renderTable('geral'); renderTable('alert'); }
   // Also rebuild charts with translated labels
   buildAllCharts();
   buildNotifs();
@@ -5057,7 +5045,7 @@ let _sbInitialized = false; // [v15 FIX] evita double-init pelo onAuthStateChang
 // _isDirector: true → vê todas as plantas (sem filtro)
 let _currentUnidade = null;
 let _isDirector     = false;
-const _UNIDADE_LABELS = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DIRECTOR: '🌎 Global' };
+const _UNIDADE_LABELS = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DUNCAN: '🇺🇸 Duncan, SC', AKRON: '🇺🇸 Akron, OH', DIRECTOR: '🌎 Global' };
 
 function _setUnidade(unidade) {
   if (!unidade || unidade === 'DIRECTOR') {
@@ -5097,31 +5085,44 @@ window.switchPlanta = function(unidade) {
     _currentUnidade = String(unidade).toUpperCase();
     const badge = document.getElementById('planta-badge');
     if (badge) badge.textContent = _UNIDADE_LABELS[_currentUnidade] || ('🏭 ' + _currentUnidade);
+    // [BUG-A FIX] Idioma automático ao Director trocar de planta (igual ao _setUnidade para usuários normais).
+    // Antes: switchPlanta nunca chamava setLang → interface permanecia no idioma errado ao selecionar MX/USA.
+    const autoLang = _PLANT_LANG[_currentUnidade] || null;
+    if (autoLang && !StorageService.get('rochling_lang_manual', '')) setLang(autoLang);
   }
   DB = [];
   if (typeof sbPull === 'function') sbPull().then(function(ok) { if (ok && typeof updateAll === 'function') updateAll(); });
 };
 
-// [v47] Carrega plantas disponíveis dinamicamente do banco — suporta plantas ilimitadas
+// [v47] Carrega plantas disponíveis — plantas fixas sempre presentes + quaisquer outras do banco
+// Plantas fixas garantidas mesmo que não tenham equipamentos cadastrados ainda.
+const _PLANTAS_FIXAS = ['SP', 'MX', 'USA', 'DUNCAN', 'AKRON'];
 window._loadPlantasDisponiveis = async function() {
-  if (!_isDirector || !window.sbActive || !window.sbActive()) return;
-  try {
-    const { data } = await _sb.from('equipamentos').select('unidade').not('unidade', 'is', null);
-    const plantas = [...new Set((data || []).map(function(r){ return r.unidade; }).filter(Boolean))].sort();
-    const sel = document.getElementById('planta-selector');
-    if (!sel || plantas.length === 0) return;
-    const current = sel.value;
-    sel.innerHTML = '<option value="">🌎 Todas as plantas</option>';
-    plantas.forEach(function(p) {
-      const label = _UNIDADE_LABELS[p] || ('🏭 ' + p);
-      const opt = document.createElement('option');
-      opt.value = p;
-      opt.textContent = label;
-      if (p === current) opt.selected = true;
-      sel.appendChild(opt);
-    });
-    console.log('[v47] Plantas disponíveis carregadas:', plantas);
-  } catch(e) { console.warn('[v47] _loadPlantasDisponiveis:', e.message || e); }
+  if (!_isDirector) return;
+  const sel = document.getElementById('planta-selector');
+  if (!sel) return;
+  const current = sel.value;
+  // Começa com as plantas fixas
+  let plantas = [..._PLANTAS_FIXAS];
+  // Se Supabase ativo, mescla com plantas do banco (suporte a novas plantas futuras)
+  if (window.sbActive && window.sbActive()) {
+    try {
+      const { data } = await _sb.from('equipamentos').select('unidade').not('unidade', 'is', null);
+      const doDb = (data || []).map(function(r){ return r.unidade; }).filter(Boolean);
+      doDb.forEach(function(p){ if (!plantas.includes(p)) plantas.push(p); });
+    } catch(e) { console.warn('[v47] _loadPlantasDisponiveis (DB):', e.message || e); }
+  }
+  plantas = plantas.sort();
+  sel.innerHTML = '<option value="">🌎 Todas as plantas</option>';
+  plantas.forEach(function(p) {
+    const label = _UNIDADE_LABELS[p] || ('🏭 ' + p);
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = label;
+    if (p === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  console.log('[v47] Plantas carregadas:', plantas);
 };
 // ──────────────────────────────────────────────────────────────────
 
@@ -5149,8 +5150,8 @@ window.adminLoadUsers = async function() {
 
     const thStyle = 'padding:9px 12px;border-bottom:1px solid var(--bdr2);';
     tbody.innerHTML = data.map(function(u) {
-      const unidadeLabel = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DIRECTOR: '🌎 Diretor' };
-      const opts = ['SP','MX','USA','DIRECTOR'].map(function(v) {
+      const unidadeLabel = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DUNCAN: '🇺🇸 Duncan, SC', AKRON: '🇺🇸 Akron, OH', DIRECTOR: '🌎 Diretor' };
+      const opts = ['SP','MX','USA','DUNCAN','AKRON','DIRECTOR'].map(function(v) {
         return '<option value="' + v + '"' + (u.unidade === v ? ' selected' : '') + '>' + (unidadeLabel[v] || v) + '</option>';
       }).join('');
       return '<tr style="border-bottom:1px solid var(--bdr2)">'
@@ -5349,7 +5350,9 @@ async function sbPull() {
     let hasMore = true;
     while (hasMore) {
       let q = _sb.from('equipamentos').select('*').order('id', { ascending: true }).range(from, from + PAGE_SIZE - 1);
-      if (!_isDirector && _currentUnidade) q = q.eq('unidade', _currentUnidade);
+      // [BUG-A FIX] Filtro aplica a QUALQUER usuário (incluindo Director) quando uma planta está selecionada.
+      // Antes: "!_isDirector && _currentUnidade" ignorava o filtro para diretores → carregava todas as plantas.
+      if (_currentUnidade) q = q.eq('unidade', _currentUnidade);
       const { data: page, error: pageErr } = await q;
       if (pageErr) throw pageErr;
       if (page && page.length > 0) allData = allData.concat(page);
@@ -5525,8 +5528,9 @@ function fbStartListen() {
       while (_rtMore) {
         // [BUG3 FIX] Adicionado filtro .eq('unidade', _currentUnidade) — sem ele o polling buscava
         // TODOS os equipamentos de TODAS as plantas, podendo sobrescrever DB com dados de outra planta.
+        // [BUG-A FIX] Removida guarda "!_isDirector": Director com planta selecionada também deve filtrar.
         let _rtQ = _sb.from('equipamentos').select('*').order('id', { ascending: true }).range(_rtFrom, _rtFrom + _RT_PAGE - 1);
-        if (!_isDirector && _currentUnidade) _rtQ = _rtQ.eq('unidade', _currentUnidade);
+        if (_currentUnidade) _rtQ = _rtQ.eq('unidade', _currentUnidade);
         const { data: _rtPage, error: _rtErr } = await _rtQ;
         if (_rtErr) { console.warn('[v45 polling] erro:', _rtErr.message); return; }
         if (_rtPage && _rtPage.length > 0) _rtAll = _rtAll.concat(_rtPage);
@@ -8533,11 +8537,11 @@ function buildNotifs(){
   });
   list.innerHTML=html;
 }
-function toggleNotif(){_notifOpen=!_notifOpen;document.getElementById('notif-panel').classList.toggle('on',_notifOpen);document.getElementById('notif-ov').style.display=_notifOpen?'block':'none';if(_notifOpen)buildNotifs();}
-function markAllRead(){DB.forEach(r=>{if(r.dias_vencer!==null&&r.dias_vencer<=30)_notifRead.add(r._uid);});buildNotifs();}
-function notifClick(uid){_notifRead.add(uid);toggleNotif();showTab('alertas',document.querySelectorAll('.tab')[1]);}
+function toggleNotif(){/* sino removido — função mantida para não quebrar chamadas residuais */}
+function markAllRead(){DB.forEach(r=>{if(r.dias_vencer!==null&&r.dias_vencer<=30)_notifRead.add(r._uid);});}
+function notifClick(uid){_notifRead.add(uid);showTab('alertas',document.querySelectorAll('.tab')[1]);}
 let _autoNotifInterval = null;
-function startAutoNotif(){buildNotifs();if(_autoNotifInterval) clearInterval(_autoNotifInterval); _autoNotifInterval = setInterval(()=>{const prev=_lastCrit;buildNotifs();if(_lastCrit>prev){document.getElementById('notif-bell').style.animation='bell-ring .5s ease 3';showToast('🔔 Novos alertas de vencimento!','err');}},30*60*1000);}
+function startAutoNotif(){buildNotifs();if(_autoNotifInterval) clearInterval(_autoNotifInterval); _autoNotifInterval = setInterval(()=>{const prev=_lastCrit;buildNotifs();if(_lastCrit>prev){showToast('🔔 Novos alertas de vencimento!','err');}},30*60*1000);}
 
 // ═══════════════════════════════════════════════════════
 // IMPORT / EXPORT
