@@ -50,7 +50,8 @@ wss://*.supabase.co
 https://cdn.jsdelivr.net
 https://cdnjs.cloudflare.com
 https:;
-worker-src 'self' blob:;
+worker-src 'self' blob: data:;
+media-src 'self' blob: data: https:;
 frame-src 'none';
 ">
 
@@ -362,16 +363,17 @@ window.advancedSearch = function(query, filters) {
     });
     
     // Filtro por data (De...Até)
+    // [iOS FIX] Usa dUTC() para evitar bug de fuso-horário em Safari/iPhone
     var dateMatch = true;
     if (filters && filters.dateFrom) {
-      var rDate = new Date(r.data_calibracao || 0);
-      var fromDate = new Date(filters.dateFrom);
-      dateMatch = dateMatch && rDate >= fromDate;
+      var rDateMs = (typeof dUTC === 'function') ? dUTC(r.data_calibracao) : new Date((r.data_calibracao || '').replace(/-/g, '/') || 0).getTime();
+      var fromMs  = (typeof dUTC === 'function') ? dUTC(filters.dateFrom)  : new Date((filters.dateFrom  || '').replace(/-/g, '/')).getTime();
+      if (rDateMs !== null && fromMs !== null) dateMatch = dateMatch && rDateMs >= fromMs;
     }
     if (filters && filters.dateTo) {
-      var rDate = new Date(r.data_calibracao || 0);
-      var toDate = new Date(filters.dateTo);
-      dateMatch = dateMatch && rDate <= toDate;
+      var rDateMs2 = (typeof dUTC === 'function') ? dUTC(r.data_calibracao) : new Date((r.data_calibracao || '').replace(/-/g, '/') || 0).getTime();
+      var toMs     = (typeof dUTC === 'function') ? dUTC(filters.dateTo)    : new Date((filters.dateTo   || '').replace(/-/g, '/')).getTime();
+      if (rDateMs2 !== null && toMs !== null) dateMatch = dateMatch && rDateMs2 <= toMs;
     }
     
     // Filtro por status
@@ -571,6 +573,8 @@ window.clearAdvancedSearch = function() {
 </script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- jsQR — decodificador QR Code para o scanner de câmera integrado (iOS/Android/Desktop) -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      [v40 iOS FIX] QR Code — qrcode.js v1.0.0 (cdnjs) com retry + fallback  
@@ -2895,6 +2899,8 @@ input[type="checkbox"], input[type="radio"] {
           <button class="btn-g" id="btn-card-select-toggle" onclick="toggleCardSelectMode()" title="Selecionar equipamentos para imprimir QR em lote">☑ Selecionar</button>
           <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
           <button class="btn-g" onclick="toggleEqView()" id="btn-toggle-eq-view" title="Alternar para visão de tabela">⊞ Tabela</button>
+          <button class="btn-p" onclick="openQrScannerModal()" title="Escanear QR Code com a câmera para localizar equipamento" style="font-size:12px;padding:6px 12px">📷 Scan QR</button>
+          <button class="btn-g" id="btn-scan-history" onclick="openScanHistoryModal()" title="Histórico dos últimos QR Codes escaneados nesta sessão" style="font-size:12px;padding:6px 12px;display:none">📋 <span id="scan-history-badge" style="background:var(--brand);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:2px">0</span></button>
         </div>
       </div>
       <!-- Bulk bar cards -->
@@ -14334,5 +14340,450 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </script>
 
-</body>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SCANNER DE QR CODE — v46 iOS/Safari Fix
+     Usa jsQR + getUserMedia com cadeia de fallback completa para iPhone/iPad.
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+<!-- Modal HTML do Scanner -->
+<div id="qr-scanner-ov" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99998;background:rgba(0,0,0,.88);align-items:center;justify-content:center">
+  <div style="background:var(--surf);border-radius:18px;padding:20px;width:calc(100% - 32px);max-width:400px;position:relative;box-shadow:0 24px 64px rgba(0,0,0,.5)">
+    <button onclick="closeQrScannerModal()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;font-size:22px;cursor:pointer;color:var(--tx2);line-height:1;padding:4px 8px;border-radius:6px" title="Fechar">✕</button>
+    <h3 style="margin:0 0 4px;font-size:16px;font-weight:700;color:var(--tx);font-family:var(--font)">📷 Escanear QR Code</h3>
+    <p style="margin:0 0 14px;font-size:11px;color:var(--tx3);font-family:var(--font)">Aponte a câmera traseira para o QR Code da etiqueta</p>
+
+    <!-- Viewport da câmera -->
+    <div id="qr-scan-viewport" style="position:relative;width:100%;background:#000;border-radius:10px;overflow:hidden;aspect-ratio:1/1">
+      <!-- [iOS FIX] Todos os atributos obrigatórios para Safari/iPhone estão aqui E serão reforçados via JS -->
+      <video id="qr-scan-video"
+        playsinline="true"
+        webkit-playsinline="true"
+        muted="true"
+        autoplay="true"
+        style="width:100%;height:100%;object-fit:cover;display:block"></video>
+      <canvas id="qr-scan-canvas" style="display:none"></canvas>
+
+      <!-- Overlay de mira com animação de linha de scan -->
+      <div style="position:absolute;inset:0;pointer-events:none">
+        <!-- Escurecimento ao redor da janela de scan -->
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,.42)"></div>
+        <!-- Janela transparente de scan (220×220 centralizada) -->
+        <div id="qr-scan-window" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:220px;height:220px;background:transparent;box-shadow:0 0 0 9999px rgba(0,0,0,.42);border-radius:4px"></div>
+        <!-- Cantos da mira — Röchling Blue -->
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:220px;height:220px">
+          <div style="position:absolute;top:0;left:0;width:28px;height:28px;border-top:3px solid #0064b3;border-left:3px solid #0064b3;border-radius:3px 0 0 0"></div>
+          <div style="position:absolute;top:0;right:0;width:28px;height:28px;border-top:3px solid #0064b3;border-right:3px solid #0064b3;border-radius:0 3px 0 0"></div>
+          <div style="position:absolute;bottom:0;left:0;width:28px;height:28px;border-bottom:3px solid #0064b3;border-left:3px solid #0064b3;border-radius:0 0 0 3px"></div>
+          <div style="position:absolute;bottom:0;right:0;width:28px;height:28px;border-bottom:3px solid #0064b3;border-right:3px solid #0064b3;border-radius:0 0 3px 0"></div>
+          <!-- Linha de scan animada -->
+          <div id="qr-scan-line" style="position:absolute;top:0;left:4px;right:4px;height:2px;background:linear-gradient(90deg,transparent,#0064b3,transparent);animation:qrScanLine 1.8s ease-in-out infinite"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status / mensagem -->
+    <p id="qr-scan-status" style="font-size:12px;color:var(--tx3);text-align:center;margin:12px 0 0;font-family:var(--font);min-height:18px">Iniciando câmera...</p>
+    <!-- Indicador de loading da câmera -->
+    <div id="qr-scan-loading" style="text-align:center;margin:6px 0 0;font-size:20px;display:none">⏳</div>
+
+    <button onclick="closeQrScannerModal()" style="margin-top:14px;width:100%;padding:12px;background:var(--surf3);border:1px solid var(--bdr2);border-radius:8px;color:var(--tx);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .12s" onmouseenter="this.style.background='var(--bdr)'" onmouseleave="this.style.background='var(--surf3)'">✕ Cancelar</button>
+  </div>
+</div>
+
+<style>
+@keyframes qrScanLine {
+  0%   { top: 4px;   opacity: 0.9; }
+  50%  { top: calc(100% - 6px); opacity: 1; }
+  100% { top: 4px;   opacity: 0.9; }
+}
+</style>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   QR CODE SCANNER — v46
+   ─────────────────────────────────────────────────────────────────────
+   • getUserMedia com cadeia de fallback de 3 níveis para iOS/Safari
+   • Atributos playsinline/webkit-playsinline reforçados via JS
+   • Decodificação frame-a-frame via jsQR (sem dependência nativa)
+   • Tratamento amigável de erro de permissão negada no Safari
+   ═══════════════════════════════════════════════════════════════════════ */
+(function () {
+
+  var _qs = {
+    active:  false,
+    stream:  null,
+    rafId:   null,
+    video:   null,
+    canvas:  null,
+    ctx:     null,
+    lastErr: null
+  };
+
+  /* ── Abre o modal e inicia a câmera ─────────────────────────────── */
+  window.openQrScannerModal = function () {
+    var ov = document.getElementById('qr-scanner-ov');
+    if (!ov) { showToast && showToast('Scanner não disponível', 'error'); return; }
+
+    // Checa suporte a getUserMedia
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showToast && showToast('📵 Câmera não suportada neste navegador.', 'error');
+      return;
+    }
+
+    ov.style.display = 'flex';
+    _setStatus('Iniciando câmera...');
+    document.getElementById('qr-scan-loading').style.display = 'block';
+    _startCamera();
+  };
+
+  /* ── Fecha o modal e libera a câmera ────────────────────────────── */
+  window.closeQrScannerModal = function () {
+    _stopCamera();
+    var ov = document.getElementById('qr-scanner-ov');
+    if (ov) ov.style.display = 'none';
+  };
+
+  /* ── Inicia câmera com cadeia de fallback para iOS ──────────────── */
+  function _startCamera() {
+    var video = document.getElementById('qr-scan-video');
+    if (!video) return;
+
+    // [iOS FIX] Reforça atributos via JS — necessário pois iOS às vezes ignora HTML
+    video.setAttribute('playsinline',       'true');
+    video.setAttribute('webkit-playsinline','true');
+    video.setAttribute('muted',             'true');
+    video.setAttribute('autoplay',          'true');
+    video.muted   = true;
+    video.volume  = 0;
+
+    _qs.video  = video;
+    _qs.canvas = document.getElementById('qr-scan-canvas');
+    _qs.ctx    = _qs.canvas ? _qs.canvas.getContext('2d') : null;
+    _qs.active = true;
+
+    // [iOS FIX] Nível 1 — câmera traseira com restrição exact (exigida pelo iOS 15+)
+    _tryConstraints({ video: { facingMode: { exact: 'environment' } }, audio: false })
+      .catch(function () {
+        // [iOS FIX] Nível 2 — câmera traseira sem exact (fallback iOS 12-14)
+        return _tryConstraints({ video: { facingMode: 'environment' }, audio: false });
+      })
+      .catch(function () {
+        // [iOS FIX] Nível 3 — qualquer câmera disponível
+        return _tryConstraints({ video: true, audio: false });
+      })
+      .catch(function (err) {
+        _qs.active = false;
+        _qs.lastErr = err;
+        document.getElementById('qr-scan-loading').style.display = 'none';
+        var msg = _friendlyErr(err);
+        _setStatus(msg);
+        showToast && showToast(msg, 'error');
+        console.error('[QR Scanner] Falha ao iniciar câmera:', err);
+      });
+  }
+
+  function _tryConstraints(constraints) {
+    return navigator.mediaDevices.getUserMedia(constraints)
+      .then(function (stream) {
+        if (!_qs.active) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+        _qs.stream = stream;
+        var video = _qs.video;
+        video.srcObject = stream;
+        // [iOS FIX] .play() deve ser chamado explicitamente após definir srcObject
+        return video.play();
+      })
+      .then(function () {
+        document.getElementById('qr-scan-loading').style.display = 'none';
+        _setStatus('Aponte para o QR Code do equipamento');
+        _scanLoop();
+      });
+  }
+
+  /* ── Loop de leitura de frames ─────────────────────────────────── */
+  function _scanLoop() {
+    if (!_qs.active) return;
+
+    var video = _qs.video;
+    if (!video || video.readyState < 2 /* HAVE_CURRENT_DATA */) {
+      _qs.rafId = requestAnimationFrame(_scanLoop);
+      return;
+    }
+
+    var canvas = _qs.canvas;
+    var ctx    = _qs.ctx;
+    if (!canvas || !ctx) return;
+
+    var w = video.videoWidth;
+    var h = video.videoHeight;
+    if (w === 0 || h === 0) { _qs.rafId = requestAnimationFrame(_scanLoop); return; }
+
+    canvas.width  = w;
+    canvas.height = h;
+    ctx.drawImage(video, 0, 0, w, h);
+
+    try {
+      var imgData = ctx.getImageData(0, 0, w, h);
+      if (typeof jsQR === 'function') {
+        var code = jsQR(imgData.data, imgData.width, imgData.height, {
+          inversionAttempts: 'dontInvert'
+        });
+        if (code && code.data) {
+          _onDetected(code.data);
+          return; // não agendar próximo frame — scanner para ao detectar
+        }
+      } else {
+        _setStatus('⚠️ Biblioteca jsQR não carregou. Verifique a conexão.');
+        _qs.active = false;
+        return;
+      }
+    } catch (e) {
+      // Ignora erros isolados de getImageData — continua tentando
+    }
+
+    _qs.rafId = requestAnimationFrame(_scanLoop);
+  }
+
+  /* ── QR detectado: interpreta, salva no histórico e abre o equipamento ─ */
+  function _onDetected(raw) {
+    console.log('[QR Scanner] Detectado:', raw);
+    _stopCamera();
+    window.closeQrScannerModal();
+
+    // Tenta extrair o parâmetro "id" ou "view" de uma URL no QR
+    var id = raw.trim();
+    try {
+      var url = new URL(raw);
+      var p   = new URLSearchParams(url.search);
+      id = p.get('id') || p.get('view') || p.get('ID') || p.get('codigo') || id;
+    } catch (e) { /* raw não é URL — usa como ID direto */ }
+
+    // Tenta encontrar o equipamento no banco local
+    var found = null;
+    if (typeof DB !== 'undefined' && Array.isArray(DB)) {
+      found = DB.find(function (r) {
+        return String(r.id) === String(id) ||
+               String(r._uid) === String(id) ||
+               (r.id && String(r.id).toLowerCase() === String(id).toLowerCase());
+      });
+    }
+
+    // Salva no histórico de scans
+    _saveToHistory({
+      raw:       raw,
+      id:        id,
+      label:     found ? (found.equipamento || found.descricao || id) : id,
+      found:     !!found,
+      uid:       found ? found._uid : null,
+      ts:        Date.now()
+    });
+
+    showToast && showToast('✅ QR lido: ' + id, 'success');
+
+    if (found && typeof openEquipView === 'function') {
+      openEquipView(found._uid);
+      return;
+    }
+
+    // Fallback: se o raw era uma URL, navega para ela
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      showToast && showToast('🌐 Abrindo URL do QR...', 'info');
+      setTimeout(function () { window.location.href = raw; }, 400);
+    } else {
+      showToast && showToast('⚠️ Equipamento "' + id + '" não encontrado.', 'warning');
+    }
+  }
+
+  /* ── Para câmera e libera stream ────────────────────────────────── */
+  function _stopCamera() {
+    _qs.active = false;
+    if (_qs.rafId) { cancelAnimationFrame(_qs.rafId); _qs.rafId = null; }
+    if (_qs.stream) {
+      _qs.stream.getTracks().forEach(function (t) { t.stop(); });
+      _qs.stream = null;
+    }
+    if (_qs.video) { try { _qs.video.srcObject = null; } catch(e) {} }
+  }
+
+  /* ── Helpers ────────────────────────────────────────────────────── */
+  function _setStatus(msg) {
+    var el = document.getElementById('qr-scan-status');
+    if (el) el.textContent = msg;
+  }
+
+  function _friendlyErr(err) {
+    if (!err) return 'Erro desconhecido ao acessar câmera.';
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      return window._isIOS
+        ? '🔒 Permissão negada. Acesse: Ajustes > Safari > Câmera → Permitir.'
+        : '🔒 Permissão de câmera negada. Clique no cadeado na barra de endereço e permita.';
+    }
+    if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+      return '📷 Nenhuma câmera encontrada neste dispositivo.';
+    }
+    if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+      return '⚠️ Câmera em uso por outro aplicativo. Feche-o e tente novamente.';
+    }
+    if (err.name === 'OverconstrainedError') {
+      return '⚠️ Câmera traseira não disponível. Tentando câmera frontal...';
+    }
+    return '⚠️ Erro ao acessar câmera: ' + (err.message || err.name || err);
+  }
+
+  /* ── Histórico de scans (sessão) ───────────────────────────────── */
+  var _HISTORY_KEY = 'rochling_scan_history_v1';
+  var _HISTORY_MAX = 10;
+
+  function _loadHistory() {
+    try { return JSON.parse(sessionStorage.getItem(_HISTORY_KEY) || '[]'); } catch(e) { return []; }
+  }
+
+  function _saveToHistory(entry) {
+    var hist = _loadHistory();
+    // Remove duplicata do mesmo ID se já existir
+    hist = hist.filter(function(h) { return h.id !== entry.id; });
+    // Insere no topo (mais recente primeiro)
+    hist.unshift(entry);
+    // Mantém máximo de 10
+    if (hist.length > _HISTORY_MAX) hist = hist.slice(0, _HISTORY_MAX);
+    try { sessionStorage.setItem(_HISTORY_KEY, JSON.stringify(hist)); } catch(e) {}
+    _updateHistoryBadge(hist.length);
+  }
+
+  function _updateHistoryBadge(count) {
+    var btn   = document.getElementById('btn-scan-history');
+    var badge = document.getElementById('scan-history-badge');
+    if (!btn || !badge) return;
+    if (count > 0) {
+      btn.style.display = '';
+      badge.textContent = count;
+    } else {
+      btn.style.display = 'none';
+    }
+  }
+
+  function _fmtTime(ts) {
+    try {
+      var d = new Date(ts);
+      var hh = String(d.getHours()).padStart(2,'0');
+      var mm = String(d.getMinutes()).padStart(2,'0');
+      var ss = String(d.getSeconds()).padStart(2,'0');
+      return hh + ':' + mm + ':' + ss;
+    } catch(e) { return '—'; }
+  }
+
+  window.openScanHistoryModal = function () {
+    var ov = document.getElementById('qr-history-ov');
+    if (!ov) return;
+    _renderHistory();
+    ov.style.display = 'flex';
+  };
+
+  window.closeScanHistoryModal = function () {
+    var ov = document.getElementById('qr-history-ov');
+    if (ov) ov.style.display = 'none';
+  };
+
+  window.clearScanHistory = function () {
+    try { sessionStorage.removeItem(_HISTORY_KEY); } catch(e) {}
+    _updateHistoryBadge(0);
+    _renderHistory();
+  };
+
+  window.reopenFromHistory = function (uid) {
+    window.closeScanHistoryModal();
+    if (typeof openEquipView === 'function' && uid !== null && uid !== undefined) {
+      openEquipView(uid);
+    }
+  };
+
+  function _renderHistory() {
+    var list = document.getElementById('qr-history-list');
+    if (!list) return;
+    var hist = _loadHistory();
+
+    if (hist.length === 0) {
+      list.innerHTML = '<div style="text-align:center;padding:32px 16px;color:var(--tx3);font-size:13px;font-family:var(--font)">Nenhum QR escaneado nesta sessão ainda.</div>';
+      return;
+    }
+
+    list.innerHTML = hist.map(function(h, idx) {
+      var statusDot  = h.found ? '🟢' : '🔴';
+      var statusText = h.found ? 'Encontrado' : 'Não encontrado';
+      var timeStr    = _fmtTime(h.ts);
+      var canOpen    = h.found && h.uid !== null;
+      var shortLabel = h.label && h.label.length > 34 ? h.label.slice(0, 31) + '…' : (h.label || h.id);
+
+      return '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--bdr2);transition:background .1s" onmouseenter="this.style.background=\'var(--surf2)\'" onmouseleave="this.style.background=\'\'">'+
+        '<div style="flex-shrink:0;width:32px;height:32px;border-radius:8px;background:var(--surf3);display:flex;align-items:center;justify-content:center;font-size:15px;border:1px solid var(--bdr2)">▦</div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:600;color:var(--tx);font-family:var(--font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+h.label+'">'+_escHtml(shortLabel)+'</div>'+
+          '<div style="font-size:10px;color:var(--tx3);font-family:var(--mono);margin-top:2px">'+_escHtml(h.id)+'</div>'+
+          '<div style="font-size:10px;color:var(--tx3);margin-top:1px">'+statusDot+' '+statusText+' · '+timeStr+'</div>'+
+        '</div>'+
+        (canOpen
+          ? '<button onclick="reopenFromHistory('+JSON.stringify(h.uid)+')" style="flex-shrink:0;padding:5px 12px;font-size:11px;font-weight:600;border:1px solid var(--brand);background:rgba(0,100,179,.08);color:var(--brand);border-radius:6px;cursor:pointer;font-family:var(--font);white-space:nowrap" onmouseenter="this.style.background=\'rgba(0,100,179,.18)\'" onmouseleave="this.style.background=\'rgba(0,100,179,.08)\'">↗ Abrir</button>'
+          : '<span style="flex-shrink:0;font-size:10px;color:var(--tx3);font-family:var(--font)">—</span>')+
+      '</div>';
+    }).join('');
+  }
+
+  function _escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Restaura badge ao carregar (caso page reload na mesma sessão)
+  (function () {
+    var hist = _loadHistory();
+    if (hist.length > 0) _updateHistoryBadge(hist.length);
+  })();
+
+  // Fecha modais ao pressionar Esc
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      window.closeQrScannerModal && window.closeQrScannerModal();
+      window.closeScanHistoryModal && window.closeScanHistoryModal();
+    }
+  });
+
+  // Fecha ao clicar no overlay fora do card
+  document.addEventListener('click', function (e) {
+    var ov1 = document.getElementById('qr-scanner-ov');
+    if (ov1 && e.target === ov1) { window.closeQrScannerModal && window.closeQrScannerModal(); }
+    var ov2 = document.getElementById('qr-history-ov');
+    if (ov2 && e.target === ov2) { window.closeScanHistoryModal && window.closeScanHistoryModal(); }
+  });
+
+  console.log('[QR Scanner v46] Carregado — jsQR + getUserMedia com fallback iOS + histórico de sessão.');
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     MODAL — HISTÓRICO DE SCANS DA SESSÃO
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div id="qr-history-ov" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99997;background:rgba(0,0,0,.72);align-items:center;justify-content:center">
+  <div style="background:var(--surf);border-radius:18px;width:calc(100% - 32px);max-width:440px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.45);overflow:hidden">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:1px solid var(--bdr2);flex-shrink:0">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--tx);font-family:var(--font)">📋 Histórico de Scans</div>
+        <div style="font-size:11px;color:var(--tx3);font-family:var(--font);margin-top:2px">Últimos 10 QR Codes escaneados nesta sessão</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button onclick="clearScanHistory()" title="Limpar histórico" style="padding:5px 10px;font-size:11px;font-weight:600;border:1px solid var(--bdr2);background:var(--surf3);color:var(--tx2);border-radius:6px;cursor:pointer;font-family:var(--font)" onmouseenter="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseleave="this.style.borderColor='var(--bdr2)';this.style.color='var(--tx2)'">🗑 Limpar</button>
+        <button onclick="closeScanHistoryModal()" style="background:transparent;border:none;font-size:20px;cursor:pointer;color:var(--tx2);padding:4px 6px;border-radius:6px;line-height:1" title="Fechar">✕</button>
+      </div>
+    </div>
+
+    <!-- Lista (scrollável) -->
+    <div id="qr-history-list" style="overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch"></div>
+
+    <!-- Footer — atalho para escanear novo -->
+    <div style="padding:12px 16px;border-top:1px solid var(--bdr2);flex-shrink:0">
+      <button onclick="closeScanHistoryModal();setTimeout(openQrScannerModal,120);" style="width:100%;padding:11px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .12s" onmouseenter="this.style.background='var(--brand-dk)'" onmouseleave="this.style.background='var(--brand)'">📷 Escanear novo QR Code</button>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-repl-id="369b6a0c-3c3c-4a91-97ab-854fa8e7eeab"></script></body>
 </html>
