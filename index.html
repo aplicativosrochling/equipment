@@ -707,10 +707,7 @@ window.clearAdvancedSearch = function() {
   }
 })();
 </script>
-<!-- ── FONTS: 2 famílias apenas — Inter (UI) + JetBrains Mono (dados técnicos/IDs) ── -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ── FONTS: sistema operacional (sem dependência externa) ── -->
 <style>
 #font-picker-ov {
   display: none; position: fixed;
@@ -765,8 +762,8 @@ window.clearAdvancedSearch = function() {
   --purple:    #7c3aed;
   --teal:      #0d9488;
   --pink:      #db2777;
-  --font:    'Inter', sans-serif;
-  --mono:    'JetBrains Mono', monospace;
+  --font:    system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mono:    ui-monospace, 'SF Mono', 'Cascadia Mono', 'Consolas', monospace;
   /* [v18 FIX] aliases para compatibilidade com formulários que referenciavam --bg2/--tx1 */
   --bg2: var(--surf);
   --tx1: var(--tx);
@@ -2248,7 +2245,7 @@ input[type="checkbox"], input[type="radio"] {
 /* ── FIX: CSS custom properties fallback for IE11 ── */
 /* IE11 doesn't support CSS vars — provide static fallbacks */
 @media all and (-ms-high-contrast: none), (-ms-high-contrast: active) {
-  body { background: #f4f5f9; color: #1a1a1a; font-family: 'Inter', sans-serif; }
+  body { background: #f4f5f9; color: #1a1a1a; font-family: system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; }
   .hdr { background: #ffffff; border-top: 3px solid #0064b3; }
   .kpi { background: #ffffff; border: 1px solid #dfe1ea; }
   .badge { font-family: monospace; }
@@ -2575,7 +2572,6 @@ input[type="checkbox"], input[type="radio"] {
     <button class="btn-g" onclick="exportJSON()" title="Export JSON Backup" style="font-size:11px">📄 JSON</button>
     <button class="btn-g" onclick="exportSQL()" title="Export SQL Insert" style="font-size:11px">🗄️ SQL</button>
     <button class="btn-g" onclick="exportCSVAdvanced()" title="Export CSV Completo" style="font-size:11px">📊 CSV+</button>
-    <button class="btn-g" id="btn-font-picker" title="Trocar fonte" aria-label="Trocar fonte" style="font-size:11px">𝐀 Fonte</button>
     <button class="btn-g" onclick="openGsConfig()" id="btn-gs-cfg" title="Supabase config" aria-label="Configurar Supabase" style="font-size:11px">☁</button>
     <button class="btn-g" onclick="resetDB()" title="Reset to original data" aria-label="Resetar para dados originais" style="font-size:11px">↺</button>
 
@@ -2584,8 +2580,9 @@ input[type="checkbox"], input[type="radio"] {
 
     <!-- Preferences -->
     <div class="lang-tgl">
-      <button class="lang-btn on" id="lb-pt" onclick="setLang('pt')">PT</button>
-      <button class="lang-btn"    id="lb-en" onclick="setLang('en')">EN</button>
+      <button class="lang-btn on" id="lb-pt" onclick="StorageService.set('rochling_lang_manual','1');setLang('pt')">PT</button>
+      <button class="lang-btn"    id="lb-en" onclick="StorageService.set('rochling_lang_manual','1');setLang('en')">EN</button>
+      <button class="lang-btn"    id="lb-es" onclick="StorageService.set('rochling_lang_manual','1');setLang('es')">ES</button>
     </div>
     <div class="lang-tgl" title="Date format">
       <button class="lang-btn on" id="df-dmy" onclick="setDateFmt('dmy')">DD/MM</button>
@@ -2603,7 +2600,6 @@ input[type="checkbox"], input[type="radio"] {
     <button class="btn-ic" id="notif-bell" onclick="toggleNotif()" title="Notifications" aria-label="Notificações">
       🔔<span id="notif-badge" style="display:none;position:absolute;top:2px;right:2px;background:var(--red);color:#fff;font-size:8px;font-weight:800;border-radius:8px;padding:1px 4px;min-width:13px;text-align:center;line-height:1.5">0</span>
     </button>
-    <button class="btn-p" onclick="openAdd()">+ <span data-i18n="btn_new_lbl">Novo</span></button>
     <!-- [v20 FIX] Legacy import input removed - use v12-import-modal instead -->
 
     <!-- Divider -->
@@ -2873,6 +2869,7 @@ input[type="checkbox"], input[type="radio"] {
         <span class="tbl-title">Equipamentos de Medição</span>
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
           <span class="tbl-cnt" id="eq-cnt">—</span>
+          <button class="btn-p" onclick="openAdd()" style="padding:6px 14px;font-size:12px;font-weight:700">＋ <span data-i18n="btn_new_lbl">Novo</span></button>
           <input class="search-box" id="f-search" aria-label="Buscar equipamentos por código ou descrição" placeholder="🔍 Buscar código, descrição..." oninput="applyF()" style="min-width:200px">
           <!-- [v36 NOVO] Botão de filtros avançados -->
           <button class="btn-g" onclick="toggleAdvancedSearch()" title="Filtros avançados" style="font-size:12px;padding:6px 12px">⚙️ Filtros</button>
@@ -2938,6 +2935,7 @@ input[type="checkbox"], input[type="radio"] {
         <span class="tbl-title">Equipamentos de Medição</span>
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
           <span class="tbl-cnt" id="eq-cnt-tbl">—</span>
+          <button class="btn-p" onclick="openAdd()" style="padding:6px 14px;font-size:12px;font-weight:700">＋ <span data-i18n="btn_new_lbl">Novo</span></button>
           <input class="search-box" id="ft-search" placeholder="🔍 Buscar código, descrição..." oninput="syncTblFilter('f-search',this.value)" style="min-width:200px">
           <button class="btn-g" onclick="clearF()" title="Limpar todos os filtros">✕ Limpar</button>
           <div class="col-panel"><button class="btn-g" id="btn-cols-eq" onclick="showColMenu('geral',this,event)">⚙ <span data-i18n="btn_cols_lbl">Colunas</span></button></div>
@@ -4102,23 +4100,188 @@ const T = {
     sync_pending:   '⏸ Pending sync…',
     sync_offline:   '⚠️ Supabase offline — using local cache',
     sync_fail:      '⚠️ Failed — retrying in 30s',
+  },
+
+  // ── [v47] ESPAÑOL ──────────────────────────────────────────────
+  es: {
+    title:          'Control de Equipos de Medición',
+    tab_dashboard:  '📊 Dashboard',
+    tab_alerts:     '⚠️ Alertas',
+    tab_equip:      '🔧 Equipos',
+    tab_reports:    '📋 Informes',
+    btn_import:     '📥 Importar',
+    btn_export:     '📤 Exportar',
+    btn_reset:      '🔄 Restablecer',
+    btn_new:        '＋ Nuevo',
+    btn_save:       '💾 Guardar',
+    btn_cancel:     'Cancelar',
+    btn_cols:       '⚙ Columnas',
+    btn_csv:        '↓ CSV',
+    btn_print:      '🖨️ Imprimir / PDF',
+    btn_csv_period: '📥 Exportar CSV',
+    btn_clear:      '✕ Limpiar',
+    btn_mark_read:  'Marcar leídas',
+    btn_see_alerts: 'Ver todas las alertas →',
+    btn_sync:       '☁️ Sync',
+    lbl_updated:    'Actualizado:',
+    kpi_total:      'Total',
+    kpi_active:     'Activos',
+    kpi_inactive:   'Inactivos',
+    kpi_calib_ok:   'Calib. OK',
+    kpi_expired:    'Vencidos',
+    kpi_due30:      'Vencen 30d',
+    kpi_due90:      'Vencen 90d',
+    kpi_health:     'Índice Salud',
+    kpi_sub_total:  'registros',
+    kpi_sub_active: 'en operación',
+    kpi_sub_inact:  'fuera de uso',
+    kpi_sub_ok:     'aprobados',
+    kpi_sub_exp:    'plazo vencido',
+    kpi_sub_urg:    'urgente',
+    kpi_sub_mon:    'monitorear',
+    kpi_sub_health: 'equip. al día',
+    ch_health:      '💚 Salud del Parque',
+    ch_calib:       '📊 Estado de Calibración',
+    ch_oper:        '⚡ Estado Operacional',
+    ch_types:       '🔧 Top Tipos de Equipo',
+    ch_types_exp:   '🔴 Tipos con Calibración Vencida',
+    ch_due6m:       '📅 Vencimientos — Próx. 6 Meses',
+    ch_locations:   '📍 Top Ubicaciones',
+    ch_companies:   '🏢 Empresa Ejecutante',
+    ch_in_day:      'al día',
+    tl_expired:     '🔴 Vencidos',
+    tl_due30:       '🟠 Vencen en 30d',
+    tl_due90:       '🟡 Vencen en 90d',
+    tl_ok:          '🟢 Al día',
+    alert_search:   '🔍 Buscar...',
+    notif_title:    '🔔 Notificaciones',
+    f_type:         'Tipo',
+    f_client:       'Cliente',
+    f_location:     'Ubicación',
+    f_responsible:  'Responsable',
+    f_company:      'Empresa',
+    f_status_op:    'Estado Op.',
+    f_calib:        'Calibración',
+    f_from:         'Desde',
+    f_to:           'Hasta',
+    f_search:       'Código, descripción...',
+    f_search_lbl:   'Buscar',
+    f_all:          'Todos',
+    f_all_f:        'Todas',
+    f_calib_ok:     'OK',
+    f_calib_exp:    'Vencido',
+    f_calib_need:   'Requerida',
+    tbl_equip_title:'Equipos de Medición',
+    col_id:         'Código',
+    col_tipo:       'Tipo',
+    col_cod_lab:    'Cód. Labortec',
+    col_cliente:    'Cliente',
+    col_desc:       'Descripción',
+    col_fab:        'Fabricante',
+    col_local:      'Ubicación',
+    col_resp:       'Responsable',
+    col_emp:        'Empresa',
+    col_ult:        'Últ. Calib.',
+    col_prox:       'Próx. Calib.',
+    col_freq:       'Frec.(d)',
+    col_calib:      'Calib.',
+    col_status:     'Estado',
+    col_dias:       'Días',
+    col_obs:        'Observaciones',
+    col_arq:        'Archivo',
+    rep_period_title: '📋 Informe por Período',
+    rep_from:       'Desde:',
+    rep_to:         'Hasta:',
+    rep_csv_period: '↓ CSV del Período',
+    rep_venc_mes:   '📅 Vencimientos por Mes (12 meses)',
+    rep_evolucao:   '📈 Evolución Acumulada (7 meses)',
+    rep_resp:       '👤 Por Responsable',
+    rep_emp_venc:   '🏭 Vencidos por Empresa',
+    rep_freq:       '⏱ Frecuencia de Calibración',
+    rep_heatmap:    '🌡️ Estado por Ubicación',
+    rep_resumo:     '🔢 Resumen General',
+    rep_urgentes:   '⏱️ Top 15 Más Urgentes',
+    rep_kpi_venc:   'Vencidos',
+    rep_kpi_30d:    'Vencen 30d',
+    rep_kpi_90d:    'Vencen 90d',
+    rep_kpi_ok:     'Al Día',
+    rep_kpi_health: 'Índice Salud',
+    m_edit_title:   'Editar Registro',
+    m_new_title:    'Nuevo Equipo',
+    m_code:         'Código de Control',
+    m_type:         'Tipo de Equipo',
+    m_client:       'Cliente',
+    m_maker:        'Fabricante',
+    m_desc:         'Descripción',
+    m_location:     'Ubicación',
+    m_responsible:  'Responsable',
+    m_company:      'Empresa Ejecutante',
+    m_codlab:       'Código Labortec',
+    m_last_calib:   'Última Calibración',
+    m_next_calib:   'Próxima Calibración',
+    m_freq:         'Frecuencia (días)',
+    m_status_op:    'Estado Operacional',
+    m_status_calib: 'Estado Calibración',
+    m_validity:     'Vigencia:',
+    m_file:         'Archivo / Certificado',
+    m_file_none:    'Ningún archivo seleccionado',
+    m_file_select:  '📁 Seleccionar',
+    m_file_open:    '🔗 Abrir',
+    m_notes:        'Observaciones',
+    s_active:       'ACTIVO',
+    s_inactive:     'INACTIVO',
+    s_calib_ok:     'Calibrado y Aprobado',
+    s_calib_need:   'Calibración Requerida',
+    s_discarded:    'Descartado',
+    s_notfound:     'No Encontrado',
+    d_expired:      'Vencido',
+    d_today:        '¡Hoy!',
+    d_days:         'd',
+    d_remaining:    'restantes',
+    t_updated:      'Registro actualizado',
+    t_added:        'Registro agregado',
+    t_imported:     'Importado',
+    t_records:      'registros',
+    t_reset:        'Datos restablecidos',
+    t_saved_fb:     '¡Guardado en Supabase!',
+    t_fb_connected: '¡Supabase conectado!',
+    t_fb_loaded:    'registros cargados.',
+    sync_loading:   'Cargando de Supabase…',
+    sync_saving:    'Guardando en Supabase…',
+    sync_saved:     'Guardado',
+    sync_pending:   '⏸ Sincronización pendiente…',
+    sync_offline:   '⚠️ Supabase sin conexión — usando caché local',
+    sync_fail:      '⚠️ Error — reintentando en 30s',
   }
 };
 
 function t(key) { return (T[LANG] || T.pt)[key] || (T.pt)[key] || key; }
 // Sidebar i18n + extras (added in v5)
 (function(){
-  const extras_pt = {sb_overview:'Visão Geral', sb_manage:'Gestão', sb_analysis:'Análise'};
-  const extras_en = {sb_overview:'Overview',    sb_manage:'Manage', sb_analysis:'Analysis'};
+  const extras_pt = {sb_overview:'Visão Geral', sb_manage:'Gestão',  sb_analysis:'Análise',  btn_new_lbl:'Novo',   btn_import_lbl:'Import',  btn_export_lbl:'Export'};
+  const extras_en = {sb_overview:'Overview',    sb_manage:'Manage',  sb_analysis:'Analysis', btn_new_lbl:'New',    btn_import_lbl:'Import',  btn_export_lbl:'Export'};
+  const extras_es = {sb_overview:'Resumen',     sb_manage:'Gestión', sb_analysis:'Análisis', btn_new_lbl:'Nuevo',  btn_import_lbl:'Importar',btn_export_lbl:'Exportar'};
   if(T.pt) Object.assign(T.pt, extras_pt);
   if(T.en) Object.assign(T.en, extras_en);
+  if(T.es) Object.assign(T.es, extras_es);
 })();
+
+// [v47] mapeamento planta → idioma (automático no login)
+const _PLANT_LANG = { SP:'pt', MX:'es', USA:'en' };
+
+// Helper: retorna o locale BCP-47 do idioma atual (para toLocaleString)
+function _locale() {
+  return LANG === 'en' ? 'en-US' : LANG === 'es' ? 'es-MX' : 'pt-BR';
+}
 
 function setLang(lang) {
   LANG = lang;
   StorageService.set('rochling_lang', lang);
   document.getElementById('lb-pt')?.classList.toggle('on', lang==='pt');
   document.getElementById('lb-en')?.classList.toggle('on', lang==='en');
+  document.getElementById('lb-es')?.classList.toggle('on', lang==='es');
+  // Ajusta locale para formatação de datas/números
+  document.documentElement.lang = lang==='pt'?'pt-BR': lang==='es'?'es-MX':'en-US';
   // Full re-render: badges use t() so tables must rebuild
   pag.eq.rows = DB.slice(); pag.eq.p = 1;
   applyLang();
@@ -4152,8 +4315,8 @@ function applyLang() {
     const map = {
       '📥 Importar':'btn_import','📥 Import':'btn_import',
       '📤 Exportar':'btn_export','📤 Export':'btn_export',
-      '🔄 Resetar':'btn_reset','🔄 Reset':'btn_reset',
-      '＋ Novo':'btn_new','＋ New':'btn_new',
+      '🔄 Resetar':'btn_reset','🔄 Reset':'btn_reset','🔄 Restablecer':'btn_reset',
+      '＋ Novo':'btn_new','＋ New':'btn_new','＋ Nuevo':'btn_new',
     };
     if(map[txt]) btn.textContent = t(map[txt]);
   });
@@ -4802,6 +4965,12 @@ function _setUnidade(unidade) {
     _isDirector     = false;
     _currentUnidade = String(unidade).toUpperCase();
   }
+  // [v47] Idioma automático baseado na planta (só altera se ainda não escolheu manualmente)
+  // SP → pt  |  MX → es  |  USA → en  |  outros → mantém idioma atual
+  const autoLang = _currentUnidade ? (_PLANT_LANG[_currentUnidade] || null) : null;
+  if (autoLang && !StorageService.get('rochling_lang_manual', '')) {
+    setLang(autoLang);
+  }
   // Atualiza badge no header
   const badge = document.getElementById('planta-badge');
   if (badge) {
@@ -5367,7 +5536,7 @@ async function initSupabase() {
 
     const ov = document.createElement('div');
     ov.id = 'public-view-ov';
-    ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,sans-serif;overflow-y:auto';
+    ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,sans-serif;overflow-y:auto';
     ov.innerHTML = `
       <div style="background:#fff;border-radius:16px;width:min(560px,100%);box-shadow:0 8px 40px rgba(0,0,0,.12);overflow:hidden;border:1px solid #e8eaf0">
         <!-- Header -->
@@ -5454,7 +5623,7 @@ async function initSupabase() {
   function showLoadingScreen() {
     if (_loadingOverlay) return;
     _loadingOverlay = document.createElement('div');
-    _loadingOverlay.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99998;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:12px';
+    _loadingOverlay.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99998;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;flex-direction:column;gap:12px';
     _loadingOverlay.innerHTML = `
       <div style="display:flex;gap:6px;align-items:center;justify-content:center">
         <div style="width:8px;height:8px;border-radius:50%;background:#0064b3;animation:pulse-dot 1.2s infinite;animation-delay:0s"></div>
@@ -5508,7 +5677,7 @@ async function initSupabase() {
         // Timeout: mostra erro em vez de girar para sempre
         hideLoadingScreen();
         const ov = document.createElement('div');
-        ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:8px;padding:24px;text-align:center';
+        ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;flex-direction:column;gap:8px;padding:24px;text-align:center';
         ov.innerHTML = `<div style="font-size:36px">⏱️</div><div style="font-size:16px;font-weight:700;color:#1a1a1a">Tempo esgotado</div><div style="font-size:12px;color:#6b7280">Não foi possível carregar os dados em ${(elapsedMs/1000).toFixed(1)}s. Verifique sua conexão.</div><div style="font-size:11px;color:#9ca3bc;margin-top:12px">💡 Dica: Tente novamente em alguns segundos ou verifique se está conectado à internet.</div>`;
         document.body.appendChild(ov);
         return;
@@ -5527,7 +5696,7 @@ async function initSupabase() {
       hideLoadingScreen();
       const ov = document.createElement('div');
       const dbCount = (typeof DB !== 'undefined' && DB) ? DB.length : 0;
-      ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;flex-direction:column;gap:6px;padding:24px;text-align:center';
+      ov.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99999;background:#f4f5f9;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;flex-direction:column;gap:6px;padding:24px;text-align:center';
       const _loadErrMsg = _publicLoadError ? String(_publicLoadError.message || _publicLoadError) : '';
       const _isNetworkErr = /network|timeout|failed to fetch|load failed|XHR/i.test(_loadErrMsg);
       ov.innerHTML = '<div style="font-size:36px">' + (_publicLoadError ? '📡' : '🔍') + '</div>'
@@ -6006,13 +6175,13 @@ function updateKPIs() {
   const x = computeStats();
   const sc = x.saude>=80?'var(--green)':x.saude>=50?'var(--orange)':'var(--red)';
   const sv = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
-  sv('k-total',    x.tot.toLocaleString('pt-BR'));
-  sv('k-ativos',   x.ativos.toLocaleString('pt-BR'));
-  sv('k-inativos', x.inativos.toLocaleString('pt-BR'));
-  sv('k-calib-ok', x.calibOk.toLocaleString('pt-BR'));
-  sv('k-venc',     x.vencidos.toLocaleString('pt-BR'));
-  sv('k-30d',      x.d30.toLocaleString('pt-BR'));
-  sv('k-90d',      x.d90.toLocaleString('pt-BR'));
+  sv('k-total',    x.tot.toLocaleString(_locale()));
+  sv('k-ativos',   x.ativos.toLocaleString(_locale()));
+  sv('k-inativos', x.inativos.toLocaleString(_locale()));
+  sv('k-calib-ok', x.calibOk.toLocaleString(_locale()));
+  sv('k-venc',     x.vencidos.toLocaleString(_locale()));
+  sv('k-30d',      x.d30.toLocaleString(_locale()));
+  sv('k-90d',      x.d90.toLocaleString(_locale()));
   sv('tl-n-venc',  x.vencidos); sv('tl-n-30d', x.d30); sv('tl-n-90d', x.d90);
   sv('tl-n-ok',    x.okFuturo);
   const sEl = document.getElementById('k-saude');
@@ -6041,8 +6210,8 @@ function dc(id){
     delete charts[id]; 
   }
 }
-const FONT = "'Inter', sans-serif";
-const MONO_F = "'JetBrains Mono', monospace";
+const FONT = "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
+const MONO_F = "ui-monospace, 'SF Mono', Consolas, monospace";
 const donutOpts = () => ({
   responsive:true, maintainAspectRatio:false, cutout:'62%',
   animation: false, // [v15b FIX] sem animação → charts aparecem instantâneos, sem loop visual ao ser recriados
@@ -6154,7 +6323,7 @@ function buildAllCharts() {
   dc('calib');
   const cOk=DB.filter(r=>(r.status_calib||'').includes('aprovado')).length;
   const cNec=DB.filter(r=>(r.status_calib||'').includes('Necessária')).length;
-  charts.calib=new Chart(document.getElementById('ch-calib'),{type:'doughnut',data:{labels:[t('f_calib_ok'),t('f_calib_need'),LANG==='en'?'Other':'Outros'],datasets:[{data:[cOk,cNec,Math.max(0,tot-cOk-cNec)],backgroundColor:['#16a34a','#ea580c','rgba(100,100,120,.3)'],borderWidth:0,hoverOffset:5}]},options:donutOpts()});
+  charts.calib=new Chart(document.getElementById('ch-calib'),{type:'doughnut',data:{labels:[t('f_calib_ok'),t('f_calib_need'),LANG==='en'?'Other':LANG==='es'?'Otro':'Outros'],datasets:[{data:[cOk,cNec,Math.max(0,tot-cOk-cNec)],backgroundColor:['#16a34a','#ea580c','rgba(100,100,120,.3)'],borderWidth:0,hoverOffset:5}]},options:donutOpts()});
 
   dc('status');
   const at=DB.filter(r=>(r.status||'').toUpperCase()==='ATIVO').length;
@@ -6175,7 +6344,7 @@ function buildAllCharts() {
   const l6=[],c6=[],col6=[];
   for(let m=0;m<6;m++){
     const d=new Date(t6.getFullYear(),t6.getMonth()+m,1);
-    l6.push(d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}));
+    l6.push(d.toLocaleDateString(_locale(),{month:'short',year:'2-digit'}));
     c6.push(DB.filter(r=>{if(!r.prox_calib)return false;const pc=new Date(r.prox_calib+'T00:00:00');return pc.getMonth()===d.getMonth()&&pc.getFullYear()===d.getFullYear();}).length);
     col6.push(m===0?'#da3633':m===1?'#d29922':'#4da6ff');
   }
@@ -6219,7 +6388,7 @@ function buildMensalChart() {
   for(let m = -(_mensalRange-1); m <= 0; m++) {
     const d = new Date(today.getFullYear(), today.getMonth()+m, 1);
     const dNext = new Date(today.getFullYear(), today.getMonth()+m+1, 1);
-    const label = d.toLocaleDateString('pt-BR', {month:'short', year:'2-digit'});
+    const label = d.toLocaleDateString(_locale(), {month:'short', year:'2-digit'});
     labels.push(label);
 
     // Previstas: equipamentos com prox_calib dentro do mês
@@ -6343,7 +6512,7 @@ function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'
 function diasBadge(d){
   if(d===null||d===undefined)return '<span class="badge b-gray">—</span>';
   if(d<0)return `<span class="badge b-err">⛔ ${Math.abs(d)}${t('d_days')}</span>`;
-  if(d===0)return `<span class="badge b-err">${LANG==='en'?'Today!':'Hoje!'}</span>`;
+  if(d===0)return `<span class="badge b-err">${t('d_today')}</span>`;
   if(d<=30)return `<span class="badge b-warn">⏰ ${d}d</span>`;
   if(d<=90)return `<span class="badge b-info">${d}d</span>`;
   return `<span class="badge b-ok">${d}d</span>`;
@@ -6525,13 +6694,13 @@ function calibText(v) {
 function calibBadge(v, diasVencer){
   // Special statuses — always show as-is
   if(!v) return '<span class="badge b-gray">—</span>';
-  if(v.includes('DESCARTADO')||v.includes('Discarded')) return '<span class="badge b-gray">✕ '+(LANG==='en'?'Discarded':'Descartado')+'</span>';
-  if(v.includes('encontrado')||v.includes('Not Found')) return '<span class="badge b-gray">? '+(LANG==='en'?'Not Found':'N/Found')+'</span>';
+  if(v.includes('DESCARTADO')||v.includes('Discarded')||v.includes('Descartado')) return '<span class="badge b-gray">✕ '+t('s_discarded')+'</span>';
+  if(v.includes('encontrado')||v.includes('Not Found')||v.includes('Encontrado')) return '<span class="badge b-gray">? '+t('s_notfound')+'</span>';
 
   // Use dias_vencer as source of truth when available
   if(diasVencer !== undefined && diasVencer !== null) {
-    if(diasVencer < 0)  return `<span class="badge b-err">⚠ ${LANG==='en'?'Expired':'Vencido'}</span>`;
-    if(diasVencer <= 30) return `<span class="badge b-warn">⏰ ${LANG==='en'?'Due soon':'Vence em breve'}</span>`;
+    if(diasVencer < 0)  return `<span class="badge b-err">⚠ ${t('d_expired')}</span>`;
+    if(diasVencer <= 30) return `<span class="badge b-warn">⏰ ${LANG==='en'?'Due soon':LANG==='es'?'Por vencer':'Vence em breve'}</span>`;
     return `<span class="badge b-ok">✓ ${t('f_calib_ok')}</span>`;
   }
 
@@ -6539,7 +6708,7 @@ function calibBadge(v, diasVencer){
   if(v.includes('aprovado')||v.includes('Approved')||v.includes('Calibrated'))
     return `<span class="badge b-ok">✓ ${t('f_calib_ok')}</span>`;
   if(v.includes('Necessária')||v.includes('Required'))
-    return `<span class="badge b-warn">⚠ ${LANG==='en'?'Expired':'Vencido'}</span>`;
+    return `<span class="badge b-warn">⚠ ${t('d_expired')}</span>`;
   return `<span class="badge b-gray">${esc(v.slice(0,12))}</span>`;
 }
 function statusBadge(v){
@@ -6828,7 +6997,7 @@ function renderCell(r, k, tbl) {
   const attr = `data-col="${k}" ${ws}`;
   const editable = (tbl === 'geral' || tbl === 'alert' || tbl === 'rep') && INLINE_EDITABLE[k];
   const editAttr = editable
-    ? `class="editable-cell" onclick="startInlineEdit(${r._uid},'${k}',this)" title="${LANG==='en'?'Click to edit':'Clique para editar'}"`
+    ? `class="editable-cell" onclick="startInlineEdit(${r._uid},'${k}',this)" title="${LANG==='en'?'Click to edit':LANG==='es'?'Clic para editar':'Clique para editar'}"`
     : '';
 
   // ── Checkbox column ──────────────────────────────────────────────
@@ -6842,9 +7011,9 @@ function renderCell(r, k, tbl) {
 
   if(k==='_act') return `<td ${attr} style="white-space:nowrap">
     <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--brand)" onclick="openEquipView(${r._uid})" title="Visualizar">👁</button>
-    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--tx3)" onclick="openEdit(${r._uid})" title="${LANG==='en'?'Edit':'Editar'}">✏</button>
+    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--tx3)" onclick="openEdit(${r._uid})" title="${LANG==='en'?'Edit':LANG==='es'?'Editar':'Editar'}">✏</button>
     <button onclick="openQrModal(${r._uid})" title="QR Code / Etiqueta" style="padding:2px 6px;font-size:10px;font-weight:700;border:1px solid var(--brand);background:rgba(0,100,179,.12);color:var(--brand);border-radius:4px;cursor:pointer;font-family:var(--font);line-height:1.4">▦ QR</button>
-    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--red);opacity:.5" onclick="deleteInline(${r._uid})" title="${LANG==='en'?'Delete':'Excluir'}">🗑</button>
+    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--red);opacity:.5" onclick="deleteInline(${r._uid})" title="${LANG==='en'?'Delete':LANG==='es'?'Eliminar':'Excluir'}">🗑</button>
   </td>`;
   if(k==='dias_vencer')  return `<td ${attr}>${diasBadge(r.dias_vencer)}</td>`;
 
@@ -6921,8 +7090,8 @@ function renderTable(tbl) {
     const cs = cols.length;
     tbody.innerHTML = `<tr><td colspan="${cs}" style="text-align:center;padding:36px 14px;color:var(--tx3);font-size:12px">
       <div style="font-size:28px;margin-bottom:6px;opacity:.4">📭</div>
-      <div style="font-weight:600;color:var(--tx2);margin-bottom:3px">${LANG==='en'?'No records match the filters':'Nenhum registro corresponde aos filtros'}</div>
-      <button class="btn-g" style="margin-top:8px;font-size:10px" onclick="clearF&&clearF()">${LANG==='en'?'Clear filters':'Limpar filtros'}</button>
+      <div style="font-weight:600;color:var(--tx2);margin-bottom:3px">${LANG==='en'?'No records match the filters':LANG==='es'?'Ningún registro coincide con los filtros':'Nenhum registro corresponde aos filtros'}</div>
+      <button class="btn-g" style="margin-top:8px;font-size:10px" onclick="clearF&&clearF()">${LANG==='en'?'Clear filters':LANG==='es'?'Limpiar filtros':'Limpar filtros'}</button>
     </td></tr>`;
   } else {
     tbody.innerHTML = slice.map(r => {
@@ -7550,7 +7719,7 @@ function renderAlerts() {
 function printAlertsPDF() {
   const rows = pag.alert.rows || [];
   if(!rows.length) { showToast('Sem dados para imprimir.', 'err'); return; }
-  const now = new Date().toLocaleString('pt-BR');
+  const now = new Date().toLocaleString(_locale());
   const titles = { vencido:'🔴 Vencidos', '30d':'🟠 Vencem em 30 dias', '90d':'🟡 Vencem em 90 dias', all:'Todos os Alertas' };
   const filterLabel = titles[alertFilter] || 'Alertas';
 
@@ -7670,7 +7839,7 @@ function buildRelatorios() {
   const t12=new Date();t12.setHours(0,0,0,0);const lm=[],cm=[],clm=[];
   for(let m=0;m<12;m++){
     const d=new Date(t12.getFullYear(),t12.getMonth()+m,1);
-    lm.push(d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}));
+    lm.push(d.toLocaleDateString(_locale(),{month:'short',year:'2-digit'}));
     cm.push(DB.filter(r=>{if(!r.prox_calib)return false;const pc=new Date(r.prox_calib+'T00:00:00');return pc.getMonth()===d.getMonth()&&pc.getFullYear()===d.getFullYear();}).length);
     clm.push(m===0?'#da3633':m<=2?'#d29922':'#4da6ff');
   }
@@ -7682,7 +7851,7 @@ function buildRelatorios() {
   const te=new Date();te.setHours(0,0,0,0);
   for(let m=0;m<7;m++){
     const ref=new Date(te.getFullYear(),te.getMonth()+m,1);
-    le.push(ref.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}));
+    le.push(ref.toLocaleDateString(_locale(),{month:'short',year:'2-digit'}));
     ve.push(DB.filter(r=>r.prox_calib&&new Date(r.prox_calib+'T00:00:00')<ref).length);
     a30.push(DB.filter(r=>{if(!r.prox_calib)return false;const diff=Math.round((new Date(r.prox_calib+'T00:00:00')-ref)/86400000);return diff>=0&&diff<=30;}).length);
     a90.push(DB.filter(r=>{if(!r.prox_calib)return false;const diff=Math.round((new Date(r.prox_calib+'T00:00:00')-ref)/86400000);return diff>30&&diff<=90;}).length);
@@ -7871,7 +8040,7 @@ function openAdd(){
   if(mTitle) mTitle.textContent=t('m_new_title');
   const delBtn=document.getElementById('m-btn-del');
   if(delBtn) delBtn.style.display='none';
-  if(mSub) mSub.textContent=LANG==='en'?'Fill in the details':'Preencha os dados';
+  if(mSub) mSub.textContent=LANG==='en'?'Fill in the details':LANG==='es'?'Complete los datos':'Preencha os dados';
   ['m-id','m-tipo','m-cliente','m-fab','m-desc','m-local','m-resp','m-emp','m-codlab','m-ult','m-prox','m-freq','m-notes','m-link','m-link-data'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('m-status').value='ATIVO';
   document.getElementById('m-calib-status').value='Instrumento Calibrado e aprovado';
@@ -7956,7 +8125,7 @@ function saveRecord(){
   updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
   refreshInPlace();
   const luSave=document.getElementById('last-upd');
-  if(luSave) luSave.textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
+  if(luSave) luSave.textContent=t('lbl_updated')+' '+new Date().toLocaleString(_locale());
   sbSchedulePush();
   refreshQrIfOpen();
 }
@@ -8038,7 +8207,7 @@ function updateValidityBar(){
   const vText=document.getElementById('v-text'); if(vText) vText.textContent=remaining<0?`${t('d_expired')} ${Math.abs(remaining)}${t('d_days')}`:remaining===0?`${t('d_today')}`:`${remaining}${t('d_days')} ${t('d_remaining')}`;
   if(vText) vText.style.color=color;
   const vBar=document.getElementById('v-bar'); if(vBar) vBar.style.cssText=`width:${pct}%;background:${pct>=100?'var(--red)':pct>=80?'var(--orange)':'var(--green)'}`;
-  const vPct=document.getElementById('v-pct'); if(vPct) vPct.textContent=pct+(LANG==='en'?'% used':'% usado');
+  const vPct=document.getElementById('v-pct'); if(vPct) vPct.textContent=pct+(LANG==='en'?'% used':LANG==='es'?'% usado':'% usado');
   wrap.style.display='block';
 }
 
@@ -8486,7 +8655,7 @@ function updateAll(){
 
   renderAlerts();
   const luAll=document.getElementById('last-upd');
-  if(luAll) luAll.textContent=t('lbl_updated')+' '+new Date().toLocaleString(LANG==='en'?'en-US':'pt-BR');
+  if(luAll) luAll.textContent=t('lbl_updated')+' '+new Date().toLocaleString(_locale());
   // Atualiza view de cards se estiver ativa
   if(typeof _eqViewMode !== 'undefined' && _eqViewMode === 'cards') {
     setTimeout(renderCardList, 0);
@@ -8679,7 +8848,7 @@ function _handleQrDeepLink() {
         const now = new Date();
         for(let i=0;i<6;i++){
           const d = new Date(now.getFullYear(), now.getMonth()+i, 1);
-          const lab = d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','') + '/' + String(d.getFullYear()).slice(-2);
+          const lab = d.toLocaleDateString(_locale(),{month:'short'}).replace('.','') + '/' + String(d.getFullYear()).slice(-2);
           if(lc(lab) === lc(label) || lc(label).startsWith(lc(lab).slice(0,3))){
             return DB.filter(r=>{ if(!r.prox_calib) return false;
               const pc=new Date(r.prox_calib+'T00:00:00');
@@ -8697,7 +8866,7 @@ function _handleQrDeepLink() {
         const now=new Date();
         for(let i=-6;i<=6;i++){
           const d=new Date(now.getFullYear(),now.getMonth()+i,1);
-          const lab=d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','')+'/'+String(d.getFullYear()).slice(-2);
+          const lab=d.toLocaleDateString(_locale(),{month:'short'}).replace('.','')+'/'+String(d.getFullYear()).slice(-2);
           if(lc(lab)===lc(label) || lc(label).startsWith(lc(lab).slice(0,3))){
             return DB.filter(r=>{if(!r.prox_calib)return false;
               const pc=new Date(r.prox_calib+'T00:00:00');
@@ -9771,7 +9940,7 @@ function clearSelection(tbl) {
     closePdfModal();
     const cols = PDF_COLS.filter(c => _pdfCols.includes(c.k));
     const rows = _pdfRows;
-    const now  = new Date().toLocaleString('pt-BR');
+    const now  = new Date().toLocaleString(_locale());
     const colW = _pdfOri === 'landscape' ? Math.floor(260/cols.length) : Math.floor(180/cols.length);
 
     const thead = cols.map(c =>
@@ -9803,12 +9972,10 @@ function clearSelection(tbl) {
 <head>
 <meta charset="UTF-8">
 <title>${_pdfTitle}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   @page { size: ${_pdfOri==='landscape'?'A4 landscape':'A4 portrait'}; margin: 10mm 8mm 10mm 8mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; color: #1a1d2e; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; color: #1a1d2e; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
   /* Header */
   .ph { display: flex; align-items: center; justify-content: space-between;
@@ -10216,7 +10383,7 @@ function printEquipView() {
   const fmt = v => fmtDateSafe(v);
   const barColor = d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : d <= 90 ? '#f59e0b' : '#16a34a';
   const pct = r.freq_dias && d !== null ? Math.max(0,Math.min(100,Math.round(d/r.freq_dias*100))) : 0;
-  const now = new Date().toLocaleString('pt-BR');
+  const now = new Date().toLocaleString(_locale());
 
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Ficha — ${r.id||r.descricao}</title>
@@ -10333,7 +10500,7 @@ window.openPdfEquipamentos = function() {
   var titleEl = document.getElementById('drill-title');
   var subEl   = document.getElementById('drill-sub');
   if (titleEl) titleEl.textContent = '🖨️ Equipamentos — ' + rows.length + ' registro(s)';
-  if (subEl)   subEl.textContent   = 'Exportado em ' + new Date().toLocaleDateString('pt-BR');
+  if (subEl)   subEl.textContent   = 'Exportado em ' + new Date().toLocaleDateString(_locale());
   openPdfModal();
 };
 
@@ -11546,7 +11713,7 @@ window.requestAnimationFrame = window.requestAnimationFrame
 
     <div class="fp-option fp-active" id="fp-inter" style="cursor:default">
       <div>
-        <div class="fp-font-name" style="font-family:'Inter',sans-serif">Inter</div>
+        <div class="fp-font-name" style="font-family:system-ui,sans-serif">System UI</div>
         <div class="fp-font-desc">Interface · UI · Tabelas · Menus · Formulários · KPIs</div>
       </div>
       <span class="fp-check">✅</span>
@@ -11554,7 +11721,7 @@ window.requestAnimationFrame = window.requestAnimationFrame
 
     <div class="fp-option fp-active" id="fp-jetbrains" style="cursor:default">
       <div>
-        <div class="fp-font-name" style="font-family:'JetBrains Mono',monospace">JetBrains Mono</div>
+        <div class="fp-font-name" style="font-family:ui-monospace,monospace">Monospace</div>
         <div class="fp-font-desc">Dados técnicos · IDs · Códigos · Timestamps · QR</div>
       </div>
       <span class="fp-check">✅</span>
@@ -11585,7 +11752,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Remove rochling_font from localStorage (force Inter)
   localStorage.removeItem('rochling_font');
   // Ensure CSS variable is always Inter
-  document.documentElement.style.setProperty('--font', "'Inter', sans-serif");
+  document.documentElement.style.setProperty('--font', "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif");
 });
 </script>
 
@@ -13871,7 +14038,7 @@ window.renderAuditLog = function() {
   }
   var actionMap = { add:'<span class="badge b-ok">+ Adição</span>', edit:'<span class="badge b-info">✏ Edição</span>', del:'<span class="badge b-err">✕ Exclusão</span>', import:'<span class="badge b-teal">&#8595; Import</span>' };
   tbody.innerHTML = rows.map(function(e) {
-    var dt = new Date(e.ts).toLocaleString('pt-BR');
+    var dt = new Date(e.ts).toLocaleString(_locale());
     var ab = actionMap[e.action] || '<span class="badge b-gray">'+e.action+'</span>';
     return [
       '<tr style="border-bottom:1px solid var(--bdr)">',
@@ -13903,7 +14070,7 @@ window.exportAuditCSV = function() {
   var hdr = ['Data/Hora','Acao','Codigo','Detalhes','Usuario'];
   var lines = [hdr.join(';')];
   _AUDIT_LOG.forEach(function(e) {
-    lines.push([new Date(e.ts).toLocaleString('pt-BR'),e.action,e.code,e.desc,e.user].map(function(v){return '"'+String(v||'').replace(/"/g,'""')+'"';}).join(';'));
+    lines.push([new Date(e.ts).toLocaleString(_locale()),e.action,e.code,e.desc,e.user].map(function(v){return '"'+String(v||'').replace(/"/g,'""')+'"';}).join(';'));
   });
    var blob = new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
 
@@ -14385,7 +14552,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     tbody.innerHTML = rows.map(function(e) {
-      var dt = new Date(e.ts).toLocaleString('pt-BR');
+      var dt = new Date(e.ts).toLocaleString(_locale());
       var ab = actionMap[e.action] || '<span class="badge b-gray">'+e.action+'</span>';
       return [
         '<tr style="border-bottom:1px solid var(--bdr)">',
