@@ -2609,6 +2609,13 @@ input[type="checkbox"], input[type="radio"] {
     <!-- Divider -->
     <div class="hdr-divider"></div>
 
+    <!-- [v47] Badge de planta + seletor diretor -->
+    <span id="planta-badge" style="display:none;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;letter-spacing:.4px;white-space:nowrap"></span>
+    <select id="planta-selector" title="Trocar planta (modo diretor)" onchange="switchPlanta(this.value)"
+      style="display:none;font-size:11px;padding:3px 6px;border-radius:6px;border:1px solid var(--brd);background:var(--card);color:var(--tx1);cursor:pointer;font-family:var(--font)">
+      <option value="">🌎 Todas as plantas</option>
+    </select>
+
     <!-- Auth user chip -->
     <div id="auth-user-chip">
       <span class="chip-dot"></span>
@@ -4780,6 +4787,70 @@ let _pending     = false;
 let _pushTimer   = null;
 let _sbInitialized = false; // [v15 FIX] evita double-init pelo onAuthStateChange que dispara SIGNED_IN imediatamente
 
+// ── [v47 MULTI-PLANTA] ─────────────────────────────────────────────
+// _currentUnidade: planta ativa do usuário logado ('SP', 'MX', 'USA', …)
+// _isDirector: true → vê todas as plantas (sem filtro)
+let _currentUnidade = null;
+let _isDirector     = false;
+const _UNIDADE_LABELS = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DIRECTOR: '🌎 Global' };
+
+function _setUnidade(unidade) {
+  if (!unidade || unidade === 'DIRECTOR') {
+    _isDirector     = true;
+    _currentUnidade = null;
+  } else {
+    _isDirector     = false;
+    _currentUnidade = String(unidade).toUpperCase();
+  }
+  // Atualiza badge no header
+  const badge = document.getElementById('planta-badge');
+  if (badge) {
+    badge.textContent = _isDirector ? '🌎 Global' : (_UNIDADE_LABELS[_currentUnidade] || _currentUnidade);
+    badge.style.display = 'inline-block';
+  }
+  // Diretores veem seletor de planta
+  const sel = document.getElementById('planta-selector');
+  if (sel) sel.style.display = _isDirector ? 'inline-block' : 'none';
+}
+
+window.switchPlanta = function(unidade) {
+  if (!_isDirector) return;
+  if (!unidade) {
+    _currentUnidade = null;
+    const badge = document.getElementById('planta-badge');
+    if (badge) badge.textContent = '🌎 Global';
+  } else {
+    _currentUnidade = String(unidade).toUpperCase();
+    const badge = document.getElementById('planta-badge');
+    if (badge) badge.textContent = _UNIDADE_LABELS[_currentUnidade] || ('🏭 ' + _currentUnidade);
+  }
+  DB = [];
+  if (typeof sbPull === 'function') sbPull().then(function(ok) { if (ok && typeof updateAll === 'function') updateAll(); });
+};
+
+// [v47] Carrega plantas disponíveis dinamicamente do banco — suporta plantas ilimitadas
+window._loadPlantasDisponiveis = async function() {
+  if (!_isDirector || !window.sbActive || !window.sbActive()) return;
+  try {
+    const { data } = await _sb.from('equipamentos').select('unidade').not('unidade', 'is', null);
+    const plantas = [...new Set((data || []).map(function(r){ return r.unidade; }).filter(Boolean))].sort();
+    const sel = document.getElementById('planta-selector');
+    if (!sel || plantas.length === 0) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">🌎 Todas as plantas</option>';
+    plantas.forEach(function(p) {
+      const label = _UNIDADE_LABELS[p] || ('🏭 ' + p);
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = label;
+      if (p === current) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    console.log('[v47] Plantas disponíveis carregadas:', plantas);
+  } catch(e) { console.warn('[v47] _loadPlantasDisponiveis:', e.message || e); }
+};
+// ──────────────────────────────────────────────────────────────────
+
 // Inicializa o cliente Supabase (lê config do localStorage se disponível)
 function _initSupabaseClient() {
   try {
@@ -4882,16 +4953,15 @@ async function sbPull() {
   setSyncInd(t('sync_loading'), 'var(--accent2)', true);
   try {
     // [v28 FIX] Supabase limita 1000 linhas por query — busca todas as páginas
+    // [v47 MULTI-PLANTA] Filtra por unidade quando não é diretor
     const PAGE_SIZE = 1000;
     let allData = [];
     let from = 0;
     let hasMore = true;
     while (hasMore) {
-      const { data: page, error: pageErr } = await _sb
-        .from('equipamentos')
-        .select('*')
-        .order('id', { ascending: true })
-        .range(from, from + PAGE_SIZE - 1);
+      let q = _sb.from('equipamentos').select('*').order('id', { ascending: true }).range(from, from + PAGE_SIZE - 1);
+      if (!_isDirector && _currentUnidade) q = q.eq('unidade', _currentUnidade);
+      const { data: page, error: pageErr } = await q;
       if (pageErr) throw pageErr;
       if (page && page.length > 0) allData = allData.concat(page);
       hasMore = page && page.length === PAGE_SIZE;
@@ -4977,9 +5047,12 @@ DB.forEach(r => {
 
   const { dias_vencer, ...rest } = r;
 
+  // [v47 MULTI-PLANTA] Garante que unidade é salva em cada registro
+  const recUnidade = rest.unidade || (_isDirector ? (rest.unidade || null) : _currentUnidade) || null;
   uniqueMap.set(String(r.id).trim(), {
     ...rest,
     id: String(r.id).trim(),
+    unidade: recUnidade,
     _updated: _pushTs,
   });
 });
@@ -5769,6 +5842,16 @@ function showApp(user) {
   const emailEl = document.getElementById('auth-user-email');
   if(chip)    chip.style.display = 'flex';
   if(emailEl) emailEl.textContent = user.email;
+
+  // [v47 MULTI-PLANTA] Detecta a planta do usuário via metadados do Supabase Auth
+  // Para configurar: no Supabase Dashboard → Auth → Users → Edit user → user_metadata → { "unidade": "MX" }
+  // Valores válidos: "SP", "MX", "USA" (ou qualquer sigla) / "DIRECTOR" para ver tudo
+  const meta = (user.user_metadata || user.app_metadata || {});
+  _setUnidade(meta.unidade || null);
+  // Diretores: carrega lista dinâmica de plantas após conectar ao Supabase
+  if (_isDirector) {
+    setTimeout(function() { if (typeof window._loadPlantasDisponiveis === 'function') window._loadPlantasDisponiveis(); }, 2000);
+  }
 
   // Inicialização de dados: só uma vez por sessão
   // onAuthStateChange (Supabase JS v2) dispara SIGNED_IN imediatamente ao ser registrado,
@@ -7827,6 +7910,7 @@ function saveRecord(){
   const upd={
     id:        idVal,
     tipo:      tipoVal,
+    unidade:   _currentUnidade || (editUID!==null ? (DB.find(x=>x._uid===editUID)||{}).unidade||null : null),
     cliente:   document.getElementById('m-cliente').value,
     fabricante:document.getElementById('m-fab').value,
     descricao: descVal,
