@@ -2723,6 +2723,16 @@ input[type="checkbox"], input[type="radio"] {
     </div>
   </div>
 
+  <!-- [v49] Mensagem amigável para planta vazia -->
+  <div id="charts-empty-state" style="display:none;padding:32px 24px;text-align:center;background:var(--surf);border-radius:12px;margin:20px;border:2px dashed var(--bdr2)">
+    <div style="font-size:32px;margin-bottom:12px">📭</div>
+    <div style="font-size:18px;font-weight:600;color:var(--tx);margin-bottom:8px">Nenhum equipamento cadastrado</div>
+    <div style="font-size:13px;color:var(--tx2);margin-bottom:20px">Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.</div>
+    <button onclick="document.getElementById('edit-modal').style.display='flex';initEquipModal('new')" style="padding:10px 20px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-family:var(--font)">
+      ➕ Adicionar primeiro equipamento
+    </button>
+  </div>
+
   <div class="cg3">
     <div class="chart-card">
       <div class="chart-title">💚 Saúde do Parque</div>
@@ -4957,6 +4967,20 @@ function _isDescartado(r) {
 }
 function computeStats() {
   if(_statsCache) return _statsCache;
+  
+  // [FIX v49] Retorna objeto com zeros para DB vazio
+  if(!DB || DB.length === 0) {
+    const emptyStats = {
+      tot: 0, ativos: 0, inativos: 0, semData: 0,
+      vencidos: 0, d30: 0, d90: 0, okFuturo: 0, calibOk: 0,
+      ativosComData: 0, ativosOkFuturo: 0, ativosSemData: 0,
+      byTipo: {}, byTipoVenc: {}, byLocal: {}, byEmp: {}, byResp: {}, byEmpVenc: {},
+      saude: 0
+    };
+    _statsCache = emptyStats;
+    return emptyStats;
+  }
+  
   const s = { tot:DB.length, ativos:0, inativos:0, semData:0,
               vencidos:0, d30:0, d90:0, okFuturo:0, calibOk:0,
               // v12: contadores separados apenas para ativos (base do gauge)
@@ -6746,6 +6770,28 @@ async function doLogout() {
 // KPIs
 // ═══════════════════════════════════════════════════════
 function updateKPIs() {
+  // [FIX v49] Guarda para planta vazia
+  if(!DB || DB.length === 0) {
+    const sv = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+    sv('k-total', '0');
+    sv('k-ativos', '0');
+    sv('k-inativos', '0');
+    sv('k-calib-ok', '0');
+    sv('k-venc', '0');
+    sv('k-30d', '0');
+    sv('k-90d', '0');
+    sv('tl-n-venc', 0);
+    sv('tl-n-30d', 0);
+    sv('tl-n-90d', 0);
+    sv('tl-n-ok', 0);
+    const sEl = document.getElementById('k-saude');
+    if(sEl){ sEl.textContent='—'; sEl.style.color='var(--tx3)'; }
+    // Sparklines vazios
+    if(typeof requestAnimationFrame!=='undefined') requestAnimationFrame(()=>requestAnimationFrame(buildSparklines));
+    else setTimeout(buildSparklines, 50);
+    return;
+  }
+
   const x = computeStats();
   const sc = x.saude>=80?'var(--green)':x.saude>=50?'var(--orange)':'var(--red)';
   const sv = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
@@ -6834,6 +6880,21 @@ function drawSparkline(id, values, color) {
 // Build sparklines from real 6-month series
 // Cada série representa, mês a mês, equipamentos cuja prox_calib cai no mês.
 function buildSparklines() {
+  // [FIX v49] Guard para DB vazio
+  if(!DB || DB.length === 0) {
+    const months = 6;
+    const empty = Array(months).fill(0);
+    drawSparkline('sp-total',    empty, '#0064b3');
+    drawSparkline('sp-ativos',   empty, '#16a34a');
+    drawSparkline('sp-inativos', empty, '#6b7280');
+    drawSparkline('sp-calib',    empty, '#0d9488');
+    drawSparkline('sp-venc',     empty, '#dc2626');
+    drawSparkline('sp-30d',      empty, '#ea580c');
+    drawSparkline('sp-90d',      empty, '#f59e0b');
+    drawSparkline('sp-saude',    empty, '#7c3aed');
+    return;
+  }
+
   const today = new Date(); today.setHours(0,0,0,0);
   const months = 6;
   // Buckets por mês [-5..0]
@@ -6878,6 +6939,25 @@ function buildAllCharts() {
     console.warn('[Charts] Chart.js não carregou (CDN indisponível). Gráficos desabilitados.');
     return;
   }
+  
+  // [FIX v49] Guard para planta sem instrumentos (Akron/Duncan/outros vazios)
+  if(!DB || DB.length === 0) {
+    console.log('[Charts] Base de dados vazia — desabilitando gráficos e exibindo tela vazia');
+    // Destroi charts existentes
+    const chartIds = ['gauge','calib','status','tipos','tipos-venc','venc6','locais','emp','mensal','venc-mes','evolucao','resp','emp-venc','freq'];
+    chartIds.forEach(id => dc(id));
+    
+    // Exibe mensagem amigável
+    const emptyMsg = document.getElementById('charts-empty-state');
+    if(emptyMsg) emptyMsg.style.display = 'block';
+    
+    return;
+  }
+  
+  // Oculta mensagem de vazio
+  const emptyMsg = document.getElementById('charts-empty-state');
+  if(emptyMsg) emptyMsg.style.display = 'none';
+  
   const tot   = DB.length;
   // v11 CORREÇÃO 1: gauge usa apenas equipamentos ATIVOS (exclui INATIVO/DESCARTADO)
   const dbAtivos = DB.filter(r => _isAtivo(r) && !_isDescartado(r));
@@ -6956,6 +7036,46 @@ window.setMensalRange = function(n) {
 
 function buildMensalChart() {
   dc('mensal');
+  
+  // [FIX v49] Guard para DB vazio
+  if(!DB || DB.length === 0) {
+    const el = document.getElementById('ch-mensal');
+    if(!el) return;
+    
+    // Cria chart vazio
+    const emptyLabels = [];
+    for(let m = -(_mensalRange-1); m <= 0; m++) {
+      const d = new Date(Date.now() + m*30*24*60*60*1000);
+      emptyLabels.push(d.toLocaleDateString(_locale(), {month:'short', year:'2-digit'}));
+    }
+    
+    const emptyData = Array(_mensalRange).fill(0);
+    charts.mensal = new Chart(el, {
+      type: 'bar',
+      data: {
+        labels: emptyLabels,
+        datasets: [
+          { label: 'Previstas (vencem)', data: emptyData, backgroundColor: 'rgba(0,100,179,.75)', borderRadius: 4, borderWidth: 0, order: 2 },
+          { label: 'Realizadas', data: emptyData, backgroundColor: 'rgba(22,163,74,.8)', borderRadius: 4, borderWidth: 0, order: 1 },
+          { label: 'Vencidas s/ realização', data: emptyData, backgroundColor: 'rgba(220,38,38,.75)', borderRadius: 4, borderWidth: 0, order: 3 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: tc(), font: { size: 10.5, family: FONT } }, grid: { display: false }, border: { display: false } },
+          y: { ticks: { color: tc(), font: { size: 10, family: FONT } }, grid: { color: gc() }, border: { display: false } }
+        }
+      }
+    });
+    
+    const sumEl = document.getElementById('ch-mensal-sumario');
+    if(sumEl) sumEl.innerHTML = '';
+    return;
+  }
+  
   const today = new Date(); today.setHours(0,0,0,0);
   const labels=[], previstos=[], realizados=[], vencidosSemReal=[];
 
