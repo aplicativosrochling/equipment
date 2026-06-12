@@ -3693,22 +3693,34 @@ input[type="checkbox"], input[type="radio"] {
           <p style="color:var(--tx2);font-size:12px;margin:0 0 10px">Execute este SQL no <b>Supabase → SQL Editor</b> uma única vez para criar a tabela de perfis:</p>
           <pre id="admin-sql-pre" style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:8px;overflow-x:auto;font-size:10.5px;line-height:1.6;white-space:pre-wrap;margin:0 0 10px">-- [v48] Tabela de perfis de usuário (plantas)
 CREATE TABLE IF NOT EXISTS user_profiles (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  email TEXT UNIQUE NOT NULL,
-  unidade TEXT NOT NULL,
+  id           UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  email        TEXT UNIQUE NOT NULL,
+  unidade      TEXT NOT NULL,
   display_name TEXT,
-  updated_at TIMESTAMPTZ DEFAULT now()
+  updated_at   TIMESTAMPTZ DEFAULT now()
 );
 
 -- Habilitar Row Level Security
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 
--- Política: usuários autenticados podem ler e editar perfis
-CREATE POLICY "auth_manage_profiles"
+-- Remove política anterior (evita erro de duplicata) e recria
+DROP POLICY IF EXISTS "auth_manage_profiles" ON user_profiles;
+DROP POLICY IF EXISTS "allow_authenticated_all" ON user_profiles;
+
+-- Política: qualquer usuário autenticado pode ler e gravar perfis
+CREATE POLICY "allow_authenticated_all"
 ON user_profiles FOR ALL
 TO authenticated
 USING (true)
-WITH CHECK (true);</pre>
+WITH CHECK (true);
+
+-- IMPORTANTE: conceder permissão de tabela ao role authenticated
+-- (RLS sozinho não basta — o role precisa ter acesso à tabela)
+GRANT ALL ON TABLE user_profiles TO authenticated;
+GRANT ALL ON TABLE user_profiles TO service_role;
+
+-- Garantir que a coluna unidade exista na tabela equipamentos
+ALTER TABLE equipamentos ADD COLUMN IF NOT EXISTS unidade TEXT;</pre>
           <button class="btn-g" onclick="adminCopySql()" style="font-size:11px">📋 Copiar SQL</button>
         </div>
       </details>
@@ -3730,6 +3742,8 @@ WITH CHECK (true);</pre>
               <option value="SP">🇧🇷 São Paulo (SP)</option>
               <option value="MX">🇲🇽 México (MX)</option>
               <option value="USA">🇺🇸 EUA (USA)</option>
+              <option value="DUNCAN">🇺🇸 Duncan, SC (DUNCAN)</option>
+              <option value="AKRON">🇺🇸 Akron, OH (AKRON)</option>
               <option value="DIRECTOR">🌎 Diretor (todas as plantas)</option>
             </select>
           </div>
@@ -3738,7 +3752,20 @@ WITH CHECK (true);</pre>
             <input id="admin-display-name" type="text" placeholder="Nome do usuário"
               style="width:100%;padding:8px 10px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf);color:var(--tx);font-size:12px;box-sizing:border-box">
           </div>
-          <button class="btn-p" onclick="adminSaveUser()" style="padding:8px 18px;font-size:12px;white-space:nowrap;align-self:flex-end">💾 Salvar</button>
+          <div style="flex:1;min-width:160px">
+            <label style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Senha (criar com senha)</label>
+            <div style="position:relative">
+              <input id="admin-password" type="password" placeholder="Mín. 6 caracteres"
+                style="width:100%;padding:8px 32px 8px 10px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf);color:var(--tx);font-size:12px;box-sizing:border-box">
+              <button type="button" onclick="(function(){var i=document.getElementById('admin-password');i.type=i.type==='password'?'text':'password';})()"
+                style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--tx3);font-size:13px;padding:0;line-height:1" title="Mostrar/ocultar senha">👁</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;align-self:flex-end;flex-wrap:wrap">
+            <button class="btn-p" onclick="adminSaveUser()" style="padding:8px 14px;font-size:11px;white-space:nowrap" title="Apenas vincula o e-mail à planta — usuário já deve existir no Supabase Auth">💾 Salvar perfil</button>
+            <button class="btn-p" onclick="adminCreateWithPassword()" style="padding:8px 14px;font-size:11px;white-space:nowrap;background:#7c3aed;border-color:#7c3aed" title="Cria o usuário com senha definida agora — sem precisar de e-mail real">🔑 Criar c/ senha</button>
+            <button class="btn-p" onclick="adminInviteUser()" style="padding:8px 14px;font-size:11px;white-space:nowrap;background:var(--green,#16a34a);border-color:var(--green,#16a34a)" title="Envia e-mail de convite — o usuário define a própria senha">✉ Convidar</button>
+          </div>
         </div>
       </div>
 
@@ -3760,10 +3787,12 @@ WITH CHECK (true);</pre>
       </div>
 
       <!-- Nota informativa -->
-      <p style="font-size:10.5px;color:var(--tx3);margin:12px 0 0;line-height:1.5">
-        ℹ️ Após salvar, o usuário precisa fazer <b>logout e login novamente</b> para a nova planta ser aplicada.<br>
-        Esta tabela funciona como fallback — se o usuário tiver <code>unidade</code> nos metadados do Supabase Auth, esse valor tem prioridade.
-      </p>
+      <div style="font-size:10.5px;color:var(--tx3);margin:12px 0 0;line-height:1.7;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:10px 14px">
+        <b>🔑 Criar c/ senha</b> — cria o usuário com senha definida agora. <u>E-mail não precisa ser real.</u> Login disponível imediatamente.<br>
+        <b>✉ Convidar</b> — envia e-mail de convite. O usuário define a própria senha. <u>E-mail precisa ser real.</u><br>
+        <b>💾 Salvar perfil</b> — apenas vincula um e-mail já existente no Supabase à planta. Não cria conta nova.<br>
+        ℹ️ Após qualquer alteração de planta, o usuário precisa fazer <b>logout e login novamente</b>.
+      </div>
     </div>
   </div>
 </div>
@@ -4625,7 +4654,7 @@ function applyLang() {
 const COL_DEFS = {
   geral: [
     {k:'_chk',        l:'',               def:true, noSort:true, w:30},
-    {k:'_act',        l:'Ações',          def:true, noSort:true, w:115},
+    {k:'_act',        l:'Ações',          def:true, noSort:true, w:170},
     {k:'id',          l:'Código',         def:true, w:105},
     {k:'tipo',        l:'Tipo',           def:true, w:120},
     {k:'cod_lab',     l:'Cód. Labortec',  def:true, w:95},
@@ -5075,24 +5104,104 @@ function _setUnidade(unidade) {
   if (adminTab) adminTab.style.display = _isDirector ? '' : 'none';
 }
 
+// [BUG-SEC FIX] Exibido quando o e-mail logado não tem planta configurada em user_profiles.
+// Impede acesso ao sistema e orienta o administrador — nunca concede modo Diretor por omissão.
+function _bloqueioSemPlanta(email) {
+  _isDirector     = false;
+  _currentUnidade = '__BLOQUEADO__';
+  // Oculta toda a UI e exibe tela de bloqueio
+  const app = document.getElementById('app') || document.querySelector('.app-shell');
+  if (app) app.style.display = 'none';
+  const loginScreen = document.getElementById('login-screen');
+  if (loginScreen) loginScreen.style.display = 'none';
+
+  let blk = document.getElementById('_sem-planta-blk');
+  if (!blk) {
+    blk = document.createElement('div');
+    blk.id = '_sem-planta-blk';
+    blk.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg,#f4f6fb);z-index:9999;font-family:system-ui,sans-serif;gap:16px;padding:24px;text-align:center';
+    document.body.appendChild(blk);
+  }
+  blk.innerHTML =
+    '<div style="font-size:48px">🔒</div>' +
+    '<div style="font-size:18px;font-weight:700;color:var(--tx,#1a2035)">Acesso não configurado</div>' +
+    '<div style="font-size:13px;color:var(--tx2,#555);max-width:420px;line-height:1.6">' +
+      'O e-mail <strong>' + (email || '—') + '</strong> ainda não foi vinculado a nenhuma planta.<br>' +
+      'Solicite ao administrador que execute o SQL de cadastro de usuário no Supabase.' +
+    '</div>' +
+    '<button onclick="(async()=>{const sb=window._globalSupabaseClient||window._sb;if(sb)await sb.auth.signOut();location.reload();})()" ' +
+      'style="margin-top:8px;padding:10px 28px;border-radius:8px;border:none;background:#0064b3;color:#fff;font-size:13px;font-weight:600;cursor:pointer">← Voltar ao login</button>';
+  blk.style.display = 'flex';
+}
+
 window.switchPlanta = function(unidade) {
   if (!_isDirector) return;
   if (!unidade) {
     _currentUnidade = null;
     const badge = document.getElementById('planta-badge');
     if (badge) badge.textContent = '🌎 Global';
+    // Volta ao português ao deselecionar planta
+    StorageService.set('rochling_lang_manual', '');
+    setLang('pt');
+    // Mostra tela de seleção de planta e para por aqui
+    DB = [];
+    _mostrarSelecaoPlanta();
+    return;
   } else {
     _currentUnidade = String(unidade).toUpperCase();
     const badge = document.getElementById('planta-badge');
     if (badge) badge.textContent = _UNIDADE_LABELS[_currentUnidade] || ('🏭 ' + _currentUnidade);
-    // [BUG-A FIX] Idioma automático ao Director trocar de planta (igual ao _setUnidade para usuários normais).
-    // Antes: switchPlanta nunca chamava setLang → interface permanecia no idioma errado ao selecionar MX/USA.
-    const autoLang = _PLANT_LANG[_currentUnidade] || null;
-    if (autoLang && !StorageService.get('rochling_lang_manual', '')) setLang(autoLang);
+    // [FIX] Idioma troca SEMPRE ao Director selecionar planta — sem bloqueio de preferência manual.
+    // Remove o flag manual para que a planta tenha prioridade absoluta sobre idioma.
+    const autoLang = _PLANT_LANG[_currentUnidade] || 'pt';
+    StorageService.set('rochling_lang_manual', '');
+    setLang(autoLang);
   }
+  // Oculta overlay de seleção de planta (se estiver visível)
+  _ocultarSelecaoPlanta();
   DB = [];
   if (typeof sbPull === 'function') sbPull().then(function(ok) { if (ok && typeof updateAll === 'function') updateAll(); });
 };
+
+// Tela exibida ao Director antes de selecionar uma planta
+function _mostrarSelecaoPlanta() {
+  let ov = document.getElementById('_dir-select-planta');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = '_dir-select-planta';
+    ov.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg,#f4f6fb);z-index:900;gap:14px;padding:24px;text-align:center';
+    document.body.appendChild(ov);
+  }
+  var plantas = [
+    { v:'SP',     lbl:'🇧🇷 São Paulo' },
+    { v:'MX',     lbl:'🇲🇽 México'   },
+    { v:'USA',    lbl:'🇺🇸 EUA'       },
+    { v:'DUNCAN', lbl:'🇺🇸 Duncan, SC'},
+    { v:'AKRON',  lbl:'🇺🇸 Akron, OH' },
+  ];
+  var btns = plantas.map(function(p) {
+    return '<button onclick="switchPlanta(\'' + p.v + '\')" ' +
+      'style="padding:12px 28px;border-radius:10px;border:2px solid #0064b3;background:#fff;' +
+      'color:#0064b3;font-size:14px;font-weight:700;cursor:pointer;min-width:170px;' +
+      'transition:background .15s,color .15s;font-family:inherit" ' +
+      'onmouseover="this.style.background=\'#0064b3\';this.style.color=\'#fff\'" ' +
+      'onmouseout="this.style.background=\'#fff\';this.style.color=\'#0064b3\'">' +
+      p.lbl + '</button>';
+  }).join('');
+  ov.innerHTML =
+    '<div style="font-size:52px">🌎</div>' +
+    '<div style="font-size:20px;font-weight:700;color:var(--tx,#1a2035)">Selecione uma planta</div>' +
+    '<div style="font-size:13px;color:var(--tx2,#555);max-width:440px;line-height:1.6;margin-bottom:8px">' +
+      'Escolha a unidade que deseja visualizar:' +
+    '</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:520px">' + btns + '</div>';
+  ov.style.display = 'flex';
+}
+
+function _ocultarSelecaoPlanta() {
+  const ov = document.getElementById('_dir-select-planta');
+  if (ov) ov.style.display = 'none';
+}
 
 // [v47] Carrega plantas disponíveis — plantas fixas sempre presentes + quaisquer outras do banco
 // Plantas fixas garantidas mesmo que não tenham equipamentos cadastrados ainda.
@@ -5171,6 +5280,64 @@ window.adminLoadUsers = async function() {
   }
 };
 
+// ── Helper: detecta erros de permissão/tabela em user_profiles e orienta o usuário ──
+function _handleProfilesError(e, contexto) {
+  var msg = (e.message || e.code || String(e)).toLowerCase();
+  var isPermission = msg.includes('permission denied') || msg.includes('42501') || msg.includes('403') || msg.includes('forbidden');
+  var isNotFound   = msg.includes('does not exist') || msg.includes('42p01') || msg.includes('relation');
+
+  var SQL_FIX =
+    'CREATE TABLE IF NOT EXISTS user_profiles (\n' +
+    '  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n' +
+    '  email TEXT UNIQUE NOT NULL,\n' +
+    '  unidade TEXT NOT NULL,\n' +
+    '  display_name TEXT,\n' +
+    '  updated_at TIMESTAMPTZ DEFAULT now()\n' +
+    ');\n\n' +
+    'ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;\n\n' +
+    'DROP POLICY IF EXISTS "auth_manage_profiles" ON user_profiles;\n' +
+    'DROP POLICY IF EXISTS "allow_authenticated_all" ON user_profiles;\n\n' +
+    'CREATE POLICY "allow_authenticated_all"\n' +
+    'ON user_profiles FOR ALL\n' +
+    'TO authenticated\n' +
+    'USING (true)\n' +
+    'WITH CHECK (true);\n\n' +
+    '-- IMPORTANTE: permissao de tabela (RLS sozinho nao basta)\n' +
+    'GRANT ALL ON TABLE user_profiles TO authenticated;\n' +
+    'GRANT ALL ON TABLE user_profiles TO service_role;\n\n' +
+    'ALTER TABLE equipamentos ADD COLUMN IF NOT EXISTS unidade TEXT;';
+
+  if (isPermission || isNotFound) {
+    // Exibe modal com o SQL correto e botão de copiar
+    var existingModal = document.getElementById('_rls-fix-modal');
+    if (existingModal) existingModal.remove();
+    var modal = document.createElement('div');
+    modal.id = '_rls-fix-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.innerHTML =
+      '<div style="background:var(--surf,#fff);border-radius:12px;padding:24px;max-width:580px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.25);font-family:var(--font,system-ui)">' +
+        '<div style="font-size:22px;margin-bottom:8px">' + (isPermission ? '🔒' : '⚠️') + '</div>' +
+        '<div style="font-size:16px;font-weight:700;color:var(--tx,#1a2035);margin-bottom:6px">' +
+          (isPermission ? 'Permissão negada — execute o SQL no Supabase' : 'Tabela não encontrada — execute o SQL no Supabase') +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--tx2,#555);margin-bottom:12px">' +
+          'Acesse <strong>Supabase → SQL Editor</strong>, cole o SQL abaixo e clique em <strong>Run</strong>:' +
+        '</div>' +
+        '<pre id="_rls-sql-block" style="background:#1e1e2e;color:#cdd6f4;padding:12px;border-radius:8px;font-size:10.5px;line-height:1.6;white-space:pre-wrap;overflow-x:auto;margin:0 0 12px;max-height:260px;overflow-y:auto">' + SQL_FIX + '</pre>' +
+        '<div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">' +
+          '<button onclick="navigator.clipboard.writeText(document.getElementById(\'_rls-sql-block\').textContent).then(function(){showToast(\'✅ SQL copiado!\',\'success\')})" ' +
+            'style="background:#0064b3;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📋 Copiar SQL</button>' +
+          '<button onclick="document.getElementById(\'_rls-fix-modal\').remove()" ' +
+            'style="background:transparent;color:var(--tx2,#555);border:1px solid var(--bdr2,#ddd);padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit">Fechar</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(ev){ if(ev.target===modal) modal.remove(); });
+  } else {
+    showToast('❌ Erro' + (contexto ? ' (' + contexto + ')' : '') + ': ' + (e.message || String(e)), 'error');
+  }
+}
+
 window.adminSaveUser = async function() {
   const sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
@@ -5193,8 +5360,117 @@ window.adminSaveUser = async function() {
     document.getElementById('admin-display-name').value = '';
     window.adminLoadUsers();
   } catch(e) {
-    const isNotFound = e.message && (e.message.includes('does not exist') || e.message.includes('42P01'));
-    showToast(isNotFound ? '❌ Tabela não criada ainda. Execute o SQL de configuração.' : ('❌ Erro: ' + (e.message || '')), 'error');
+    _handleProfilesError(e, 'Salvar perfil');
+  }
+};
+
+// 🔑 CRIAR COM SENHA — cria usuário com senha definida na hora, sem precisar de e-mail real
+// Usa sb.auth.admin.createUser — requer service_role key no Supabase client.
+// Se não disponível, orienta o usuário a usar o Dashboard.
+window.adminCreateWithPassword = async function() {
+  const sb = window._globalSupabaseClient || window._sb;
+  if (!sb || !_isDirector) return;
+  const email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
+  const unidade     = document.getElementById('admin-unidade').value;
+  const displayName = (document.getElementById('admin-display-name').value || '').trim();
+  const password    = (document.getElementById('admin-password').value || '').trim();
+
+  if (!email || !unidade)  { showToast('⚠️ Preencha e-mail e planta.', 'warning'); return; }
+  if (!password)           { showToast('⚠️ Digite uma senha para o usuário.', 'warning'); return; }
+  if (password.length < 6) { showToast('⚠️ A senha deve ter no mínimo 6 caracteres.', 'warning'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('⚠️ E-mail inválido.', 'warning'); return; }
+
+  showToast('⏳ Criando usuário ' + email + '…', 'info');
+
+  try {
+    // Tenta criar via Admin API (requer service_role)
+    const { data: created, error: createErr } = await sb.auth.admin.createUser({
+      email: email,
+      password: password,
+      email_confirm: true,           // confirma o e-mail automaticamente (sem precisar clicar em link)
+      user_metadata: { unidade: unidade, display_name: displayName || null }
+    });
+
+    if (createErr) {
+      // Fallback: Admin API indisponível — orienta usar Dashboard
+      showToast(
+        '⚠️ API Admin indisponível. Crie o usuário manualmente: Supabase → Auth → Users → Add User → Create New User, com e-mail "' + email + '" e a senha desejada. Depois clique em 💾 Salvar perfil.',
+        'warning'
+      );
+      return;
+    }
+
+    // Salva perfil em user_profiles vinculando à planta
+    const { error: upErr } = await sb.from('user_profiles').upsert(
+      { email: email, unidade: unidade, display_name: displayName || null, updated_at: new Date().toISOString() },
+      { onConflict: 'email' }
+    );
+    if (upErr) throw upErr;
+
+    showToast('✅ Usuário criado: ' + email + ' → ' + (_UNIDADE_LABELS[unidade] || unidade) + '. Pode fazer login imediatamente.', 'success');
+
+    // Limpa formulário
+    document.getElementById('admin-email').value        = '';
+    document.getElementById('admin-unidade').value      = '';
+    document.getElementById('admin-display-name').value = '';
+    document.getElementById('admin-password').value     = '';
+    window.adminLoadUsers();
+
+  } catch(e) {
+    _handleProfilesError(e, 'Criar usuário');
+  }
+};
+
+// ✉ CONVIDAR — cria usuário no Supabase Auth (envia e-mail convite) + salva em user_profiles
+// Não precisa de SQL manual nem do Dashboard do Supabase.
+window.adminInviteUser = async function() {
+  const sb = window._globalSupabaseClient || window._sb;
+  if (!sb || !_isDirector) return;
+  const email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
+  const unidade     = document.getElementById('admin-unidade').value;
+  const displayName = (document.getElementById('admin-display-name').value || '').trim();
+
+  if (!email || !unidade) { showToast('⚠️ Preencha e-mail e planta antes de convidar.', 'warning'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('⚠️ E-mail inválido.', 'warning'); return; }
+
+  showToast('⏳ Enviando convite para ' + email + '…', 'info');
+
+  try {
+    // Passo 1: Criar usuário no Supabase Auth via Admin API (inviteUserByEmail)
+    // Requer que o Supabase client tenha permissão de service_role ou que o usuário
+    // seja autenticado como admin. Se falhar, cai no fallback abaixo.
+    const { data: inviteData, error: inviteErr } = await sb.auth.admin.inviteUserByEmail(email, {
+      data: { unidade: unidade, display_name: displayName || null }
+    });
+
+    if (inviteErr) {
+      // Fallback: API admin não disponível (client sem service_role).
+      // Apenas salva em user_profiles e orienta o usuário.
+      console.warn('[adminInviteUser] Admin API indisponível — salvando só perfil:', inviteErr.message);
+      const { error: upErr } = await sb.from('user_profiles').upsert(
+        { email: email, unidade: unidade, display_name: displayName || null, updated_at: new Date().toISOString() },
+        { onConflict: 'email' }
+      );
+      if (upErr) throw upErr;
+      showToast('💾 Perfil salvo. Para convidar, crie o usuário manualmente no Supabase Dashboard → Auth → Users → Invite.', 'warning');
+    } else {
+      // Passo 2: Salvar perfil em user_profiles com a planta
+      const { error: upErr } = await sb.from('user_profiles').upsert(
+        { email: email, unidade: unidade, display_name: displayName || null, updated_at: new Date().toISOString() },
+        { onConflict: 'email' }
+      );
+      if (upErr) throw upErr;
+      showToast('✅ Convite enviado para ' + email + ' — planta: ' + (_UNIDADE_LABELS[unidade] || unidade), 'success');
+    }
+
+    // Limpa o formulário e recarrega a lista
+    document.getElementById('admin-email').value = '';
+    document.getElementById('admin-unidade').value = '';
+    document.getElementById('admin-display-name').value = '';
+    window.adminLoadUsers();
+
+  } catch(e) {
+    _handleProfilesError(e, 'Convidar usuário');
   }
 };
 
@@ -5208,7 +5484,7 @@ window.adminUpdateUnidade = async function(email, unidade) {
     if (error) throw error;
     showToast('✅ Planta atualizada: ' + email + ' → ' + unidade, 'success');
   } catch(e) {
-    showToast('❌ Erro ao atualizar: ' + (e.message || ''), 'error');
+    _handleProfilesError(e, 'Atualizar planta');
   }
 };
 
@@ -5222,7 +5498,7 @@ window.adminDeleteUser = async function(email) {
     showToast('🗑 Perfil removido: ' + email, 'success');
     window.adminLoadUsers();
   } catch(e) {
-    showToast('❌ Erro ao remover: ' + (e.message || ''), 'error');
+    _handleProfilesError(e, 'Remover usuário');
   }
 };
 
@@ -5255,10 +5531,12 @@ function _initSupabaseClient() {
     }
     if (!window._globalSupabaseClient) {
       // [v29 FIX] storageKey único evita warning "Multiple GoTrueClient instances"
+      // [FIX-LOGIN] persistSession:false — sessão nunca salva em localStorage.
+      // Cada vez que o sistema abre exige login obrigatório (sem auto-login com último usuário).
       window._globalSupabaseClient = supabase.createClient(
         _supabaseUrl,
         _supabaseKey,
-        { auth: { storageKey: 'sb-rochling-auth-token' } }
+        { auth: { persistSession: false, autoRefreshToken: false, storageKey: 'sb-rochling-auth-token' } }
       );
       window._globalSupabaseClientCfg = { url: _supabaseUrl, key: _supabaseKey };
     }
@@ -5340,6 +5618,13 @@ function sbActive() { return _sbActive && !!_sb; } // sbActive: alias for _sbAct
 // LEITURA — carrega todos os registros da tabela 'equipamentos'
 async function sbPull() {
   if(!sbActive()) return false;
+  // [FIX-DIRECTOR] Director sem planta selecionada → não carrega nada.
+  // Antes: sbPull carregava TODOS os dados de TODAS as plantas → SP aparecia no login do Director.
+  if (_isDirector && !_currentUnidade) {
+    DB = [];
+    setSyncInd('Selecione uma planta', 'var(--tx3)', false);
+    return false;
+  }
   setSyncInd(t('sync_loading'), 'var(--accent2)', true);
   try {
     // [v28 FIX] Supabase limita 1000 linhas por query — busca todas as páginas
@@ -5376,9 +5661,10 @@ async function sbPull() {
         _uid: r._uid || r.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)),
       })));
       saveLS(true); // [v15 FIX] silent=true: pull do cloud não é mudança local, não marcar como unsaved
-    } else if (data && data.length === 0 && !_isDirector && _currentUnidade) {
-      // [v48 FIX] Planta sem equipamentos cadastrados — limpa cache local para não
-      // exibir dados de outra planta vindos do localStorage
+    } else if (data && data.length === 0 && _currentUnidade) {
+      // [FIX] Planta sem equipamentos cadastrados (ou diretor em planta vazia) —
+      // limpa cache local para não exibir dados de outra planta vindos do localStorage.
+      // Removido !_isDirector: diretores também precisam ver tela vazia ao trocar de planta.
       DB = [];
       saveLS(true);
       if (typeof updateAll === 'function') updateAll();
@@ -5634,8 +5920,9 @@ async function sbConnect() {
     // Só recria se URL/key mudou em relação ao cliente existente
     const _existingCfg = window._globalSupabaseClientCfg || {};
     if (!window._globalSupabaseClient || _existingCfg.url !== url || _existingCfg.key !== key) {
+      // [FIX-LOGIN] persistSession:false — login obrigatório a cada abertura do sistema.
       window._globalSupabaseClient = supabase.createClient(url, key, {
-        auth: { storageKey: 'sb-rochling-auth-token' }
+        auth: { persistSession: false, autoRefreshToken: false, storageKey: 'sb-rochling-auth-token' }
       });
       window._globalSupabaseClientCfg = { url, key };
     }
@@ -6266,19 +6553,32 @@ function showApp(user) {
           if (data && data.unidade) {
             _setUnidade(data.unidade);
           } else {
-            _setUnidade(null);
+            // [BUG-SEC FIX] Usuário sem planta configurada NÃO vira Diretor.
+            // Antes: _setUnidade(null) → _isDirector=true → via todos os dados de todas as plantas.
+            // Agora: bloqueia o acesso e exibe mensagem orientando o administrador a configurar a planta.
+            _bloqueioSemPlanta(user.email);
+            return;
           }
         } else {
-          _setUnidade(null);
+          // Supabase não disponível — bloqueia por precaução
+          _bloqueioSemPlanta(user.email);
+          return;
         }
         // [v48 FIX] Re-pull com o filtro de planta correto — initSupabase() já rodou
         // sem o filtro porque este bloco é async. Precisamos recarregar os dados.
-        if (typeof sbPull === 'function' && typeof window.sbActive === 'function' && window.sbActive()) {
+        // [BUG-FIX] Diretor via user_profiles: _isDirector só fica true aqui (async),
+        // então showApp() já terminou sem mostrar a tela de seleção de planta.
+        // Corrigido: tratamos o caso do diretor explicitamente neste bloco.
+        if (_isDirector) {
+          _mostrarSelecaoPlanta();
+          if (typeof window._loadPlantasDisponiveis === 'function') window._loadPlantasDisponiveis();
+        } else if (typeof sbPull === 'function' && typeof window.sbActive === 'function' && window.sbActive()) {
           sbPull().then(function(ok) { if (ok && typeof updateAll === 'function') updateAll(); });
         }
       } catch(e) {
         console.warn('[v48] user_profiles fallback:', e.message || e);
-        _setUnidade(null);
+        _bloqueioSemPlanta(user.email);
+        return;
       }
     })();
   }
@@ -6294,6 +6594,15 @@ function showApp(user) {
   // recriados antes da animação terminar → loop visual infinito nos gráficos.
   if (_appInitialized) return;
   _appInitialized = true;
+
+  // [FIX-DIRECTOR] Director sem planta selecionada → mostra tela de seleção, não carrega dados.
+  // Antes: updateAll() + initSupabase() → sbPull() carregava todos os dados (SP dominava).
+  if (_isDirector && !_currentUnidade) {
+    _mostrarSelecaoPlanta();
+    initSupabase(); // conecta mas sbPull vai retornar cedo (sem planta)
+    return;
+  }
+
   // Inicializa tabelas e depois conecta ao Supabase
   updateAll();
   // [v18 FIX] buildAllCharts aguarda Chart.js carregar (carregado com defer)
@@ -6987,6 +7296,7 @@ function fileIcon(n){const e=((n||'').split('.').pop()||'').toLowerCase();return
 
 // Inline-editable fields config
 const INLINE_EDITABLE = {
+  id:          { type: 'text' },   // [DUPLICATE-ROW] permite editar código na linha duplicada/em branco
   tipo:        { type: 'text' },
   cliente:     { type: 'text' },
   descricao:   { type: 'text' },
@@ -7277,6 +7587,7 @@ function renderCell(r, k, tbl) {
   if(k==='_act') return `<td ${attr} style="white-space:nowrap">
     <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--brand)" onclick="openEquipView(${r._uid})" title="Visualizar">👁</button>
     <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--tx3)" onclick="openEdit(${r._uid})" title="${LANG==='en'?'Edit':LANG==='es'?'Editar':'Editar'}">✏</button>
+    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--green)" onclick="duplicateRow(${r._uid})" title="${LANG==='en'?'Duplicate row (like Excel copy)':LANG==='es'?'Duplicar fila':'Duplicar linha — copiar para novo cadastro'}">⧉</button>
     <button onclick="openQrModal(${r._uid})" title="QR Code / Etiqueta" style="padding:2px 6px;font-size:10px;font-weight:700;border:1px solid var(--brand);background:rgba(0,100,179,.12);color:var(--brand);border-radius:4px;cursor:pointer;font-family:var(--font);line-height:1.4">▦ QR</button>
     <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--red);opacity:.5" onclick="deleteInline(${r._uid})" title="${LANG==='en'?'Delete':LANG==='es'?'Eliminar':'Excluir'}">🗑</button>
   </td>`;
@@ -7363,6 +7674,20 @@ function renderTable(tbl) {
       const sel = _selectedUIDs[tbl]?.has(r._uid) ? 'class="selected"' : '';
       return `<tr data-uid="${r._uid}" ${sel}>`+cols.map(c=>renderCell(r,c.k,tbl)).join('')+'</tr>';
     }).join('');
+  }
+  // [DUPLICATE-ROW] Linha "+" no rodapé da tabela geral (igual Excel — clica para nova linha em branco)
+  if (tbl === 'geral') {
+    const addRow = document.createElement('tr');
+    addRow.id = '_add-blank-row-btn';
+    addRow.title = LANG==='en' ? 'Add new blank row' : LANG==='es' ? 'Agregar nueva fila' : 'Adicionar nova linha em branco';
+    addRow.style.cssText = 'cursor:pointer;opacity:.55;transition:opacity .15s';
+    addRow.onmouseenter = function(){ this.style.opacity='1'; };
+    addRow.onmouseleave = function(){ this.style.opacity='.55'; };
+    addRow.onclick = function(){ if(typeof addBlankRow==='function') addBlankRow(); };
+    addRow.innerHTML = `<td colspan="${cols.length}" style="text-align:center;padding:5px 0;font-size:12px;color:var(--tx3);border-top:1px dashed var(--border);letter-spacing:.5px">
+      ＋ ${LANG==='en'?'Add row':LANG==='es'?'Agregar fila':'Adicionar linha'}
+    </td>`;
+    tbody.appendChild(addRow);
   }
 
   const el = document.getElementById(cntId); if(el) el.textContent = p.rows.length+' '+t('kpi_sub_total');
@@ -8455,6 +8780,93 @@ function deleteInline(uid){
     sbSchedulePush();
     showToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
   });
+}
+
+// ── Duplicar linha (como arrastar no Excel para copiar) ─────────────────────
+function duplicateRow(uid) {
+  const src = DB.find(x => x._uid === uid);
+  if (!src) return;
+  pushUndo();
+  // Cria cópia profunda, apaga id (usuário deve preencher) e gera novo _uid
+  const newUid = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  const copy = Object.assign({}, src, {
+    _uid: newUid,
+    id: '',           // ID em branco — usuário preenche
+    _updated: null,
+  });
+  // Recalcula dias_vencer na cópia
+  const [recd] = recalcDias([copy]);
+  Object.assign(copy, recd);
+  // Insere logo após o original no DB
+  const srcIdx = DB.findIndex(x => x._uid === uid);
+  DB.splice(srcIdx + 1, 0, copy);
+  // Atualiza filtros/KPIs e re-renderiza
+  updateKPIs(); populateFilters(); buildAllColPanels();
+  refreshInPlace();
+  sbSchedulePush();
+  // Destaca a linha nova e abre edição do campo "id" automaticamente
+  setTimeout(function() {
+    const newTr = document.querySelector(`tr[data-uid="${newUid}"]`);
+    if (newTr) {
+      newTr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      newTr.style.transition = 'background .3s';
+      newTr.style.background = 'rgba(0,180,100,.18)';
+      setTimeout(function() { newTr.style.background = ''; }, 1800);
+      // Abre edição inline do campo "id" para o usuário digitar o novo código
+      const idTd = newTr.querySelector('td[data-col="id"]');
+      if (idTd && typeof startInlineEdit === 'function') startInlineEdit(newUid, 'id', idTd);
+    }
+  }, 80);
+  showToast(LANG==='en' ? '⧉ Row duplicated — fill in the new ID' : '⧉ Linha duplicada — preencha o novo Código');
+}
+
+// Adiciona linha em branco ao final (como clicar na linha vazia do Excel)
+function addBlankRow() {
+  pushUndo();
+  const newUid = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  const blank = {
+    _uid: newUid,
+    id: '',
+    tipo: '',
+    cod_lab: '',
+    cliente: '',
+    descricao: '',
+    fabricante: '',
+    localizacao: '',
+    responsavel: '',
+    empresa: '',
+    ult_calib: null,
+    prox_calib: null,
+    freq_dias: null,
+    status_calib: 'Calibração Necessária',
+    status: 'ATIVO',
+    observacoes: '',
+    link: null,
+    link_data: null,
+    unidade: _currentUnidade || null,
+    dias_vencer: null,
+    _updated: null,
+  };
+  DB.push(blank);
+  // Vai para a última página e renderiza
+  pag.eq.rows = DB.slice();
+  const maxPage = Math.max(1, Math.ceil(pag.eq.rows.length / PER_PAGE));
+  pag.eq.p = maxPage;
+  updateKPIs(); populateFilters(); buildAllColPanels();
+  renderTable('geral');
+  sbSchedulePush();
+  setTimeout(function() {
+    const newTr = document.querySelector(`tr[data-uid="${newUid}"]`);
+    if (newTr) {
+      newTr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      newTr.style.transition = 'background .3s';
+      newTr.style.background = 'rgba(0,100,179,.13)';
+      setTimeout(function() { newTr.style.background = ''; }, 1800);
+      const idTd = newTr.querySelector('td[data-col="id"]');
+      if (idTd && typeof startInlineEdit === 'function') startInlineEdit(newUid, 'id', idTd);
+    }
+  }, 80);
+  showToast(LANG==='en' ? '＋ New row added — fill in the fields' : '＋ Nova linha adicionada — preencha os campos');
 }
 
 // deleteRecord_real é alias de deleteRecord (mantido para compatibilidade de hooks)
@@ -15323,5 +15735,5 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
-<script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-repl-id="369b6a0c-3c3c-4a91-97ab-854fa8e7eeab"></script></body>
+</body>
 </html>
