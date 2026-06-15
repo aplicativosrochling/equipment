@@ -15,7 +15,7 @@
 <!-- 🍎 iOS Specific: Evita timeout em Safari -->
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v49.7)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v49.8)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição - v36 Premium com melhorias avançadas.">
 
 
@@ -7261,7 +7261,7 @@ async function sbPush(manual) {
 const uniqueMap = new Map();
 
 DB.forEach(r => {
-  if (!r) return;
+  if (!r) return; // [v49.8 FIX] skip null/undefined entries
   // [v29 FIX] Registros sem id receberiam ID gerado automaticamente em vez de serem descartados
   if (!r.id) {
     r.id = 'AUTO-' + (r._uid ? String(r._uid) : (Date.now() + Math.floor(Math.random()*10000)));
@@ -7293,7 +7293,8 @@ const payload = Array.from(uniqueMap.values());
     }
 
     // [v15 FIX] sincroniza _updated no DB local para evitar diff falso no listener realtime
-    DB.forEach(r => { r._updated = _pushTs; });
+    // [v49.8 FIX] Guard against null/undefined records — sbPush error: Cannot set properties of undefined
+    DB.forEach(r => { if(r) r._updated = _pushTs; });
     saveLS(true); // silent: já está no cloud, não marcar como unsaved
     _pending = false;
     const btn = document.getElementById('btn-sync-now');
@@ -9170,7 +9171,7 @@ function cancelInlineEdit() {
 function rerenderRow(uid, tbl) {
   const tr = document.querySelector(`tr[data-uid="${uid}"]`);
   if(!tr) return; // row not on current page — safe to ignore
-  const r = DB.find(x => x._uid === uid);
+  const r = DB.find(x => x && x._uid === uid); // [v49.8 FIX] guard x against null/undefined
   if(!r) return;
   const cols = (COL_DEFS[tbl]||[]).filter(c => colVis[tbl]?.[c.k] !== false);
   tr.innerHTML = cols.map(c => renderCell(r, c.k, tbl)).join('');
@@ -12117,11 +12118,13 @@ function applyBulkEdit(tbl) {
   _statsCache = null; // invalida cache de KPIs antes do bulk edit
 
   DB = DB.map(r => {
+    // [v49.8 FIX] Guard against null/undefined records in DB array
+    if(!r || r._uid === undefined || r._uid === null) return r;
     if(!uids.has(r._uid)) return r;
     const updated = { ...r, [field]: field==='freq_dias' ? parseInt(newVal)||r.freq_dias : newVal };
     changed++;
     return recalcRecord(updated);
-  });
+  }).filter(r => r !== undefined && r !== null); // [v49.8 FIX] Remove any undefined/null entries
 
   // Confirm toast
   showToast(`✔ ${changed} registro(s) atualizado(s) — clique em 🔄 para atualizar filtros`);
