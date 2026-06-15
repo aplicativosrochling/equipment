@@ -15,7 +15,7 @@
 <!-- 🍎 iOS Specific: Evita timeout em Safari -->
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v49.8)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v49.9)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição - v36 Premium com melhorias avançadas.">
 
 
@@ -2893,6 +2893,7 @@ input[type="checkbox"], input[type="radio"] {
       </div>
       <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="applyBulkEdit('alert')" id="bulk-apply-alert" disabled>✔ Aplicar</button>
       <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="openPdfModalBulk('alert')">🖨️ Imprimir</button>
+      <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="quickRefresh()" title="Atualizar tabela">🔄 Atualizar</button>
       <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="clearSelection('alert')">✕ Cancelar</button>
       <button class="btn-del" style="font-size:11px;padding:4px 10px;margin-left:8px" onclick="bulkDelete('alert')">🗑 Excluir selecionados</button>
     </div>
@@ -2938,6 +2939,7 @@ input[type="checkbox"], input[type="radio"] {
         <span class="tbl-title">Equipamentos de Medição</span>
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
           <span class="tbl-cnt" id="eq-cnt">—</span>
+          <button class="btn-g" onclick="quickRefresh()" title="Atualizar tabela sem recarregar a página" style="padding:6px 12px;font-size:12px">🔄 Atualizar</button>
           <button class="btn-p" onclick="openAdd()" style="padding:6px 14px;font-size:12px;font-weight:700">＋ <span data-i18n="btn_new_lbl">Novo</span></button>
           <input class="search-box" id="f-search" aria-label="Buscar equipamentos por código ou descrição" placeholder="🔍 Buscar código, descrição..." oninput="applyF()" style="min-width:200px">
           <!-- [v36 NOVO] Botão de filtros avançados -->
@@ -3004,6 +3006,7 @@ input[type="checkbox"], input[type="radio"] {
         <span class="tbl-title">Equipamentos de Medição</span>
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
           <span class="tbl-cnt" id="eq-cnt-tbl">—</span>
+          <button class="btn-g" onclick="quickRefresh()" title="Atualizar tabela sem recarregar a página" style="padding:6px 12px;font-size:12px">🔄 Atualizar</button>
           <button class="btn-p" onclick="openAdd()" style="padding:6px 14px;font-size:12px;font-weight:700">＋ <span data-i18n="btn_new_lbl">Novo</span></button>
           <input class="search-box" id="ft-search" placeholder="🔍 Buscar código, descrição..." oninput="syncTblFilter('f-search',this.value)" style="min-width:200px">
           <button class="btn-g" onclick="clearF()" title="Limpar todos os filtros">✕ Limpar</button>
@@ -3035,6 +3038,7 @@ input[type="checkbox"], input[type="radio"] {
         <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="applyBulkEdit('geral')" id="bulk-apply-geral" disabled>✔ Aplicar</button>
         <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="openPdfModalBulk('geral')">🖨️ Imprimir</button>
         <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="openQrBulkModal('geral')">▦ QR em Lote</button>
+        <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="quickRefresh()" title="Atualizar tabela">🔄 Atualizar</button>
         <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="clearSelection('geral')">✕ Cancelar</button>
         <button class="btn-del" style="font-size:11px;padding:4px 10px;margin-left:8px" onclick="bulkDelete('geral')">🗑 Excluir selecionados</button>
       </div>
@@ -3194,6 +3198,7 @@ input[type="checkbox"], input[type="radio"] {
       </div>
       <button class="btn-p" style="font-size:11px;padding:4px 12px" onclick="applyBulkEdit('rep')" id="bulk-apply-rep" disabled>✔ Aplicar</button>
       <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="openPdfModalBulk('rep')">🖨️ Imprimir</button>
+      <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="quickRefresh()" title="Atualizar tabela">🔄 Atualizar</button>
       <button class="btn-g" style="font-size:11px;padding:4px 10px" onclick="clearSelection('rep')">✕ Cancelar</button>
       <button class="btn-del" style="font-size:11px;padding:4px 10px;margin-left:8px" onclick="bulkDelete('rep')">🗑 Excluir selecionados</button>
     </div>
@@ -9176,7 +9181,7 @@ function rerenderRow(uid, tbl) {
   const cols = (COL_DEFS[tbl]||[]).filter(c => colVis[tbl]?.[c.k] !== false);
   tr.innerHTML = cols.map(c => renderCell(r, c.k, tbl)).join('');
   // Restore selected highlight if needed
-  if(typeof _selectedUIDs !== 'undefined' && _selectedUIDs[tbl]?.has(uid)) tr.classList.add('selected');
+  if(typeof _selectedUIDs !== 'undefined' && _selectedUIDs[tbl]?.has(String(uid))) tr.classList.add('selected');
 }
 
 // ── Deferred filter refresh — user controls when filters re-apply ──────────
@@ -9234,7 +9239,7 @@ function renderCell(r, k, tbl) {
 
   // ── Checkbox column ──────────────────────────────────────────────
   if(k==='_chk') {
-    const sel = _selectedUIDs[tbl] && _selectedUIDs[tbl].has(r._uid);
+    const sel = _selectedUIDs[tbl] && _selectedUIDs[tbl].has(String(r._uid));
     return `<td class="chk-col" onclick="event.stopPropagation()">
       <input type="checkbox" class="row-chk" data-uid="${r._uid}" data-tbl="${tbl}"
         ${sel?'checked':''} onchange="onRowCheck(this,'${tbl}')">
@@ -9302,7 +9307,7 @@ function renderTable(tbl) {
   thead.innerHTML = '<tr>'+cols.map(c => {
     const w = colWidths[tbl]?.[c.k] || c.w || 100;
     if(c.k === '_chk') {
-      const allSel = p.rows.length > 0 && p.rows.every(r => _selectedUIDs[tbl]?.has(r._uid));
+      const allSel = p.rows.length > 0 && p.rows.every(r => _selectedUIDs[tbl]?.has(String(r._uid)));
       return `<th class="chk-col"><input type="checkbox" class="row-chk" id="chk-all-${tbl}" title="Selecionar todos" ${allSel?'checked':''} onchange="onSelectAll(this,'${tbl}')"></th>`;
     }
     if(c.noSort) {
@@ -9328,7 +9333,7 @@ function renderTable(tbl) {
     </td></tr>`;
   } else {
     tbody.innerHTML = slice.map(r => {
-      const sel = _selectedUIDs[tbl]?.has(r._uid) ? 'class="selected"' : '';
+      const sel = _selectedUIDs[tbl]?.has(String(r._uid)) ? 'class="selected"' : '';
       return `<tr data-uid="${r._uid}" ${sel}>`+cols.map(c=>renderCell(r,c.k,tbl)).join('')+'</tr>';
     }).join('');
   }
@@ -10328,6 +10333,10 @@ function saveRecord(){
   if(editUID===null){
     const dup=DB.find(x=>x.id===idVal);
     if(dup){showToast(`⚠ Código "${idVal}" já existe. Use outro código.`,'err');document.getElementById('m-id').focus();return;}
+  } else {
+    // [v49.9 FIX] Ao editar, valida se novo código já existe em OUTRO registro
+    const dup=DB.find(x=>x.id===idVal && x._uid!==editUID);
+    if(dup){showToast(`⚠ Código "${idVal}" já existe em outro equipamento.`,'err');document.getElementById('m-id').focus();return;}
   }
 
   const dv=prox?Math.round((new Date(prox+'T00:00:00Z')-today)/86400000):null;
@@ -12028,7 +12037,7 @@ const BULK_FIELDS = {
 };
 
 function onRowCheck(chk, tbl) {
-  const uid = parseInt(chk.dataset.uid);
+  const uid = String(chk.dataset.uid);
   if(chk.checked) _selectedUIDs[tbl].add(uid);
   else            _selectedUIDs[tbl].delete(uid);
   updateBulkBar(tbl);
@@ -12040,8 +12049,8 @@ function onRowCheck(chk, tbl) {
 function onSelectAll(chk, tbl) {
   const p = _PAG(tbl);
   // Apply to ALL filtered rows (not just current page)
-  if(chk.checked) p.rows.forEach(r => _selectedUIDs[tbl].add(r._uid));
-  else            p.rows.forEach(r => _selectedUIDs[tbl].delete(r._uid));
+  if(chk.checked) p.rows.forEach(r => _selectedUIDs[tbl].add(String(r._uid)));
+  else            p.rows.forEach(r => _selectedUIDs[tbl].delete(String(r._uid)));
   updateBulkBar(tbl);
   renderTable(tbl);
 }
@@ -12120,7 +12129,7 @@ function applyBulkEdit(tbl) {
   DB = DB.map(r => {
     // [v49.8 FIX] Guard against null/undefined records in DB array
     if(!r || r._uid === undefined || r._uid === null) return r;
-    if(!uids.has(r._uid)) return r;
+    if(!uids.has(String(r._uid))) return r;
     const updated = { ...r, [field]: field==='freq_dias' ? parseInt(newVal)||r.freq_dias : newVal };
     changed++;
     return recalcRecord(updated);
@@ -12140,10 +12149,22 @@ function applyBulkEdit(tbl) {
   uids.forEach(uid => rerenderRow(uid, tbl));
   clearSelection(tbl);
 
+  // [v49.9] Auto refresh after bulk edit — no manual reload needed
+  try { quickRefresh(); } catch(_) {}
+
   // Mark deferred refresh needed
   _pendingFilterRefresh = true;
   updateApplyFilterBtn();
 }
+
+// [v49.9] Quick refresh: re-apply filters + render without leaving the page
+function quickRefresh() {
+  try { _statsCache = null; } catch(_) {}
+  try { if (typeof updateKPIs === 'function') updateKPIs(); } catch(_) {}
+  try { if (typeof refreshInPlace === 'function') refreshInPlace(); } catch(_) {}
+  try { showToast('✅ Atualizado com sucesso'); } catch(_) {}
+}
+window.quickRefresh = quickRefresh;
 
 function bulkDelete(tbl) {
   const uids = _selectedUIDs[tbl];
@@ -12156,14 +12177,14 @@ function _v25BulkDeleteBody(uids) {
   // Supabase: deleta cada registro pelo campo 'id' (código do equipamento)
   if(sbActive()) {
     uids.forEach(uid => {
-      const r = DB.find(x => x._uid === uid);
+      const r = DB.find(x => String(x._uid) === String(uid));
       if(r && r.id) {
         sbDeleteRecord(r.id).catch(e => console.warn('[Supabase] bulkDelete:', r.id, e));
       }
     });
   }
 
-  DB = DB.filter(r => !uids.has(r._uid));
+  DB = DB.filter(r => !uids.has(String(r._uid)));
   saveLS();
   clearSelection(tbl);
   showToast(`🗑 ${uids.size} registro(s) excluído(s)`, 'warn');
