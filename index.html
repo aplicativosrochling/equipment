@@ -15,7 +15,7 @@
 <!-- 🍎 iOS Specific: Evita timeout em Safari -->
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v47)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v49.7)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição - v36 Premium com melhorias avançadas.">
 
 
@@ -962,11 +962,29 @@ body {
   background: var(--surf);
   border-bottom: 1px solid var(--bdr2);
   border-top: 3px solid #0064b3;
-  padding: 0 24px;
+  padding: 8px 16px;
   display: flex; align-items: center; justify-content: space-between;
-  height: 57px; position: sticky; top: 0; z-index: 300; gap: 8px;
+  min-height: 57px; position: sticky; top: 0; z-index: 300;
+  gap: 8px; row-gap: 8px; flex-wrap: wrap;
   box-shadow: 0 2px 12px rgba(0,0,0,.18);
 }
+.hdr-r { flex-wrap: wrap; row-gap: 6px; }
+@media (max-width: 1400px){
+  .hdr h1 { font-size: 11px; }
+}
+
+/* [v49.5] Allow nav tab strip to scroll horizontally on narrow viewports
+   instead of clipping the first or last item. */
+nav.tabs {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  flex-wrap: nowrap;
+}
+nav.tabs::-webkit-scrollbar { height: 4px; }
+nav.tabs::-webkit-scrollbar-thumb { background: rgba(127,127,127,.35); border-radius: 2px; }
+nav.tabs .tab { flex-shrink: 0; }
+
 .hdr-l { display: flex; align-items: center; gap: 14px; flex-shrink: 0 }
 .hdr h1 {
   font-size: 12px; font-weight: 500; white-space: nowrap;
@@ -2582,10 +2600,29 @@ input[type="checkbox"], input[type="radio"] {
     <div class="hdr-divider"></div>
 
     <!-- Preferences -->
-    <div class="lang-tgl">
-      <button class="lang-btn on" id="lb-pt" onclick="StorageService.set('rochling_lang_manual','1');setLang('pt')">PT</button>
-      <button class="lang-btn"    id="lb-en" onclick="StorageService.set('rochling_lang_manual','1');setLang('en')">EN</button>
-      <button class="lang-btn"    id="lb-es" onclick="StorageService.set('rochling_lang_manual','1');setLang('es')">ES</button>
+    <div class="lang-tgl" style="display:flex;align-items:center;gap:4px">
+      <button class="lang-btn on" id="lb-pt" onclick="StorageService.set('rochling_lang_manual','1');setLang('pt')" title="Português">PT</button>
+      <button class="lang-btn"    id="lb-en" onclick="StorageService.set('rochling_lang_manual','1');setLang('en')" title="English">EN</button>
+      <button class="lang-btn"    id="lb-es" onclick="StorageService.set('rochling_lang_manual','1');setLang('es')" title="Español">ES</button>
+      <button class="lang-btn"    id="lb-de" onclick="StorageService.set('rochling_lang_manual','1');setLang('de')" title="Deutsch">DE</button>
+      <button class="lang-btn"    id="lb-fr" onclick="StorageService.set('rochling_lang_manual','1');setLang('fr')" title="Français">FR</button>
+      <button class="lang-btn"    id="lb-it" onclick="StorageService.set('rochling_lang_manual','1');setLang('it')" title="Italiano">IT</button>
+      <button class="lang-btn"    id="lb-pl" onclick="StorageService.set('rochling_lang_manual','1');setLang('pl')" title="Polski">PL</button>
+      <select id="lang-select" title="More languages"
+        onchange="StorageService.set('rochling_lang_manual','1');setLang(this.value)"
+        style="font-size:10px;padding:2px 4px;border-radius:5px;border:1px solid var(--bdr2);background:var(--surf2);color:var(--tx);cursor:pointer;font-family:var(--font);height:22px;max-width:72px">
+        <option value="pt">🇧🇷 PT</option>
+        <option value="en">🇺🇸 EN</option>
+        <option value="es">🇲🇽 ES</option>
+        <option value="de">🇩🇪 DE</option>
+        <option value="fr">🇫🇷 FR</option>
+        <option value="it">🇮🇹 IT</option>
+        <option value="pl">🇵🇱 PL</option>
+        <option value="nl">🇳🇱 NL</option>
+        <option value="cs">🇨🇿 CS</option>
+        <option value="tr">🇹🇷 TR</option>
+        <option value="ru">🇷🇺 RU</option>
+      </select>
     </div>
     <div class="lang-tgl" title="Date format">
       <button class="lang-btn on" id="df-dmy" onclick="setDateFmt('dmy')">DD/MM</button>
@@ -2605,12 +2642,30 @@ input[type="checkbox"], input[type="radio"] {
     <!-- Divider -->
     <div class="hdr-divider"></div>
 
-    <!-- [v47] Badge de planta + seletor diretor -->
-    <span id="planta-badge" style="display:none;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;letter-spacing:.4px;white-space:nowrap"></span>
-    <select id="planta-selector" title="Trocar planta (modo diretor)" onchange="switchPlanta(this.value)"
-      style="display:none;font-size:11px;padding:3px 6px;border-radius:6px;border:1px solid var(--brd);background:var(--card);color:var(--tx1);cursor:pointer;font-family:var(--font)">
-      <option value="">🌎 Todas as plantas</option>
-    </select>
+    <!-- [v49.3] Badge de planta + seletor diretor (UI refinada) -->
+    <div class="plant-switcher" id="plant-switcher-wrap">
+      <span id="planta-badge" class="plant-badge" style="display:none"></span>
+      <div class="plant-select-shell" id="plant-select-shell" style="display:none">
+        <span class="plant-select-ico" aria-hidden="true">🏭</span>
+        <select id="planta-selector" title="Trocar planta (modo diretor)" onchange="switchPlanta(this.value)" class="plant-select">
+          <option value="">🌎 Todas as plantas</option>
+        </select>
+        <span class="plant-select-caret" aria-hidden="true">▾</span>
+      </div>
+    </div>
+    <style>
+      .plant-switcher{display:inline-flex;align-items:center;gap:8px}
+      .plant-badge{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#0064b3,#0089e3);color:#fff;font-size:11px;font-weight:700;padding:5px 11px;border-radius:999px;letter-spacing:.4px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,100,179,.25);border:1px solid rgba(255,255,255,.18)}
+      .plant-select-shell{position:relative;display:inline-flex;align-items:center;gap:6px;padding:5px 10px 5px 10px;border-radius:999px;border:1px solid var(--brd);background:var(--card);transition:all .18s ease;box-shadow:0 1px 2px rgba(0,0,0,.04);font-family:var(--font)}
+      .plant-select-shell:hover{border-color:#0064b3;box-shadow:0 2px 8px rgba(0,100,179,.18);background:color-mix(in srgb,#0064b3 6%,var(--card))}
+      .plant-select-shell:focus-within{border-color:#0064b3;box-shadow:0 0 0 3px rgba(0,100,179,.18)}
+      .plant-select-ico{font-size:13px;line-height:1;opacity:.85}
+      .plant-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;background:transparent;border:0;outline:0;font-size:12px;font-weight:600;color:var(--tx1);font-family:inherit;padding:2px 14px 2px 0;cursor:pointer;min-width:120px;max-width:200px}
+      .plant-select-caret{position:absolute;right:9px;font-size:10px;color:#0064b3;pointer-events:none;font-weight:700}
+      [data-theme="dark"] .plant-select-shell{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12)}
+      [data-theme="dark"] .plant-select-shell:hover{background:rgba(0,137,227,.12);border-color:#0089e3}
+      @media (max-width:680px){.plant-select{min-width:90px;max-width:140px;font-size:11px}.plant-badge{font-size:10px;padding:4px 9px}}
+    </style>
 
     <!-- Auth user chip -->
     <div id="auth-user-chip">
@@ -3687,10 +3742,42 @@ input[type="checkbox"], input[type="radio"] {
 
 <!-- ═══════════════ ADMIN PLANTAS (v48) ═══════════════ -->
 <div id="tab-admin" class="page">
+
+  <!-- Card: Plantas cadastradas -->
   <div class="tbl-card" style="margin-bottom:16px">
     <div class="tbl-hdr" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <span class="tbl-title">🌎 Administração de Plantas</span>
-      <button class="btn-g" onclick="adminLoadUsers()" style="font-size:12px">🔄 Atualizar Lista</button>
+      <span class="tbl-title" data-adm-i18n="plants_title">🏭 Plantas cadastradas</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-p" onclick="adminOpenNewPlantModal()" style="font-size:12px;background:#0ea5e9;border-color:#0ea5e9" data-adm-i18n="btn_new_plant">🏭 Nova Planta</button>
+        <button class="btn-g" onclick="adminLoadPlants();adminLoadUsers();" style="font-size:12px" data-adm-i18n="btn_refresh">🔄 Atualizar</button>
+      </div>
+    </div>
+    <div style="padding:14px">
+      <div class="tbl-wrap" style="max-height:320px;overflow-y:auto;border:1px solid var(--bdr2);border-radius:8px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead>
+            <tr>
+              <th style="padding:9px 12px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0;text-align:left" data-adm-i18n="th_code">Código</th>
+              <th style="padding:9px 12px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0;text-align:left" data-adm-i18n="th_name">Nome</th>
+              <th style="padding:9px 12px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0;text-align:left" data-adm-i18n="th_country">País</th>
+              <th style="padding:9px 12px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0;text-align:left" data-adm-i18n="th_lang">Idioma</th>
+              <th style="padding:9px 12px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0;text-align:center" data-adm-i18n="th_actions">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="admin-plants-tbody">
+            <tr><td colspan="5" style="padding:20px;text-align:center;color:var(--tx3);font-size:12px" data-adm-i18n="loading_plants">Clique em Atualizar para carregar as plantas.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="tbl-card" style="margin-bottom:16px">
+    <div class="tbl-hdr" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <span class="tbl-title" data-adm-i18n="admin_title">🌎 Administração de Usuários</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-g" onclick="adminLoadUsers()" style="font-size:12px" data-adm-i18n="btn_refresh_users">🔄 Atualizar Lista</button>
+      </div>
     </div>
     <div style="padding:16px">
 
@@ -3746,16 +3833,17 @@ ALTER TABLE equipamentos ADD COLUMN IF NOT EXISTS unidade TEXT;</pre>
           </div>
           <div style="flex:1;min-width:150px">
             <label style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Planta</label>
-            <select id="admin-unidade"
-              style="width:100%;padding:8px 10px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf);color:var(--tx);font-size:12px;box-sizing:border-box">
+            <select id="admin-unidade" data-plant-select="1"
+              style="width:100%;padding:8px 10px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf);color:var(--tx);font-size:12px;box-sizing:border-box"
+              onfocus="try{window._repopulatePlantSelects&&window._repopulatePlantSelects();}catch(e){}">
               <option value="">Selecionar planta...</option>
-              <option value="SP">🇧🇷 São Paulo (SP)</option>
-              <option value="MX">🇲🇽 México (MX)</option>
-              <option value="USA">🇺🇸 EUA (USA)</option>
-              <option value="DUNCAN">🇺🇸 Duncan, SC (DUNCAN)</option>
-              <option value="AKRON">🇺🇸 Akron, OH (AKRON)</option>
-              <option value="DIRECTOR">🌎 Diretor (todas as plantas)</option>
             </select>
+          </div>
+          <div style="flex:1;min-width:120px">
+            <label style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">País (código)</label>
+            <input id="admin-country" type="text" placeholder="BR / MX / DE…" maxlength="3"
+              style="width:100%;padding:8px 10px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf);color:var(--tx);font-size:12px;box-sizing:border-box;text-transform:uppercase"
+              oninput="this.value=this.value.toUpperCase()">
           </div>
           <div style="flex:1;min-width:140px">
             <label style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Nome (opcional)</label>
@@ -3803,6 +3891,86 @@ ALTER TABLE equipamentos ADD COLUMN IF NOT EXISTS unidade TEXT;</pre>
         <b>💾 Salvar perfil</b> — apenas vincula um e-mail já existente no Supabase à planta. Não cria conta nova.<br>
         ℹ️ Após qualquer alteração de planta, o usuário precisa fazer <b>logout e login novamente</b>.
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ NOVA PLANTA — Modal (Diretor) ═══════════ -->
+<div id="np-modal" role="dialog" aria-modal="true" aria-labelledby="np-title"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;align-items:center;justify-content:center;padding:20px"
+     onclick="if(event.target===this)adminCloseNewPlantModal()">
+  <div style="background:var(--surf,#fff);border-radius:14px;padding:22px;max-width:460px;width:100%;box-shadow:0 12px 48px rgba(0,0,0,.32);font-family:var(--font,system-ui)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div id="np-title" style="font-size:16px;font-weight:700;color:var(--tx,#1a2035)">🏭 Nova Planta</div>
+      <button type="button" onclick="adminCloseNewPlantModal()" aria-label="Fechar"
+        style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--tx3);line-height:1">×</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div>
+        <label id="np-lbl-code" style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Código da planta *</label>
+        <input id="np-code" type="text" maxlength="12" placeholder="Ex.: SP, MX, DUNCAN"
+          oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9_-]/g,'')"
+          style="width:100%;padding:9px 11px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf2);color:var(--tx);font-size:12px;box-sizing:border-box;text-transform:uppercase">
+      </div>
+      <div>
+        <label id="np-lbl-name" style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Nome (opcional)</label>
+        <input id="np-name" type="text" maxlength="60" placeholder="Nome de exibição"
+          style="width:100%;padding:9px 11px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf2);color:var(--tx);font-size:12px;box-sizing:border-box">
+      </div>
+      <div>
+        <label id="np-lbl-country" style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">País (código ISO, opcional)</label>
+        <input id="np-country" type="text" maxlength="3" placeholder="BR / MX / DE…"
+          oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'')"
+          style="width:100%;padding:9px 11px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf2);color:var(--tx);font-size:12px;box-sizing:border-box;text-transform:uppercase">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
+      <button id="np-btn-cancel" type="button" onclick="adminCloseNewPlantModal()"
+        style="background:transparent;color:var(--tx2);border:1px solid var(--bdr2);padding:8px 16px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit">Cancelar</button>
+      <button id="np-btn-save" type="button" onclick="adminCreatePlant()"
+        style="background:#0ea5e9;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">💾 Criar planta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ EDITAR USUÁRIO — Modal ═══════════ -->
+<div id="eu-modal" role="dialog" aria-modal="true"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;align-items:center;justify-content:center;padding:20px"
+     onclick="if(event.target===this)adminCloseEditUserModal()">
+  <div style="background:var(--surf,#fff);border-radius:14px;padding:22px;max-width:460px;width:100%;box-shadow:0 12px 48px rgba(0,0,0,.32);font-family:var(--font,system-ui)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div id="eu-title" style="font-size:16px;font-weight:700;color:var(--tx,#1a2035)">✏️ Editar Usuário</div>
+      <button type="button" onclick="adminCloseEditUserModal()" aria-label="Fechar"
+        style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--tx3);line-height:1">×</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div>
+        <label id="eu-lbl-email" style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">E-mail</label>
+        <input id="eu-email" type="email" readonly
+          style="width:100%;padding:9px 11px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf2);color:var(--tx3);font-size:12px;box-sizing:border-box">
+      </div>
+      <div>
+        <label id="eu-lbl-name" style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Nome</label>
+        <input id="eu-name" type="text" maxlength="80"
+          style="width:100%;padding:9px 11px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf2);color:var(--tx);font-size:12px;box-sizing:border-box">
+      </div>
+      <div>
+        <label id="eu-lbl-plant" style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Planta</label>
+        <select id="eu-plant" data-plant-select="1"
+          style="width:100%;padding:9px 11px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf2);color:var(--tx);font-size:12px;box-sizing:border-box"></select>
+      </div>
+      <div>
+        <label id="eu-lbl-country" style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">País (código ISO)</label>
+        <input id="eu-country" type="text" maxlength="3"
+          oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'')"
+          style="width:100%;padding:9px 11px;border:1px solid var(--bdr2);border-radius:6px;background:var(--surf2);color:var(--tx);font-size:12px;box-sizing:border-box;text-transform:uppercase">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
+      <button id="eu-btn-cancel" type="button" onclick="adminCloseEditUserModal()"
+        style="background:transparent;color:var(--tx2);border:1px solid var(--bdr2);padding:8px 16px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit">Cancelar</button>
+      <button id="eu-btn-save" type="button" onclick="adminSaveEditUser()"
+        style="background:var(--green,#16a34a);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">💾 Salvar alterações</button>
     </div>
   </div>
 </div>
@@ -4375,6 +4543,622 @@ const T = {
     sync_pending:   '⏸ Sincronización pendiente…',
     sync_offline:   '⚠️ Supabase sin conexión — usando caché local',
     sync_fail:      '⚠️ Error — reintentando en 30s',
+  },
+
+  // ── [v48] DEUTSCH ──────────────────────────────────────────────────
+  de: {
+    title:          'Messmittel-Verwaltung',
+    tab_dashboard:  '📊 Dashboard',
+    tab_alerts:     '⚠️ Warnungen',
+    tab_equip:      '🔧 Geräte',
+    tab_reports:    '📋 Berichte',
+    btn_import:     '📥 Importieren',
+    btn_export:     '📤 Exportieren',
+    btn_reset:      '🔄 Zurücksetzen',
+    btn_new:        '＋ Neu',
+    btn_save:       '💾 Speichern',
+    btn_cancel:     'Abbrechen',
+    btn_cols:       '⚙ Spalten',
+    btn_csv:        '↓ CSV',
+    btn_print:      '🖨️ Drucken / PDF',
+    btn_csv_period: '📥 CSV Exportieren',
+    btn_clear:      '✕ Löschen',
+    btn_mark_read:  'Alle gelesen',
+    btn_see_alerts: 'Alle Warnungen →',
+    btn_sync:       '☁️ Sync',
+    lbl_updated:    'Aktualisiert:',
+    kpi_total:      'Gesamt',
+    kpi_active:     'Aktiv',
+    kpi_inactive:   'Inaktiv',
+    kpi_calib_ok:   'Kalib. OK',
+    kpi_expired:    'Abgelaufen',
+    kpi_due30:      'Fällig 30T',
+    kpi_due90:      'Fällig 90T',
+    kpi_health:     'Gesundheitsindex',
+    kpi_sub_total:  'Einträge',
+    kpi_sub_active: 'in Betrieb',
+    kpi_sub_inact:  'außer Betrieb',
+    kpi_sub_ok:     'genehmigt',
+    kpi_sub_exp:    'abgelaufen',
+    kpi_sub_urg:    'dringend',
+    kpi_sub_mon:    'überwachen',
+    kpi_sub_health: 'Geräte aktuell',
+    ch_health:      '💚 Parkzustand',
+    ch_calib:       '📊 Kalibrierungsstatus',
+    ch_oper:        '⚡ Betriebsstatus',
+    ch_types:       '🔧 Top Gerätetypen',
+    ch_types_exp:   '🔴 Typen mit abgelaufener Kalibrierung',
+    ch_due6m:       '📅 Fälligkeiten — Nächste 6 Monate',
+    ch_locations:   '📍 Top Standorte',
+    ch_companies:   '🏢 Ausführendes Unternehmen',
+    ch_in_day:      'aktuell',
+    tl_expired:     '🔴 Abgelaufen',
+    tl_due30:       '🟠 Fällig in 30T',
+    tl_due90:       '🟡 Fällig in 90T',
+    tl_ok:          '🟢 Aktuell',
+    alert_search:   '🔍 Suchen...',
+    notif_title:    '🔔 Benachrichtigungen',
+    f_type:         'Typ',
+    f_client:       'Kunde',
+    f_location:     'Standort',
+    f_responsible:  'Verantwortlich',
+    f_company:      'Unternehmen',
+    f_status_op:    'Betr.-Status',
+    f_calib:        'Kalibrierung',
+    f_from:         'Von',
+    f_to:           'Bis',
+    f_search:       'Code, Beschreibung...',
+    f_search_lbl:   'Suchen',
+    f_all:          'Alle',
+    f_all_f:        'Alle',
+    f_calib_ok:     'OK',
+    f_calib_exp:    'Abgelaufen',
+    f_calib_need:   'Erforderlich',
+    tbl_equip_title:'Messgeräte',
+    col_id:         'Code',
+    col_tipo:       'Typ',
+    col_cod_lab:    'Labortec-Code',
+    col_cliente:    'Kunde',
+    col_desc:       'Beschreibung',
+    col_fab:        'Hersteller',
+    col_local:      'Standort',
+    col_resp:       'Verantwortlich',
+    col_emp:        'Unternehmen',
+    col_ult:        'Letzte Kalib.',
+    col_prox:       'Nächste Kalib.',
+    col_freq:       'Freq.(T)',
+    col_calib:      'Kalib.',
+    col_status:     'Status',
+    col_dias:       'Tage',
+    col_obs:        'Notizen',
+    col_arq:        'Datei',
+    rep_period_title: '📋 Periodenbericht',
+    rep_from:       'Von:',
+    rep_to:         'Bis:',
+    rep_csv_period: '↓ CSV Periode',
+    rep_venc_mes:   '📅 Ablauf pro Monat (12 Monate)',
+    rep_evolucao:   '📈 Kumulative Entwicklung (7 Monate)',
+    rep_resp:       '👤 Nach Verantwortlichem',
+    rep_emp_venc:   '🏭 Abgelaufen nach Unternehmen',
+    rep_freq:       '⏱ Kalibrierungsfrequenz',
+    rep_heatmap:    '🌡️ Status nach Standort',
+    rep_resumo:     '🔢 Allgemeine Zusammenfassung',
+    rep_urgentes:   '⏱️ Top 15 Dringendste',
+    rep_kpi_venc:   'Abgelaufen',
+    rep_kpi_30d:    'Fällig 30T',
+    rep_kpi_90d:    'Fällig 90T',
+    rep_kpi_ok:     'Aktuell',
+    rep_kpi_health: 'Gesundheitsindex',
+    m_edit_title:   'Eintrag bearbeiten',
+    m_new_title:    'Neues Gerät',
+    m_code:         'Kontrollcode',
+    m_type:         'Gerätetyp',
+    m_client:       'Kunde',
+    m_maker:        'Hersteller',
+    m_desc:         'Beschreibung',
+    m_location:     'Standort',
+    m_responsible:  'Verantwortlich',
+    m_company:      'Ausführendes Unternehmen',
+    m_codlab:       'Labortec-Code',
+    m_last_calib:   'Letzte Kalibrierung',
+    m_next_calib:   'Nächste Kalibrierung',
+    m_freq:         'Frequenz (Tage)',
+    m_status_op:    'Betriebsstatus',
+    m_status_calib: 'Kalibrierungsstatus',
+    m_validity:     'Gültigkeit:',
+    m_file:         'Datei / Zertifikat',
+    m_file_none:    'Keine Datei ausgewählt',
+    m_file_select:  '📁 Auswählen',
+    m_file_open:    '🔗 Öffnen',
+    m_notes:        'Notizen',
+    s_active:       'AKTIV',
+    s_inactive:     'INAKTIV',
+    s_calib_ok:     'Kalibriert und genehmigt',
+    s_calib_need:   'Kalibrierung erforderlich',
+    s_discarded:    'Ausgesondert',
+    s_notfound:     'Nicht gefunden',
+    d_expired:      'Abgelaufen',
+    d_today:        'Heute!',
+    d_days:         'T',
+    d_remaining:    'verbleibend',
+    t_updated:      'Eintrag aktualisiert',
+    t_added:        'Eintrag hinzugefügt',
+    t_imported:     'Importiert',
+    t_records:      'Einträge',
+    t_reset:        'Daten zurückgesetzt',
+    t_saved_fb:     'In Supabase gespeichert!',
+    t_fb_connected: 'Supabase verbunden!',
+    t_fb_loaded:    'Einträge geladen.',
+    sync_loading:   'Lade von Supabase…',
+    sync_saving:    'Speichere in Supabase…',
+    sync_saved:     'Gespeichert',
+    sync_pending:   '⏸ Sync ausstehend…',
+    sync_offline:   '⚠️ Supabase offline — lokaler Cache',
+    sync_fail:      '⚠️ Fehler — neuer Versuch in 30s',
+    sb_overview:    'Übersicht',   sb_manage:'Verwaltung', sb_analysis:'Analyse',
+    btn_new_lbl:'Neu', btn_import_lbl:'Importieren', btn_export_lbl:'Exportieren',
+  },
+
+  // ── [v48] FRANÇAIS ─────────────────────────────────────────────────
+  fr: {
+    title:          'Contrôle des Équipements de Mesure',
+    tab_dashboard:  '📊 Tableau de bord',
+    tab_alerts:     '⚠️ Alertes',
+    tab_equip:      '🔧 Équipements',
+    tab_reports:    '📋 Rapports',
+    btn_import:     '📥 Importer',
+    btn_export:     '📤 Exporter',
+    btn_reset:      '🔄 Réinitialiser',
+    btn_new:        '＋ Nouveau',
+    btn_save:       '💾 Enregistrer',
+    btn_cancel:     'Annuler',
+    btn_cols:       '⚙ Colonnes',
+    btn_csv:        '↓ CSV',
+    btn_print:      '🖨️ Imprimer / PDF',
+    btn_csv_period: '📥 Exporter CSV',
+    btn_clear:      '✕ Effacer',
+    btn_mark_read:  'Tout marquer lu',
+    btn_see_alerts: 'Voir toutes les alertes →',
+    btn_sync:       '☁️ Sync',
+    lbl_updated:    'Mis à jour:',
+    kpi_total:      'Total',
+    kpi_active:     'Actifs',
+    kpi_inactive:   'Inactifs',
+    kpi_calib_ok:   'Calib. OK',
+    kpi_expired:    'Expirés',
+    kpi_due30:      'Échéant 30j',
+    kpi_due90:      'Échéant 90j',
+    kpi_health:     'Indice de Santé',
+    kpi_sub_total:  'enregistrements',
+    kpi_sub_active: 'en service',
+    kpi_sub_inact:  'hors service',
+    kpi_sub_ok:     'approuvés',
+    kpi_sub_exp:    'expiré',
+    kpi_sub_urg:    'urgent',
+    kpi_sub_mon:    'surveiller',
+    kpi_sub_health: 'équip. à jour',
+    ch_health:      '💚 Santé du Parc',
+    ch_calib:       '📊 État de Calibration',
+    ch_oper:        '⚡ État Opérationnel',
+    ch_types:       "🔧 Top Types d'équipements",
+    ch_types_exp:   '🔴 Types avec calibration expirée',
+    ch_due6m:       '📅 Échéances — 6 Prochains Mois',
+    ch_locations:   '📍 Top Emplacements',
+    ch_companies:   '🏢 Entreprise Exécutante',
+    ch_in_day:      'à jour',
+    tl_expired:     '🔴 Expirés',
+    tl_due30:       '🟠 Échéant en 30j',
+    tl_due90:       '🟡 Échéant en 90j',
+    tl_ok:          '🟢 À jour',
+    alert_search:   '🔍 Rechercher...',
+    notif_title:    '🔔 Notifications',
+    f_type:         'Type',
+    f_client:       'Client',
+    f_location:     'Emplacement',
+    f_responsible:  'Responsable',
+    f_company:      'Entreprise',
+    f_status_op:    'Statut Op.',
+    f_calib:        'Calibration',
+    f_from:         'De',
+    f_to:           'À',
+    f_search:       'Code, description...',
+    f_search_lbl:   'Rechercher',
+    f_all:          'Tous',
+    f_all_f:        'Toutes',
+    f_calib_ok:     'OK',
+    f_calib_exp:    'Expiré',
+    f_calib_need:   'Requis',
+    tbl_equip_title:'Équipements de Mesure',
+    col_id:         'Code',
+    col_tipo:       'Type',
+    col_cod_lab:    'Code Labortec',
+    col_cliente:    'Client',
+    col_desc:       'Description',
+    col_fab:        'Fabricant',
+    col_local:      'Emplacement',
+    col_resp:       'Responsable',
+    col_emp:        'Entreprise',
+    col_ult:        'Dern. Calib.',
+    col_prox:       'Proch. Calib.',
+    col_freq:       'Fréq.(j)',
+    col_calib:      'Calib.',
+    col_status:     'Statut',
+    col_dias:       'Jours',
+    col_obs:        'Observations',
+    col_arq:        'Fichier',
+    rep_period_title: '📋 Rapport par Période',
+    rep_from:       'De:',
+    rep_to:         'À:',
+    rep_csv_period: '↓ CSV Période',
+    rep_venc_mes:   '📅 Expirations par Mois (12 mois)',
+    rep_evolucao:   '📈 Évolution Cumulée (7 mois)',
+    rep_resp:       '👤 Par Responsable',
+    rep_emp_venc:   '🏭 Expirés par Entreprise',
+    rep_freq:       '⏱ Fréquence de Calibration',
+    rep_heatmap:    '🌡️ Statut par Emplacement',
+    rep_resumo:     '🔢 Résumé Général',
+    rep_urgentes:   '⏱️ Top 15 Plus Urgents',
+    rep_kpi_venc:   'Expirés',
+    rep_kpi_30d:    'Échéant 30j',
+    rep_kpi_90d:    'Échéant 90j',
+    rep_kpi_ok:     'À Jour',
+    rep_kpi_health: 'Indice de Santé',
+    m_edit_title:   'Modifier Enregistrement',
+    m_new_title:    'Nouvel Équipement',
+    m_code:         'Code de Contrôle',
+    m_type:         "Type d'Équipement",
+    m_client:       'Client',
+    m_maker:        'Fabricant',
+    m_desc:         'Description',
+    m_location:     'Emplacement',
+    m_responsible:  'Responsable',
+    m_company:      'Entreprise Exécutante',
+    m_codlab:       'Code Labortec',
+    m_last_calib:   'Dernière Calibration',
+    m_next_calib:   'Prochaine Calibration',
+    m_freq:         'Fréquence (jours)',
+    m_status_op:    'Statut Opérationnel',
+    m_status_calib: 'Statut Calibration',
+    m_validity:     'Validité:',
+    m_file:         'Fichier / Certificat',
+    m_file_none:    'Aucun fichier sélectionné',
+    m_file_select:  '📁 Sélectionner',
+    m_file_open:    '🔗 Ouvrir',
+    m_notes:        'Observations',
+    s_active:       'ACTIF',
+    s_inactive:     'INACTIF',
+    s_calib_ok:     'Calibré et Approuvé',
+    s_calib_need:   'Calibration Requise',
+    s_discarded:    'Mis au rebut',
+    s_notfound:     'Non Trouvé',
+    d_expired:      "Expiré",
+    d_today:        "Aujourd'hui!",
+    d_days:         'j',
+    d_remaining:    'restants',
+    t_updated:      'Enregistrement mis à jour',
+    t_added:        'Enregistrement ajouté',
+    t_imported:     'Importé',
+    t_records:      'enregistrements',
+    t_reset:        'Données réinitialisées',
+    t_saved_fb:     'Enregistré dans Supabase!',
+    t_fb_connected: 'Supabase connecté!',
+    t_fb_loaded:    'enregistrements chargés.',
+    sync_loading:   'Chargement de Supabase…',
+    sync_saving:    'Enregistrement dans Supabase…',
+    sync_saved:     'Enregistré',
+    sync_pending:   '⏸ Sync en attente…',
+    sync_offline:   '⚠️ Supabase hors ligne — cache local',
+    sync_fail:      '⚠️ Erreur — nouvelle tentative dans 30s',
+    sb_overview:    "Vue d'ensemble", sb_manage:'Gestion', sb_analysis:'Analyse',
+    btn_new_lbl:'Nouveau', btn_import_lbl:'Importer', btn_export_lbl:'Exporter',
+  },
+
+  // ── [v48] ITALIANO ─────────────────────────────────────────────────
+  it: {
+    title:          'Controllo Strumenti di Misura',
+    tab_dashboard:  '📊 Dashboard',
+    tab_alerts:     '⚠️ Avvisi',
+    tab_equip:      '🔧 Strumenti',
+    tab_reports:    '📋 Rapporti',
+    btn_import:     '📥 Importa',
+    btn_export:     '📤 Esporta',
+    btn_reset:      '🔄 Reimposta',
+    btn_new:        '＋ Nuovo',
+    btn_save:       '💾 Salva',
+    btn_cancel:     'Annulla',
+    btn_cols:       '⚙ Colonne',
+    btn_csv:        '↓ CSV',
+    btn_print:      '🖨️ Stampa / PDF',
+    btn_csv_period: '📥 Esporta CSV',
+    btn_clear:      '✕ Cancella',
+    btn_mark_read:  'Segna tutto letto',
+    btn_see_alerts: 'Vedi tutti gli avvisi →',
+    btn_sync:       '☁️ Sync',
+    lbl_updated:    'Aggiornato:',
+    kpi_total:      'Totale',
+    kpi_active:     'Attivi',
+    kpi_inactive:   'Inattivi',
+    kpi_calib_ok:   'Calib. OK',
+    kpi_expired:    'Scaduti',
+    kpi_due30:      'Scade 30g',
+    kpi_due90:      'Scade 90g',
+    kpi_health:     'Indice di Salute',
+    kpi_sub_total:  'registrazioni',
+    kpi_sub_active: 'in servizio',
+    kpi_sub_inact:  'fuori servizio',
+    kpi_sub_ok:     'approvati',
+    kpi_sub_exp:    'scaduto',
+    kpi_sub_urg:    'urgente',
+    kpi_sub_mon:    'monitorare',
+    kpi_sub_health: 'strum. aggiornati',
+    ch_health:      '💚 Salute del Parco',
+    ch_calib:       '📊 Stato Calibrazione',
+    ch_oper:        '⚡ Stato Operativo',
+    ch_types:       '🔧 Top Tipi di Strumenti',
+    ch_types_exp:   '🔴 Tipi con Calibrazione Scaduta',
+    ch_due6m:       '📅 Scadenze — Prossimi 6 Mesi',
+    ch_locations:   '📍 Top Posizioni',
+    ch_companies:   '🏢 Azienda Esecutrice',
+    ch_in_day:      'aggiornato',
+    tl_expired:     '🔴 Scaduti',
+    tl_due30:       '🟠 Scade in 30g',
+    tl_due90:       '🟡 Scade in 90g',
+    tl_ok:          '🟢 Aggiornato',
+    alert_search:   '🔍 Cerca...',
+    notif_title:    '🔔 Notifiche',
+    f_type:         'Tipo',
+    f_client:       'Cliente',
+    f_location:     'Posizione',
+    f_responsible:  'Responsabile',
+    f_company:      'Azienda',
+    f_status_op:    'Stato Op.',
+    f_calib:        'Calibrazione',
+    f_from:         'Da',
+    f_to:           'A',
+    f_search:       'Codice, descrizione...',
+    f_search_lbl:   'Cerca',
+    f_all:          'Tutti',
+    f_all_f:        'Tutte',
+    f_calib_ok:     'OK',
+    f_calib_exp:    'Scaduto',
+    f_calib_need:   'Richiesta',
+    tbl_equip_title:'Strumenti di Misura',
+    col_id:         'Codice',
+    col_tipo:       'Tipo',
+    col_cod_lab:    'Cod. Labortec',
+    col_cliente:    'Cliente',
+    col_desc:       'Descrizione',
+    col_fab:        'Produttore',
+    col_local:      'Posizione',
+    col_resp:       'Responsabile',
+    col_emp:        'Azienda',
+    col_ult:        'Ult. Calib.',
+    col_prox:       'Pros. Calib.',
+    col_freq:       'Freq.(g)',
+    col_calib:      'Calib.',
+    col_status:     'Stato',
+    col_dias:       'Giorni',
+    col_obs:        'Note',
+    col_arq:        'File',
+    rep_period_title: '📋 Rapporto per Periodo',
+    rep_from:       'Da:',
+    rep_to:         'A:',
+    rep_csv_period: '↓ CSV Periodo',
+    rep_venc_mes:   '📅 Scadenze per Mese (12 mesi)',
+    rep_evolucao:   '📈 Andamento Cumulativo (7 mesi)',
+    rep_resp:       '👤 Per Responsabile',
+    rep_emp_venc:   '🏭 Scaduti per Azienda',
+    rep_freq:       '⏱ Frequenza Calibrazione',
+    rep_heatmap:    '🌡️ Stato per Posizione',
+    rep_resumo:     '🔢 Riepilogo Generale',
+    rep_urgentes:   '⏱️ Top 15 Più Urgenti',
+    rep_kpi_venc:   'Scaduti',
+    rep_kpi_30d:    'Scade 30g',
+    rep_kpi_90d:    'Scade 90g',
+    rep_kpi_ok:     'Aggiornato',
+    rep_kpi_health: 'Indice di Salute',
+    m_edit_title:   'Modifica Registrazione',
+    m_new_title:    'Nuovo Strumento',
+    m_code:         'Codice di Controllo',
+    m_type:         'Tipo di Strumento',
+    m_client:       'Cliente',
+    m_maker:        'Produttore',
+    m_desc:         'Descrizione',
+    m_location:     'Posizione',
+    m_responsible:  'Responsabile',
+    m_company:      'Azienda Esecutrice',
+    m_codlab:       'Codice Labortec',
+    m_last_calib:   'Ultima Calibrazione',
+    m_next_calib:   'Prossima Calibrazione',
+    m_freq:         'Frequenza (giorni)',
+    m_status_op:    'Stato Operativo',
+    m_status_calib: 'Stato Calibrazione',
+    m_validity:     'Validità:',
+    m_file:         'File / Certificato',
+    m_file_none:    'Nessun file selezionato',
+    m_file_select:  '📁 Seleziona',
+    m_file_open:    '🔗 Apri',
+    m_notes:        'Note',
+    s_active:       'ATTIVO',
+    s_inactive:     'INATTIVO',
+    s_calib_ok:     'Calibrato e Approvato',
+    s_calib_need:   'Calibrazione Richiesta',
+    s_discarded:    'Scartato',
+    s_notfound:     'Non Trovato',
+    d_expired:      'Scaduto',
+    d_today:        'Oggi!',
+    d_days:         'g',
+    d_remaining:    'rimanenti',
+    t_updated:      'Registrazione aggiornata',
+    t_added:        'Registrazione aggiunta',
+    t_imported:     'Importato',
+    t_records:      'registrazioni',
+    t_reset:        'Dati reimpostati',
+    t_saved_fb:     'Salvato in Supabase!',
+    t_fb_connected: 'Supabase connesso!',
+    t_fb_loaded:    'registrazioni caricate.',
+    sync_loading:   'Caricamento da Supabase…',
+    sync_saving:    'Salvataggio in Supabase…',
+    sync_saved:     'Salvato',
+    sync_pending:   '⏸ Sync in sospeso…',
+    sync_offline:   '⚠️ Supabase offline — cache locale',
+    sync_fail:      '⚠️ Errore — nuovo tentativo in 30s',
+    sb_overview:    'Panoramica', sb_manage:'Gestione', sb_analysis:'Analisi',
+    btn_new_lbl:'Nuovo', btn_import_lbl:'Importa', btn_export_lbl:'Esporta',
+  },
+
+  // ── [v48] POLSKI ───────────────────────────────────────────────────
+  pl: {
+    title:          'Zarządzanie Przyrządami Pomiarowymi',
+    tab_dashboard:  '📊 Pulpit',
+    tab_alerts:     '⚠️ Alerty',
+    tab_equip:      '🔧 Przyrządy',
+    tab_reports:    '📋 Raporty',
+    btn_import:     '📥 Importuj',
+    btn_export:     '📤 Eksportuj',
+    btn_reset:      '🔄 Resetuj',
+    btn_new:        '＋ Nowy',
+    btn_save:       '💾 Zapisz',
+    btn_cancel:     'Anuluj',
+    btn_cols:       '⚙ Kolumny',
+    btn_csv:        '↓ CSV',
+    btn_print:      '🖨️ Drukuj / PDF',
+    btn_csv_period: '📥 Eksportuj CSV',
+    btn_clear:      '✕ Wyczyść',
+    btn_mark_read:  'Oznacz przeczytane',
+    btn_see_alerts: 'Zobacz wszystkie alerty →',
+    btn_sync:       '☁️ Sync',
+    lbl_updated:    'Zaktualizowano:',
+    kpi_total:      'Łącznie',
+    kpi_active:     'Aktywne',
+    kpi_inactive:   'Nieaktywne',
+    kpi_calib_ok:   'Kalib. OK',
+    kpi_expired:    'Wygasłe',
+    kpi_due30:      'Do 30d',
+    kpi_due90:      'Do 90d',
+    kpi_health:     'Wskaźnik Zdrowia',
+    kpi_sub_total:  'wpisów',
+    kpi_sub_active: 'w użyciu',
+    kpi_sub_inact:  'poza użyciem',
+    kpi_sub_ok:     'zatwierdzone',
+    kpi_sub_exp:    'wygasłe',
+    kpi_sub_urg:    'pilne',
+    kpi_sub_mon:    'monitorować',
+    kpi_sub_health: 'przyrz. aktualne',
+    ch_health:      '💚 Stan Parku',
+    ch_calib:       '📊 Status Kalibracji',
+    ch_oper:        '⚡ Status Operacyjny',
+    ch_types:       '🔧 Top Typy Przyrządów',
+    ch_types_exp:   '🔴 Typy z Wygasłą Kalibracją',
+    ch_due6m:       '📅 Terminy — Następne 6 Miesięcy',
+    ch_locations:   '📍 Top Lokalizacje',
+    ch_companies:   '🏢 Firma Wykonawcza',
+    ch_in_day:      'aktualny',
+    tl_expired:     '🔴 Wygasłe',
+    tl_due30:       '🟠 Do 30d',
+    tl_due90:       '🟡 Do 90d',
+    tl_ok:          '🟢 Aktualne',
+    alert_search:   '🔍 Szukaj...',
+    notif_title:    '🔔 Powiadomienia',
+    f_type:         'Typ',
+    f_client:       'Klient',
+    f_location:     'Lokalizacja',
+    f_responsible:  'Odpowiedzialny',
+    f_company:      'Firma',
+    f_status_op:    'Status Op.',
+    f_calib:        'Kalibracja',
+    f_from:         'Od',
+    f_to:           'Do',
+    f_search:       'Kod, opis...',
+    f_search_lbl:   'Szukaj',
+    f_all:          'Wszystkie',
+    f_all_f:        'Wszystkie',
+    f_calib_ok:     'OK',
+    f_calib_exp:    'Wygasłe',
+    f_calib_need:   'Wymagana',
+    tbl_equip_title:'Przyrządy Pomiarowe',
+    col_id:         'Kod',
+    col_tipo:       'Typ',
+    col_cod_lab:    'Kod Labortec',
+    col_cliente:    'Klient',
+    col_desc:       'Opis',
+    col_fab:        'Producent',
+    col_local:      'Lokalizacja',
+    col_resp:       'Odpowiedzialny',
+    col_emp:        'Firma',
+    col_ult:        'Ost. Kalib.',
+    col_prox:       'Nast. Kalib.',
+    col_freq:       'Częst.(d)',
+    col_calib:      'Kalib.',
+    col_status:     'Status',
+    col_dias:       'Dni',
+    col_obs:        'Uwagi',
+    col_arq:        'Plik',
+    rep_period_title: '📋 Raport Okresowy',
+    rep_from:       'Od:',
+    rep_to:         'Do:',
+    rep_csv_period: '↓ CSV Okres',
+    rep_venc_mes:   '📅 Wygasłe wg Miesiąca (12 miesięcy)',
+    rep_evolucao:   '📈 Trend Skumulowany (7 miesięcy)',
+    rep_resp:       '👤 Wg Odpowiedzialnego',
+    rep_emp_venc:   '🏭 Wygasłe wg Firmy',
+    rep_freq:       '⏱ Częstotliwość Kalibracji',
+    rep_heatmap:    '🌡️ Status wg Lokalizacji',
+    rep_resumo:     '🔢 Ogólne Podsumowanie',
+    rep_urgentes:   '⏱️ Top 15 Najpilniejszych',
+    rep_kpi_venc:   'Wygasłe',
+    rep_kpi_30d:    'Do 30d',
+    rep_kpi_90d:    'Do 90d',
+    rep_kpi_ok:     'Aktualne',
+    rep_kpi_health: 'Wskaźnik Zdrowia',
+    m_edit_title:   'Edytuj Wpis',
+    m_new_title:    'Nowy Przyrząd',
+    m_code:         'Kod Kontrolny',
+    m_type:         'Typ Przyrządu',
+    m_client:       'Klient',
+    m_maker:        'Producent',
+    m_desc:         'Opis',
+    m_location:     'Lokalizacja',
+    m_responsible:  'Odpowiedzialny',
+    m_company:      'Firma Wykonawcza',
+    m_codlab:       'Kod Labortec',
+    m_last_calib:   'Ostatnia Kalibracja',
+    m_next_calib:   'Następna Kalibracja',
+    m_freq:         'Częstotliwość (dni)',
+    m_status_op:    'Status Operacyjny',
+    m_status_calib: 'Status Kalibracji',
+    m_validity:     'Ważność:',
+    m_file:         'Plik / Certyfikat',
+    m_file_none:    'Nie wybrano pliku',
+    m_file_select:  '📁 Wybierz',
+    m_file_open:    '🔗 Otwórz',
+    m_notes:        'Uwagi',
+    s_active:       'AKTYWNY',
+    s_inactive:     'NIEAKTYWNY',
+    s_calib_ok:     'Skalibrowany i Zatwierdzony',
+    s_calib_need:   'Kalibracja Wymagana',
+    s_discarded:    'Wycofany',
+    s_notfound:     'Nie Znaleziono',
+    d_expired:      'Wygasłe',
+    d_today:        'Dziś!',
+    d_days:         'd',
+    d_remaining:    'pozostało',
+    t_updated:      'Wpis zaktualizowany',
+    t_added:        'Wpis dodany',
+    t_imported:     'Zaimportowano',
+    t_records:      'wpisów',
+    t_reset:        'Dane zresetowane',
+    t_saved_fb:     'Zapisano w Supabase!',
+    t_fb_connected: 'Supabase połączone!',
+    t_fb_loaded:    'wpisów załadowanych.',
+    sync_loading:   'Ładowanie z Supabase…',
+    sync_saving:    'Zapisywanie do Supabase…',
+    sync_saved:     'Zapisano',
+    sync_pending:   '⏸ Sync oczekuje…',
+    sync_offline:   '⚠️ Supabase offline — lokalna pamięć podręczna',
+    sync_fail:      '⚠️ Błąd — ponowna próba za 30s',
+    sb_overview:    'Przegląd', sb_manage:'Zarządzanie', sb_analysis:'Analiza',
+    btn_new_lbl:'Nowy', btn_import_lbl:'Importuj', btn_export_lbl:'Eksportuj',
   }
 };
 
@@ -4387,24 +5171,97 @@ function t(key) { return (T[LANG] || T.pt)[key] || (T.pt)[key] || key; }
   if(T.pt) Object.assign(T.pt, extras_pt);
   if(T.en) Object.assign(T.en, extras_en);
   if(T.es) Object.assign(T.es, extras_es);
+  // [v48] extras for new languages (already inlined in their objects above)
+  const _newLangs = ['de','fr','it','pl'];
+  _newLangs.forEach(function(l){ if(!T[l]) T[l] = {}; if(!T[l].sb_overview) Object.assign(T[l], {sb_overview:T[l].sb_overview||T.en.sb_overview, sb_manage:T[l].sb_manage||T.en.sb_manage, sb_analysis:T[l].sb_analysis||T.en.sb_analysis, btn_new_lbl:T[l].btn_new_lbl||T.en.btn_new_lbl, btn_import_lbl:T[l].btn_import_lbl||T.en.btn_import_lbl, btn_export_lbl:T[l].btn_export_lbl||T.en.btn_export_lbl}); });
 })();
 
-// [v47] mapeamento planta → idioma (automático no login)
+// [v49.7] Cadastrar form action labels — needed for full i18n of the Add Equipment form
+(function(){
+  var _cad = {
+    pt: { cad_save:'💾 Salvar Equipamento', cad_clear:'🗑 Limpar',    cad_validity:'Validade estimada' },
+    en: { cad_save:'💾 Save Equipment',     cad_clear:'🗑 Clear',     cad_validity:'Estimated validity' },
+    es: { cad_save:'💾 Guardar Equipo',     cad_clear:'🗑 Limpiar',   cad_validity:'Validez estimada' },
+    de: { cad_save:'💾 Gerät speichern',    cad_clear:'🗑 Löschen',   cad_validity:'Geschätzte Gültigkeit' },
+    fr: { cad_save:'💾 Enregistrer',        cad_clear:'🗑 Effacer',   cad_validity:'Validité estimée' },
+    it: { cad_save:'💾 Salva Strumento',    cad_clear:'🗑 Cancella',  cad_validity:'Validità stimata' },
+    pl: { cad_save:'💾 Zapisz Przyrząd',    cad_clear:'🗑 Wyczyść',   cad_validity:'Szacowana ważność' },
+  };
+  Object.keys(_cad).forEach(function(l){ if(!T[l]) T[l]={}; Object.assign(T[l], _cad[l]); });
+})();
+
+// [v49.4] Tab labels for tabs 4-7 (Cadastrar, Auditoria, Responsáveis, Admin Plantas).
+(function(){
+  var X = {
+    pt:{ tab_add:'➕ Cadastrar', tab_audit:'📜 Auditoria', tab_resp:'👤 Responsáveis', tab_admin:'🌎 Admin Plantas' },
+    en:{ tab_add:'➕ Register',  tab_audit:'📜 Audit',     tab_resp:'👤 Owners',       tab_admin:'🌎 Plants admin' },
+    es:{ tab_add:'➕ Registrar', tab_audit:'📜 Auditoría', tab_resp:'👤 Responsables', tab_admin:'🌎 Admin plantas' },
+    de:{ tab_add:'➕ Erfassen',  tab_audit:'📜 Audit',     tab_resp:'👤 Verantwortliche', tab_admin:'🌎 Werke-Admin' },
+    fr:{ tab_add:'➕ Enregistrer', tab_audit:'📜 Audit',   tab_resp:'👤 Responsables', tab_admin:'🌎 Admin sites' },
+    it:{ tab_add:'➕ Registra',  tab_audit:'📜 Audit',     tab_resp:'👤 Responsabili', tab_admin:'🌎 Admin stabilimenti' },
+    pl:{ tab_add:'➕ Zarejestruj', tab_audit:'📜 Audyt',   tab_resp:'👤 Odpowiedzialni', tab_admin:'🌎 Admin zakładów' }
+  };
+  Object.keys(X).forEach(function(l){ if(T[l]) Object.assign(T[l], X[l]); });
+})();
+
+// [v48] ISO-3166-1 alpha-2 country code → language code
+const _COUNTRY_LANG = {
+  BR:'pt', PT:'pt', AO:'pt', MZ:'pt', CV:'pt',
+  MX:'es', AR:'es', CL:'es', CO:'es', PE:'es', VE:'es', EC:'es', BO:'es',
+  GT:'es', HN:'es', SV:'es', CR:'es', PA:'es', DO:'es', CU:'es', PY:'es', UY:'es',
+  US:'en', GB:'en', AU:'en', CA:'en', NZ:'en', IE:'en', ZA:'en', IN:'en',
+  DE:'de', AT:'de', CH:'de', LI:'de',
+  FR:'fr', BE:'fr', LU:'fr', SN:'fr', CI:'fr', MA:'fr',
+  IT:'it', SM:'it', VA:'it',
+  PL:'pl',
+  CN:'zh', TW:'zh', HK:'zh', SG:'zh',
+  JP:'ja',
+  NL:'nl',
+  CZ:'cs', SK:'cs',
+  TR:'tr',
+  RU:'ru', BY:'ru', KZ:'ru',
+};
+// [v48] Runtime map: plant code → { label, country }  (populated from user_profiles + legacy)
+var _DYNAMIC_PLANTS = {};
+// [v47 compat] Legacy hardcoded plant → language (used as fallback when no country set)
 const _PLANT_LANG = { SP:'pt', MX:'es', USA:'en', DUNCAN:'en', AKRON:'en' };
+// [v48] Get language for a given plant code + country (country takes priority over legacy map)
+function _langForPlant(unidade, country) {
+  if (country) {
+    var cc = String(country).toUpperCase();
+    if (_COUNTRY_LANG[cc]) return _COUNTRY_LANG[cc];
+  }
+  return _PLANT_LANG[unidade] || null;
+}
+// [v48] Get display label for a plant code
+function _getPlantLabel(code) {
+  if (!code) return '';
+  if (_DYNAMIC_PLANTS[code] && _DYNAMIC_PLANTS[code].label) return _DYNAMIC_PLANTS[code].label;
+  if (_UNIDADE_LABELS[code]) return _UNIDADE_LABELS[code];
+  return '🏭 ' + code;
+}
 
 // Helper: retorna o locale BCP-47 do idioma atual (para toLocaleString)
 function _locale() {
-  return LANG === 'en' ? 'en-US' : LANG === 'es' ? 'es-MX' : 'pt-BR';
+  var _localeMap = {
+    pt:'pt-BR', en:'en-US', es:'es-MX', de:'de-DE', fr:'fr-FR',
+    it:'it-IT', pl:'pl-PL', nl:'nl-NL', cs:'cs-CZ', tr:'tr-TR', ru:'ru-RU'
+  };
+  return _localeMap[LANG] || 'pt-BR';
 }
 
 function setLang(lang) {
   LANG = lang;
   StorageService.set('rochling_lang', lang);
-  document.getElementById('lb-pt')?.classList.toggle('on', lang==='pt');
-  document.getElementById('lb-en')?.classList.toggle('on', lang==='en');
-  document.getElementById('lb-es')?.classList.toggle('on', lang==='es');
+  // Toggle legacy PT/EN/ES buttons (backward compat) + update language select
+  ['pt','en','es','de','fr','it','pl','nl','cs','tr','ru'].forEach(function(l){
+    var btn = document.getElementById('lb-' + l);
+    if (btn) btn.classList.toggle('on', l === lang);
+  });
+  var langSel = document.getElementById('lang-select');
+  if (langSel) langSel.value = lang;
   // Ajusta locale para formatação de datas/números
-  document.documentElement.lang = lang==='pt'?'pt-BR': lang==='es'?'es-MX':'en-US';
+  document.documentElement.lang = _locale();
   // Full re-render: badges use t() so tables must rebuild
   pag.eq.rows = DB.slice(); pag.eq.p = 1;
   applyLang();
@@ -4430,10 +5287,25 @@ function applyLang() {
 
   // Tabs
   const tabs = document.querySelectorAll('.tab');
-  if(tabs[0]) tabs[0].textContent = t('tab_dashboard');
-  if(tabs[1]) tabs[1].textContent = t('tab_alerts');
-  if(tabs[2]) tabs[2].textContent = t('tab_equip');
-  if(tabs[3]) tabs[3].textContent = t('tab_reports');
+  // [v49.4] Translate ALL nav tabs (not just first four). We look up by
+  // data-tab attribute so it stays correct even if order changes.
+  var _tabKeyMap = {
+    dashboard:'tab_dashboard', alertas:'tab_alerts', equipamentos:'tab_equip',
+    relatorios:'tab_reports', cadastrar:'tab_add', auditoria:'tab_audit',
+    responsaveis:'tab_resp', admin:'tab_admin'
+  };
+  document.querySelectorAll('.tab[data-tab]').forEach(function(el){
+    var key = _tabKeyMap[el.getAttribute('data-tab')];
+    if (!key) return;
+    var label = t(key);
+    // Preserve any badge span (e.g. #tab-badge-alertas) by re-rendering icon + label only.
+    var badge = el.querySelector('.tab-badge');
+    // label looks like '📊 Dashboard' — split icon from text
+    var m = label.match(/^(\S+)\s+(.*)$/);
+    var iconHtml = m ? '<span class="tab-icon">'+m[1]+'</span> ' : '';
+    var textPart = m ? m[2] : label;
+    el.innerHTML = iconHtml + textPart + (badge ? ' ' + badge.outerHTML : '');
+  });
 
   // Header buttons
   const hbtns = document.querySelectorAll('.hdr-r .btn-g, .hdr-r .btn-p');
@@ -4623,6 +5495,55 @@ function applyLang() {
     if(mCalib.options[2]) mCalib.options[2].text = t('s_discarded');
     if(mCalib.options[3]) mCalib.options[3].text = t('s_notfound');
   }
+
+  // [v49.7] Cadastrar tab form labels — previously 100% hardcoded in PT
+  const _cadMap = [
+    ['cad-id',          'm_code'],      ['cad-tipo',   'm_type'],
+    ['cad-codlab',      'm_codlab'],    ['cad-cliente','m_client'],
+    ['cad-desc',        'm_desc'],      ['cad-fab',    'm_maker'],
+    ['cad-local',       'm_location'],  ['cad-resp',   'm_responsible'],
+    ['cad-emp',         'm_company'],   ['cad-ult',    'm_last_calib'],
+    ['cad-prox',        'm_next_calib'],['cad-freq',   'm_freq'],
+    ['cad-status',      'm_status_op'], ['cad-calib-status','m_status_calib'],
+    ['cad-obs',         'm_notes'],
+  ];
+  _cadMap.forEach(([inputId, labelKey]) => {
+    const inp = document.getElementById(inputId);
+    if(!inp) return;
+    const lbl = inp.closest('div')?.querySelector('label');
+    if(!lbl) return;
+    if(inputId === 'cad-prox') {
+      lbl.innerHTML = t(labelKey) + ' <span style="color:var(--accent);font-size:9px">AUTO</span>';
+    } else {
+      // Update first text node only — preserves required-asterisk <span> child
+      if(lbl.firstChild && lbl.firstChild.nodeType === 3) {
+        lbl.firstChild.textContent = t(labelKey) + ' ';
+      } else {
+        lbl.textContent = t(labelKey);
+      }
+    }
+  });
+  // Cadastrar select options
+  const cadSel = document.getElementById('cad-status');
+  if(cadSel) {
+    if(cadSel.options[0]) { cadSel.options[0].value=t('s_active');   cadSel.options[0].text=t('s_active'); }
+    if(cadSel.options[1]) { cadSel.options[1].value=t('s_inactive'); cadSel.options[1].text=t('s_inactive'); }
+  }
+  const cadCalib = document.getElementById('cad-calib-status');
+  if(cadCalib) {
+    if(cadCalib.options[0]) cadCalib.options[0].text = t('s_calib_ok');
+    if(cadCalib.options[1]) cadCalib.options[1].text = t('s_calib_need');
+    if(cadCalib.options[2]) cadCalib.options[2].text = t('s_discarded');
+    if(cadCalib.options[3]) cadCalib.options[3].text = t('s_notfound');
+  }
+  // Cadastrar action buttons
+  const cadResetBtn = document.querySelector('[onclick="cadReset()"]');
+  if(cadResetBtn) cadResetBtn.textContent = t('cad_clear');
+  const cadSubmitBtn = document.getElementById('cad-submit-btn');
+  if(cadSubmitBtn) cadSubmitBtn.textContent = t('cad_save');
+  // Cadastrar validity bar label
+  const cadValidLbl = document.querySelector('#cad-validity-wrap [style*="font-weight:700;text-transform"]');
+  if(cadValidLbl) cadValidLbl.textContent = t('cad_validity');
 
   // File labels
   const fileLabel = document.querySelector('label[for="fp"]') || 
@@ -5098,7 +6019,7 @@ let _sbInitialized = false; // [v15 FIX] evita double-init pelo onAuthStateChang
 // _isDirector: true → vê todas as plantas (sem filtro)
 let _currentUnidade = null;
 let _isDirector     = false;
-const _UNIDADE_LABELS = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DUNCAN: '🇺🇸 Duncan, SC', AKRON: '🇺🇸 Akron, OH', DIRECTOR: '🌎 Global' };
+let _UNIDADE_LABELS = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DUNCAN: '🇺🇸 Duncan, SC', AKRON: '🇺🇸 Akron, OH', DIRECTOR: '🌎 Global' };
 
 function _setUnidade(unidade) {
   if (!unidade || unidade === 'DIRECTOR') {
@@ -5108,21 +6029,25 @@ function _setUnidade(unidade) {
     _isDirector     = false;
     _currentUnidade = String(unidade).toUpperCase();
   }
-  // [v47] Idioma automático baseado na planta (só altera se ainda não escolheu manualmente)
-  // SP → pt  |  MX → es  |  USA → en  |  outros → mantém idioma atual
-  const autoLang = _currentUnidade ? (_PLANT_LANG[_currentUnidade] || null) : null;
-  if (autoLang && !StorageService.get('rochling_lang_manual', '')) {
+  // [v49.5 FIX] Idioma automático SEMPRE ao logar: limpa seleção manual e aplica idioma da planta.
+  // Isso garante que 100% dos componentes sejam traduzidos com base na planta ativa no login.
+  const _plantMeta = _currentUnidade ? (_DYNAMIC_PLANTS[_currentUnidade] || {}) : {};
+  const autoLang = _currentUnidade ? _langForPlant(_currentUnidade, _plantMeta.country) : null;
+  if (autoLang) {
+    StorageService.set('rochling_lang_manual', ''); // limpa override manual → i18n automático
     setLang(autoLang);
   }
   // Atualiza badge no header
   const badge = document.getElementById('planta-badge');
   if (badge) {
-    badge.textContent = _isDirector ? '🌎 Global' : (_UNIDADE_LABELS[_currentUnidade] || _currentUnidade);
-    badge.style.display = 'inline-block';
+    badge.textContent = _isDirector ? '🌎 Global' : _getPlantLabel(_currentUnidade);
+    badge.style.display = 'inline-flex';
   }
   // Diretores veem seletor de planta
   const sel = document.getElementById('planta-selector');
   if (sel) sel.style.display = _isDirector ? 'inline-block' : 'none';
+  const selShell = document.getElementById('plant-select-shell');
+  if (selShell) selShell.style.display = _isDirector ? 'inline-flex' : 'none';
   // [v48] Aba Admin visível apenas para Diretores
   const adminTab = document.getElementById('admin-tab-btn');
   if (adminTab) adminTab.style.display = _isDirector ? '' : 'none';
@@ -5162,6 +6087,7 @@ window.switchPlanta = function(unidade) {
   if (!_isDirector) return;
   if (!unidade) {
     _currentUnidade = null;
+    StorageService.set('rochling_director_plant', ''); // [v49.5 FIX] limpa persistência
     const badge = document.getElementById('planta-badge');
     if (badge) badge.textContent = '🌎 Global';
     // Volta ao português ao deselecionar planta
@@ -5173,11 +6099,12 @@ window.switchPlanta = function(unidade) {
     return;
   } else {
     _currentUnidade = String(unidade).toUpperCase();
+    StorageService.set('rochling_director_plant', _currentUnidade); // [v49.5 FIX] persiste planta
     const badge = document.getElementById('planta-badge');
-    if (badge) badge.textContent = _UNIDADE_LABELS[_currentUnidade] || ('🏭 ' + _currentUnidade);
-    // [FIX] Idioma troca SEMPRE ao Director selecionar planta — sem bloqueio de preferência manual.
-    // Remove o flag manual para que a planta tenha prioridade absoluta sobre idioma.
-    const autoLang = _PLANT_LANG[_currentUnidade] || 'pt';
+    if (badge) badge.textContent = _getPlantLabel(_currentUnidade);
+    // [v48] Idioma troca SEMPRE ao Director selecionar planta — usa country do perfil dinâmico.
+    const _smeta = _DYNAMIC_PLANTS[_currentUnidade] || {};
+    const autoLang = _langForPlant(_currentUnidade, _smeta.country) || 'pt';
     StorageService.set('rochling_lang_manual', '');
     setLang(autoLang);
   }
@@ -5187,39 +6114,307 @@ window.switchPlanta = function(unidade) {
   if (typeof sbPull === 'function') sbPull().then(function(ok) { if (ok && typeof updateAll === 'function') updateAll(); });
 };
 
-// Tela exibida ao Director antes de selecionar uma planta
+// [v49.4] Tela do Director — Lista limpa com bandeira + nome (sem mapa-múndi).
 function _mostrarSelecaoPlanta() {
-  let ov = document.getElementById('_dir-select-planta');
-  if (!ov) {
-    ov = document.createElement('div');
-    ov.id = '_dir-select-planta';
-    ov.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg,#f4f6fb);z-index:900;gap:14px;padding:24px;text-align:center';
-    document.body.appendChild(ov);
-  }
-  var plantas = [
-    { v:'SP',     lbl:'🇧🇷 São Paulo' },
-    { v:'MX',     lbl:'🇲🇽 México'   },
-    { v:'USA',    lbl:'🇺🇸 EUA'       },
-    { v:'DUNCAN', lbl:'🇺🇸 Duncan, SC'},
-    { v:'AKRON',  lbl:'🇺🇸 Akron, OH' },
-  ];
-  var btns = plantas.map(function(p) {
-    return '<button onclick="switchPlanta(\'' + p.v + '\')" ' +
-      'style="padding:12px 28px;border-radius:10px;border:2px solid #0064b3;background:#fff;' +
-      'color:#0064b3;font-size:14px;font-weight:700;cursor:pointer;min-width:170px;' +
-      'transition:background .15s,color .15s;font-family:inherit" ' +
-      'onmouseover="this.style.background=\'#0064b3\';this.style.color=\'#fff\'" ' +
-      'onmouseout="this.style.background=\'#fff\';this.style.color=\'#0064b3\'">' +
-      p.lbl + '</button>';
-  }).join('');
-  ov.innerHTML =
-    '<div style="font-size:52px">🌎</div>' +
-    '<div style="font-size:20px;font-weight:700;color:var(--tx,#1a2035)">Selecione uma planta</div>' +
-    '<div style="font-size:13px;color:var(--tx2,#555);max-width:440px;line-height:1.6;margin-bottom:8px">' +
-      'Escolha a unidade que deseja visualizar:' +
-    '</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:520px">' + btns + '</div>';
+  var ov = document.getElementById('_dir-select-planta');
+  if (!ov) { ov = document.createElement('div'); ov.id = '_dir-select-planta'; document.body.appendChild(ov); }
+  ov.style.cssText = 'position:fixed;inset:0;z-index:1000;overflow:auto;display:flex;flex-direction:column;font-family:var(--font,-apple-system,system-ui,sans-serif);background:radial-gradient(ellipse at 50% 0%,#0a1628 0%,#050b17 55%,#02060e 100%);color:#e6edf7';
   ov.style.display = 'flex';
+
+  // ── Inject CSS once ──
+  var oldSt = document.getElementById('_map-style');
+  if (oldSt) oldSt.remove();
+  var st = document.createElement('style');
+  st.id = '_map-style';
+  st.textContent =
+    '#_dir-select-planta *{box-sizing:border-box}' +
+    '#_dir-select-planta .glow{position:absolute;border-radius:50%;filter:blur(80px);opacity:.32;pointer-events:none}' +
+    '#_dir-select-planta .pchip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:11px;color:#aab8cc;letter-spacing:.2px}' +
+    '#_dir-select-planta .pchip .dot{width:7px;height:7px;border-radius:50%}' +
+    '#_dir-select-planta .logoutBtn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:#aab8cc;font-size:11px;padding:7px 14px;border-radius:8px;cursor:pointer;transition:all .18s;font-family:inherit}' +
+    '#_dir-select-planta .logoutBtn:hover{background:rgba(220,38,38,.12);border-color:rgba(220,38,38,.35);color:#fca5a5}' +
+    '#_dir-select-planta .plant-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;width:100%;max-width:920px;margin:0 auto;padding:24px 24px 48px}' +
+    '#_dir-select-planta .plant-item{display:flex;align-items:center;gap:16px;padding:18px 22px;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.08);cursor:pointer;transition:transform .18s ease,border-color .18s,background .18s,box-shadow .18s;text-align:left;font-family:inherit;color:inherit;width:100%}' +
+    '#_dir-select-planta .plant-item:hover{transform:translateY(-2px);border-color:rgba(0,137,227,.55);background:linear-gradient(180deg,rgba(0,137,227,.10),rgba(0,100,179,.04));box-shadow:0 10px 30px -10px rgba(0,137,227,.45)}' +
+    '#_dir-select-planta .plant-flag{font-size:38px;line-height:1;width:54px;height:54px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);flex-shrink:0}' +
+    '#_dir-select-planta .plant-info{flex:1;min-width:0}' +
+    '#_dir-select-planta .plant-name{font-size:16px;font-weight:700;color:#fff;letter-spacing:-.1px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '#_dir-select-planta .plant-meta{margin-top:4px;font-size:11.5px;color:#7a8aa3;display:flex;align-items:center;gap:8px;flex-wrap:wrap}' +
+    '#_dir-select-planta .plant-meta .dot{width:7px;height:7px;border-radius:50%}' +
+    '#_dir-select-planta .plant-arrow{font-size:18px;color:#7a8aa3;opacity:.55;transition:transform .18s,opacity .18s,color .18s}' +
+    '#_dir-select-planta .plant-item:hover .plant-arrow{color:#0089e3;opacity:1;transform:translateX(3px)}' +
+    '#_dir-select-planta .legend-bar{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin:0 24px 16px}' +
+    '@keyframes _fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}' +
+    '#_dir-select-planta .topbar,#_dir-select-planta .summary,#_dir-select-planta .plant-list,#_dir-select-planta .legend-bar{animation:_fadeUp .45s ease both}' +
+    '@media (max-width:560px){#_dir-select-planta .plant-list{grid-template-columns:1fr;padding:16px}#_dir-select-planta .plant-flag{font-size:30px;width:44px;height:44px}}';
+  document.head.appendChild(st);
+
+  // ── Render shell ──
+  ov.innerHTML =
+      '<div class="glow" style="top:-120px;left:15%;width:480px;height:480px;background:#0064b3"></div>'
+    + '<div class="glow" style="bottom:-160px;right:10%;width:520px;height:520px;background:#0089e3;opacity:.22"></div>'
+    // Top bar
+    + '<div class="topbar" style="position:relative;z-index:5;flex:0 0 auto;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid rgba(255,255,255,.06);background:linear-gradient(to bottom,rgba(255,255,255,.025),transparent)">'
+    +   '<div style="display:flex;align-items:center;gap:14px">'
+    +     '<div style="width:34px;height:34px;background:linear-gradient(135deg,#0089e3,#0064b3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 4px 14px rgba(0,137,227,.35)">🏭</div>'
+    +     '<div style="line-height:1.25">'
+    +       '<div style="font-weight:700;font-size:14px;color:#fff;letter-spacing:.2px">Röchling Automotive</div>'
+    +       '<div style="color:#7a8aa3;font-size:11px;letter-spacing:.4px;text-transform:uppercase">Global Operations · Director Console</div>'
+    +     '</div>'
+    +   '</div>'
+    +   '<div style="display:flex;align-items:center;gap:10px">'
+    +     '<span class="pchip" id="_chipPlants"><span class="dot" style="background:#0089e3"></span><span id="_chipPlantsTxt">— plantas</span></span>'
+    +     '<button class="logoutBtn" onclick="(async()=>{try{var sb=window._globalSupabaseClient||window._sb;if(sb)await sb.auth.signOut();}catch(e){}location.reload();})()">Sair</button>'
+    +   '</div>'
+    + '</div>'
+    // Headline
+    + '<div class="summary" style="position:relative;z-index:4;text-align:center;padding:36px 24px 18px">'
+    +   '<div style="font-size:24px;font-weight:600;color:#fff;letter-spacing:-.3px">Selecione uma unidade</div>'
+    +   '<div style="font-size:13px;color:#7a8aa3;margin-top:6px">Escolha uma planta para acessar o sistema</div>'
+    + '</div>'
+    // Legend
+    + '<div class="legend-bar" id="_mlegend">'
+    +   '<span class="pchip"><span class="dot" style="background:#22c55e;box-shadow:0 0 8px #22c55e"></span>Calibração OK</span>'
+    +   '<span class="pchip"><span class="dot" style="background:#f59e0b;box-shadow:0 0 8px #f59e0b"></span>Vence em breve</span>'
+    +   '<span class="pchip"><span class="dot" style="background:#ef4444;box-shadow:0 0 8px #ef4444"></span>Vencida</span>'
+    + '</div>'
+    // List container
+    + '<div id="_plantList" class="plant-list" style="position:relative;z-index:3">'
+    +   '<div style="grid-column:1/-1;text-align:center;color:#7a8aa3;font-size:12px;padding:40px 0">'
+    +     '<span style="display:inline-flex;align-items:center;gap:10px">'
+    +       '<span style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(0,137,227,.25);border-top-color:#0089e3;animation:spin 1s linear infinite;display:inline-block"></span>'
+    +       'Carregando plantas…'
+    +     '</span>'
+    +   '</div>'
+    + '</div>';
+
+  // spinner keyframes (one-shot)
+  if (!document.getElementById('_spinkf')) {
+    var sk = document.createElement('style'); sk.id='_spinkf';
+    sk.textContent='@keyframes spin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(sk);
+  }
+
+  _loadPlantasParaSelector(function(plantas) {
+    if (!plantas || plantas.length === 0) {
+      plantas = _PLANTAS_FIXAS.map(function(p){ return {v:p,lbl:_getPlantLabel(p),country:null}; });
+    }
+    // Deduplicate
+    var seen = {}, uniq = [];
+    plantas.forEach(function(p){ if(p && p.v && !seen[p.v]){ seen[p.v]=true; uniq.push(p); }});
+    plantas = uniq.sort(function(a,b){ return String(a.lbl||a.v).localeCompare(String(b.lbl||b.v)); });
+
+    var chip = document.getElementById('_chipPlantsTxt');
+    if (chip) chip.textContent = plantas.length + ' planta' + (plantas.length===1?'':'s');
+    _loadMapStats(plantas, function(stats) {
+      _renderPlantList(plantas, stats);
+    });
+  });
+}
+
+// [v49.4] Render the plant list (flag + name + status)
+function _renderPlantList(plantas, stats) {
+  var box = document.getElementById('_plantList');
+  if (!box) return;
+  if (!plantas.length) {
+    box.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#7a8aa3;font-size:13px;padding:40px 0">Nenhuma planta cadastrada.</div>';
+    return;
+  }
+  function getCountry(code) {
+    if (_DYNAMIC_PLANTS[code] && _DYNAMIC_PLANTS[code].country) return _DYNAMIC_PLANTS[code].country;
+    return {SP:'BR',MX:'MX',USA:'US',DUNCAN:'US',AKRON:'US'}[code] || null;
+  }
+  var html = '';
+  plantas.forEach(function(p){
+    var code  = p.v;
+    var country = getCountry(code);
+    var flag  = (typeof _countryFlagEmoji === 'function') ? _countryFlagEmoji(country) : '';
+    var label = _getPlantLabel ? _getPlantLabel(code) : p.lbl;
+    // Strip leading flag from label if present (we render flag separately)
+    var shortLbl = String(label||code).replace(/^[\uD800-\uDFFF]{2}\s*/,'').split('(')[0].trim() || code;
+    var st = (stats && stats[code]) || {total:0,overdue:0,soon:0};
+    var color = st.overdue > 0 ? '#ef4444' : st.soon > 0 ? '#f59e0b' : '#22c55e';
+    var metaTxt;
+    if (st.total > 0) {
+      metaTxt = st.total + ' equipamento' + (st.total===1?'':'s');
+      if (st.overdue) metaTxt += ' · ' + st.overdue + ' vencido' + (st.overdue===1?'':'s');
+      else if (st.soon) metaTxt += ' · ' + st.soon + ' vence em breve';
+    } else {
+      metaTxt = 'Sem equipamentos cadastrados';
+    }
+    html +=
+      '<button type="button" class="plant-item" onclick="switchPlanta(\'' + code + '\')" aria-label="' + _escAttr(shortLbl) + '">'
+      +   '<div class="plant-flag">' + (flag || '🏭') + '</div>'
+      +   '<div class="plant-info">'
+      +     '<div class="plant-name">' + _escAttr(shortLbl) + '</div>'
+      +     '<div class="plant-meta"><span class="dot" style="background:' + color + ';box-shadow:0 0 6px ' + color + '"></span>' + _escAttr(metaTxt) + '</div>'
+      +   '</div>'
+      +   '<div class="plant-arrow">→</div>'
+      + '</button>';
+  });
+  box.innerHTML = html;
+  // Trigger i18n sweep so labels/legend/headlines translate per current LANG.
+  try { if (typeof LANG !== 'undefined' && LANG && LANG !== 'pt') setTimeout(function(){ try { window._I18N_DICT; } catch(_){} }, 30); } catch(_){}
+}
+
+// ── Load equipment counts + calibration status per plant ──────────────────────
+function _loadMapStats(plantas, cb) {
+  var sb = window._globalSupabaseClient;
+  if (!sb || !window.sbActive || !window.sbActive()) { cb({}); return; }
+  sb.from('equipamentos').select('unidade,status_calib,prox_calib')
+    .then(function(res) {
+      var data = res.data || [];
+      var stats = {};
+      var today = new Date(); today.setHours(0,0,0,0);
+      var soon  = new Date(today); soon.setDate(soon.getDate()+30);
+      data.forEach(function(eq) {
+        var u = (eq.unidade||'').toUpperCase();
+        if (!u || u==='DIRECTOR') return;
+        if (!stats[u]) stats[u] = {total:0,overdue:0,soon:0};
+        stats[u].total++;
+        if (eq.prox_calib) {
+          var d = new Date(eq.prox_calib);
+          if (!isNaN(d.getTime())) {
+            if (d < today) stats[u].overdue++;
+            else if (d <= soon) stats[u].soon++;
+          }
+        }
+      });
+      cb(stats);
+    }).catch(function(){ cb({}); });
+}
+
+// ── Dark minimal — render pins on SVG map ──────────────────────────────────────
+function _renderWorldPins(plantas, stats, getCoords, toX, toY) {
+  var loader = document.getElementById('_mloader');
+  if (loader) loader.style.display = 'none';
+  var legend = document.getElementById('_mlegend');
+  if (legend) legend.style.opacity = '1';
+  var pinsG = document.getElementById('_pins');
+  if (!pinsG) return;
+
+  function getCountry(code) {
+    if (_DYNAMIC_PLANTS[code] && _DYNAMIC_PLANTS[code].country) return _DYNAMIC_PLANTS[code].country;
+    return {SP:'BR',MX:'MX',USA:'US',DUNCAN:'US',AKRON:'US'}[code] || null;
+  }
+
+  // Simple anti-overlap: track placed label rects and flip card side if collision
+  var placed = [];
+  function collides(x,y,w,h){
+    for (var i=0;i<placed.length;i++){
+      var r=placed[i];
+      if (!(x+w<r.x || x>r.x+r.w || y+h<r.y || y>r.y+r.h)) return true;
+    }
+    return false;
+  }
+
+  var svgPins = '';
+  plantas.forEach(function(p) {
+    var code    = p.v;
+    var country = getCountry(code);
+    var coords  = getCoords(code, country);
+    var st      = stats[code] || {total:0,overdue:0,soon:0};
+    var color   = st.overdue > 0 ? '#ef4444' : st.soon > 0 ? '#f59e0b' : '#22c55e';
+    var label   = _getPlantLabel ? _getPlantLabel(code) : p.lbl;
+    var shortLbl = label.replace(/^[\uD800-\uDFFF]{2}\s*/,'').split('(')[0].trim() || code;
+    var totalTxt = st.total > 0 ? (st.total + ' equip.' + (st.overdue ? ' · ' + st.overdue + ' venc.' : '')) : 'sem dados';
+
+    if (!coords) return;
+    var cx = toX(coords.lon);
+    var cy = toY(coords.lat);
+    var cardW = Math.max(shortLbl.length * 6.2 + 24, 88);
+    var cardH = 32;
+
+    // try right side first; if overlap or off-canvas, flip to left
+    var side = 1; // 1 = right, -1 = left
+    var rx = cx + 12;
+    var ry = cy - cardH/2;
+    if (rx + cardW > 990 || collides(rx, ry, cardW, cardH)) {
+      side = -1;
+      rx = cx - 12 - cardW;
+      ry = cy - cardH/2;
+    }
+    placed.push({x:rx,y:ry,w:cardW,h:cardH});
+
+    var textAnchor = side === 1 ? 'start' : 'start';
+    var textX = rx + 10;
+
+    svgPins +=
+      '<g class="wpin" onclick="switchPlanta(\'' + code + '\')">'
+      // expanding ring
+      + '<circle class="wpulse" cx="' + cx + '" cy="' + cy + '" fill="none" stroke="' + color + '" stroke-width="1.5" style="animation:_ringPulse 2.4s ease-out infinite"/>'
+      // halo
+      + '<circle cx="' + cx + '" cy="' + cy + '" r="10" fill="' + color + '" opacity=".18"/>'
+      // dot
+      + '<circle class="wdot" cx="' + cx + '" cy="' + cy + '" r="5" fill="' + color + '" stroke="#0a1628" stroke-width="1.5" filter="url(#_pinShd)" style="color:' + color + '"/>'
+      // label card
+      + '<g class="wcard">'
+      +   '<rect x="' + rx + '" y="' + ry + '" width="' + cardW + '" height="' + cardH + '" rx="6" fill="rgba(10,22,40,.92)" stroke="rgba(255,255,255,.1)" stroke-width="1"/>'
+      +   '<text x="' + textX + '" y="' + (ry + 13) + '" font-size="10.5" font-weight="600" fill="#e6edf7" font-family="-apple-system,system-ui,sans-serif" text-anchor="' + textAnchor + '">' + _escAttr(shortLbl) + '</text>'
+      +   '<text x="' + textX + '" y="' + (ry + 25) + '" font-size="8.5" fill="' + color + '" font-family="-apple-system,system-ui,sans-serif" text-anchor="' + textAnchor + '">' + _escAttr(totalTxt) + '</text>'
+      + '</g>'
+      + '</g>';
+  });
+
+  pinsG.innerHTML = svgPins;
+}
+
+// minimal SVG text escaper used by the world map pins
+function _escAttr(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+// [v48] Load distinct plants from user_profiles (+ legacy fallback), register in _DYNAMIC_PLANTS
+async function _loadPlantasParaSelector(cb) {
+  var seen = {};
+  var plantas = [];
+  // Start with legacy fixed plants
+  _PLANTAS_FIXAS.forEach(function(p) {
+    if (!seen[p]) { seen[p] = true; plantas.push({ v:p, lbl:_getPlantLabel(p) }); }
+  });
+  // [v49.4] Also include seeded dynamic plants so they always show on the
+  // director's selection screen even if no user_profiles row exists yet.
+  try {
+    Object.keys(_DYNAMIC_PLANTS||{}).forEach(function(code){
+      if (!seen[code]) { seen[code] = true; plantas.push({ v:code, lbl:_getPlantLabel(code) }); }
+    });
+  } catch(e) {}
+  // Then load from user_profiles
+  if (window.sbActive && window.sbActive() && window._globalSupabaseClient) {
+    try {
+      var { data } = await window._globalSupabaseClient
+        .from('user_profiles')
+        .select('unidade, display_name, country')
+        .not('unidade', 'eq', 'DIRECTOR')
+        .not('unidade', 'is', null);
+      if (data) {
+        data.forEach(function(row) {
+          if (!row.unidade || row.unidade === 'DIRECTOR') return;
+          var code = String(row.unidade).toUpperCase();
+          // Register in dynamic map
+          if (!_DYNAMIC_PLANTS[code]) {
+            var flag = _countryFlagEmoji(row.country);
+            _DYNAMIC_PLANTS[code] = {
+              label: (flag ? flag + ' ' : '') + (row.display_name || code),
+              country: row.country || null
+            };
+            // Also update _UNIDADE_LABELS for backward compat
+            _UNIDADE_LABELS[code] = _DYNAMIC_PLANTS[code].label;
+          }
+          if (!seen[code]) { seen[code] = true; plantas.push({ v:code, lbl:_getPlantLabel(code) }); }
+        });
+      }
+    } catch(e) { console.warn('[v48] _loadPlantasParaSelector:', e.message || e); }
+  }
+  cb(plantas);
+}
+
+// [v48] Helper: convert ISO-3166-1 alpha-2 country code to flag emoji
+function _countryFlagEmoji(cc) {
+  if (!cc || cc.length !== 2) return '';
+  try {
+    var A = 0x1F1E6 - 65; // offset from A
+    return String.fromCodePoint(A + cc.toUpperCase().charCodeAt(0)) +
+           String.fromCodePoint(A + cc.toUpperCase().charCodeAt(1));
+  } catch(e) { return ''; }
 }
 
 function _ocultarSelecaoPlanta() {
@@ -5227,35 +6422,114 @@ function _ocultarSelecaoPlanta() {
   if (ov) ov.style.display = 'none';
 }
 
-// [v47] Carrega plantas disponíveis — plantas fixas sempre presentes + quaisquer outras do banco
-// Plantas fixas garantidas mesmo que não tenham equipamentos cadastrados ainda.
-const _PLANTAS_FIXAS = ['SP', 'MX', 'USA', 'DUNCAN', 'AKRON'];
+// [v49.2] Plantas legadas movidas para _DYNAMIC_PLANTS (editáveis/excluíveis).
+// _PLANTAS_FIXAS mantido vazio só para compatibilidade com referências antigas.
+const _PLANTAS_FIXAS = ['SP','MX','USA','DUNCAN','AKRON'];
+
+// [v49.6] Gerenciamento de plantas fixas excluídas — persiste no localStorage
+// para que o seed não as reinsira após reload.
+window._getDeletedFixedSet = function() {
+  try {
+    var raw = localStorage.getItem('rochling_deleted_fixed');
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
+};
+window._addDeletedFixed = function(code) {
+  try {
+    var list = window._getDeletedFixedSet();
+    if (list.indexOf(code) < 0) { list.push(code); }
+    localStorage.setItem('rochling_deleted_fixed', JSON.stringify(list));
+    // Também remove do array _PLANTAS_FIXAS em memória para não reaparecer na sessão atual
+    var idx = _PLANTAS_FIXAS.indexOf(code);
+    if (idx >= 0) _PLANTAS_FIXAS.splice(idx, 1);
+  } catch(e) { /* silent */ }
+};
+window._removeDeletedFixed = function(code) {
+  try {
+    var list = window._getDeletedFixedSet().filter(function(c){ return c !== code; });
+    localStorage.setItem('rochling_deleted_fixed', JSON.stringify(list));
+  } catch(e) { /* silent */ }
+};
+
+// Sementes das plantas que antes eram fixas — registram em _DYNAMIC_PLANTS
+// para virarem editáveis/excluíveis como qualquer outra planta dinâmica.
+// [v49.6] Respeita a lista de excluídas: nunca ressemeia o que o usuário deletou.
+(function _seedLegacyPlants(){
+  try {
+    if (typeof window === 'undefined') return;
+    window._DYNAMIC_PLANTS = window._DYNAMIC_PLANTS || (typeof _DYNAMIC_PLANTS !== 'undefined' ? _DYNAMIC_PLANTS : {});
+    window._UNIDADE_LABELS = window._UNIDADE_LABELS || (typeof _UNIDADE_LABELS !== 'undefined' ? _UNIDADE_LABELS : {});
+    var deleted = window._getDeletedFixedSet();
+    var seeds = [
+      { code:'SP',     name:'São Paulo',       country:'BR' },
+      { code:'MX',     name:'México',          country:'MX' },
+      { code:'USA',    name:'EUA',             country:'US' },
+      { code:'DUNCAN', name:'Röchling Duncan', country:'US' },
+      { code:'AKRON',  name:'Akron',           country:'US' }
+    ];
+    seeds.forEach(function(s){
+      // Não ressemeia planta que foi excluída pelo usuário
+      if (deleted.indexOf(s.code) >= 0) return;
+      if (window._DYNAMIC_PLANTS[s.code]) return;
+      var flag = (typeof _countryFlagEmoji === 'function') ? _countryFlagEmoji(s.country) : '';
+      window._DYNAMIC_PLANTS[s.code] = { label:(flag?flag+' ':'')+s.name, country:s.country };
+      window._UNIDADE_LABELS[s.code] = window._DYNAMIC_PLANTS[s.code].label;
+    });
+    // Sincroniza _PLANTAS_FIXAS em memória — remove os excluídos
+    deleted.forEach(function(code) {
+      var idx = _PLANTAS_FIXAS.indexOf(code);
+      if (idx >= 0) _PLANTAS_FIXAS.splice(idx, 1);
+    });
+  } catch(e){ /* silent */ }
+})();
 window._loadPlantasDisponiveis = async function() {
   if (!_isDirector) return;
   const sel = document.getElementById('planta-selector');
   if (!sel) return;
   const current = sel.value;
-  // Começa com as plantas fixas
-  let plantas = [..._PLANTAS_FIXAS];
-  // Se Supabase ativo, mescla com plantas do banco (suporte a novas plantas futuras)
-  if (window.sbActive && window.sbActive()) {
+  let seen = {};
+  let plantas = [];
+  // Seed with legacy fixed plants
+  _PLANTAS_FIXAS.forEach(function(p){ if(!seen[p]){seen[p]=true;plantas.push(p);} });
+  // [v48] Load from user_profiles (includes dynamically added plants)
+  if (window.sbActive && window.sbActive() && window._globalSupabaseClient) {
+    try {
+      const { data: profData } = await window._globalSupabaseClient
+        .from('user_profiles')
+        .select('unidade, display_name, country')
+        .not('unidade', 'eq', 'DIRECTOR')
+        .not('unidade', 'is', null);
+      (profData || []).forEach(function(row) {
+        if (!row.unidade || row.unidade === 'DIRECTOR') return;
+        var code = String(row.unidade).toUpperCase();
+        if (!_DYNAMIC_PLANTS[code]) {
+          var flag = _countryFlagEmoji(row.country);
+          _DYNAMIC_PLANTS[code] = {
+            label: (flag ? flag + ' ' : '') + (row.display_name || code),
+            country: row.country || null
+          };
+          _UNIDADE_LABELS[code] = _DYNAMIC_PLANTS[code].label;
+        }
+        if (!seen[code]) { seen[code] = true; plantas.push(code); }
+      });
+    } catch(e) { console.warn('[v48] _loadPlantasDisponiveis (user_profiles):', e.message || e); }
+    // Also merge from equipamentos table for backward compat
     try {
       const { data } = await _sb.from('equipamentos').select('unidade').not('unidade', 'is', null);
-      const doDb = (data || []).map(function(r){ return r.unidade; }).filter(Boolean);
-      doDb.forEach(function(p){ if (!plantas.includes(p)) plantas.push(p); });
-    } catch(e) { console.warn('[v47] _loadPlantasDisponiveis (DB):', e.message || e); }
+      (data || []).forEach(function(r){ if(r.unidade && !seen[r.unidade]){seen[r.unidade]=true;plantas.push(r.unidade);} });
+    } catch(e) { console.warn('[v48] _loadPlantasDisponiveis (equipamentos):', e.message || e); }
   }
   plantas = plantas.sort();
   sel.innerHTML = '<option value="">🌎 Todas as plantas</option>';
   plantas.forEach(function(p) {
-    const label = _UNIDADE_LABELS[p] || ('🏭 ' + p);
+    const label = _getPlantLabel(p);
     const opt = document.createElement('option');
     opt.value = p;
     opt.textContent = label;
     if (p === current) opt.selected = true;
     sel.appendChild(opt);
   });
-  console.log('[v47] Plantas carregadas:', plantas);
+  console.log('[v48] Plantas carregadas:', plantas);
 };
 // ──────────────────────────────────────────────────────────────────
 
@@ -5270,28 +6544,36 @@ window.adminLoadUsers = async function() {
   }
   const tbody = document.getElementById('admin-users-tbody');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--tx3)">⏳ Carregando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--tx3)">⏳ Carregando...</td></tr>';
 
   try {
-    const { data, error } = await sb.from('user_profiles').select('*').order('email');
+    const { data: rawData, error } = await sb.from('user_profiles').select('*').order('email');
     if (error) throw error;
+    // [FIX] Filter out plant-sentinel rows (created by "Nova Planta" modal)
+    const data = (rawData || []).filter(function(u){ return !(u && u.email && u.email.indexOf('__plant__') === 0); });
 
     if (!data || data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--tx3);font-size:12px">Nenhum perfil cadastrado ainda. Use o formulário acima para adicionar.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--tx3);font-size:12px">Nenhum perfil cadastrado ainda. Use o formulário acima para adicionar.</td></tr>';
       return;
     }
 
     const thStyle = 'padding:9px 12px;border-bottom:1px solid var(--bdr2);';
+    const allPlants = Array.from(new Set([..._PLANTAS_FIXAS, ...Object.keys(_DYNAMIC_PLANTS), 'DIRECTOR'])).sort();
     tbody.innerHTML = data.map(function(u) {
-      const unidadeLabel = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DUNCAN: '🇺🇸 Duncan, SC', AKRON: '🇺🇸 Akron, OH', DIRECTOR: '🌎 Diretor' };
-      const opts = ['SP','MX','USA','DUNCAN','AKRON','DIRECTOR'].map(function(v) {
-        return '<option value="' + v + '"' + (u.unidade === v ? ' selected' : '') + '>' + (unidadeLabel[v] || v) + '</option>';
+      const opts = allPlants.map(function(v) {
+        return '<option value="' + v + '"' + (u.unidade === v ? ' selected' : '') + '>' + _getPlantLabel(v) + '</option>';
       }).join('');
+      const countryFlag = u.country ? _countryFlagEmoji(u.country) : '';
+      const countryDisp = u.country ? (countryFlag + ' ' + u.country) : '<span style="color:var(--tx3)">—</span>';
       return '<tr style="border-bottom:1px solid var(--bdr2)">'
         + '<td style="' + thStyle + '">' + (u.email || '—') + '</td>'
         + '<td style="' + thStyle + '">' + (u.display_name || '<span style="color:var(--tx3)">—</span>') + '</td>'
-        + '<td style="' + thStyle + '"><select onchange="adminUpdateUnidade(\'' + u.email + '\',this.value)" style="padding:4px 8px;border:1px solid var(--bdr2);border-radius:5px;background:var(--surf2);color:var(--tx);font-size:11px">' + opts + '</select></td>'
-        + '<td style="' + thStyle + 'text-align:center"><button class="btn-g" onclick="adminDeleteUser(\'' + u.email + '\')" style="font-size:10px;padding:4px 10px;background:var(--red,#dc2626);border-color:var(--red,#dc2626);color:#fff">🗑 Remover</button></td>'
+        + '<td style="' + thStyle + '">' + countryDisp + '</td>'
+        + '<td style="' + thStyle + '"><select onchange="adminUpdateUnidade(\'' + u.email + '\',this.value,\'' + (u.country||'') + '\')" style="padding:4px 8px;border:1px solid var(--bdr2);border-radius:5px;background:var(--surf2);color:var(--tx);font-size:11px">' + opts + '</select></td>'
+        + '<td style="' + thStyle + 'text-align:center;white-space:nowrap">'
+          + '<button class="btn-g" onclick="adminEditUser(\'' + u.email + '\')" style="font-size:10px;padding:4px 10px;margin-right:4px;background:#0ea5e9;border-color:#0ea5e9;color:#fff">✏️ ' + (window._at?window._at('act_edit'):'Editar') + '</button>'
+          + '<button class="btn-g" onclick="adminDeleteUser(\'' + u.email + '\')" style="font-size:10px;padding:4px 10px;background:var(--red,#dc2626);border-color:var(--red,#dc2626);color:#fff">🗑 ' + (window._at?window._at('act_delete'):'Remover') + '</button>'
+        + '</td>'
         + '</tr>';
     }).join('');
   } catch(e) {
@@ -5315,6 +6597,7 @@ function _handleProfilesError(e, contexto) {
     '  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n' +
     '  email TEXT UNIQUE NOT NULL,\n' +
     '  unidade TEXT NOT NULL,\n' +
+    '  country TEXT,\n' +
     '  display_name TEXT,\n' +
     '  updated_at TIMESTAMPTZ DEFAULT now()\n' +
     ');\n\n' +
@@ -5329,7 +6612,9 @@ function _handleProfilesError(e, contexto) {
     '-- IMPORTANTE: permissao de tabela (RLS sozinho nao basta)\n' +
     'GRANT ALL ON TABLE user_profiles TO authenticated;\n' +
     'GRANT ALL ON TABLE user_profiles TO service_role;\n\n' +
-    'ALTER TABLE equipamentos ADD COLUMN IF NOT EXISTS unidade TEXT;';
+    'ALTER TABLE equipamentos ADD COLUMN IF NOT EXISTS unidade TEXT;\n\n' +
+    '-- [v48] Add country column for auto-language detection\n' +
+    'ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS country TEXT;';
 
   if (isPermission || isNotFound) {
     // Exibe modal com o SQL correto e botão de copiar
@@ -5366,21 +6651,30 @@ window.adminSaveUser = async function() {
   const sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
   const email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
-  const unidade     = document.getElementById('admin-unidade').value;
+  const unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
+  const country     = (document.getElementById('admin-country').value || '').trim().toUpperCase() || null;
   const displayName = (document.getElementById('admin-display-name').value || '').trim();
 
   if (!email || !unidade) { showToast('⚠️ Preencha e-mail e planta.', 'warning'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('⚠️ E-mail inválido.', 'warning'); return; }
 
+  // [v48] Register plant in dynamic map if new
+  if (country && unidade !== 'DIRECTOR' && !_DYNAMIC_PLANTS[unidade]) {
+    var flag = _countryFlagEmoji(country);
+    _DYNAMIC_PLANTS[unidade] = { label:(flag?flag+' ':''+(displayName||unidade)), country:country };
+    _UNIDADE_LABELS[unidade] = _DYNAMIC_PLANTS[unidade].label;
+  }
+
   try {
     const { error } = await sb.from('user_profiles').upsert(
-      { email: email, unidade: unidade, display_name: displayName || null, updated_at: new Date().toISOString() },
+      { email: email, unidade: unidade, country: country, display_name: displayName || null, updated_at: new Date().toISOString() },
       { onConflict: 'email' }
     );
     if (error) throw error;
-    showToast('✅ Perfil salvo: ' + email + ' → ' + unidade, 'success');
+    showToast('✅ Perfil salvo: ' + email + ' → ' + unidade + (country?' ('+country+')':''), 'success');
     document.getElementById('admin-email').value = '';
     document.getElementById('admin-unidade').value = '';
+    if(document.getElementById('admin-country')) document.getElementById('admin-country').value = '';
     document.getElementById('admin-display-name').value = '';
     window.adminLoadUsers();
   } catch(e) {
@@ -5395,7 +6689,8 @@ window.adminCreateWithPassword = async function() {
   const sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
   const email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
-  const unidade     = document.getElementById('admin-unidade').value;
+  const unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
+  const country     = (document.getElementById('admin-country') ? document.getElementById('admin-country').value : '').trim().toUpperCase() || null;
   const displayName = (document.getElementById('admin-display-name').value || '').trim();
   const password    = (document.getElementById('admin-password').value || '').trim();
 
@@ -5406,44 +6701,130 @@ window.adminCreateWithPassword = async function() {
 
   showToast('⏳ Criando usuário ' + email + '…', 'info');
 
-  try {
-    // Tenta criar via Admin API (requer service_role)
-    const { data: created, error: createErr } = await sb.auth.admin.createUser({
-      email: email,
-      password: password,
-      email_confirm: true,           // confirma o e-mail automaticamente (sem precisar clicar em link)
-      user_metadata: { unidade: unidade, display_name: displayName || null }
-    });
+  // [v49.3] Coerção defensiva — garante que tudo é string e sem caracteres invisíveis
+  const _emailStr = String(email);
+  const _passStr  = String(password);
+  const _uniStr   = String(unidade);
+  const _ctryStr  = country ? String(country) : null;
+  const _nameStr  = displayName ? String(displayName) : null;
 
-    if (createErr) {
-      // Fallback: Admin API indisponível — orienta usar Dashboard
-      showToast(
-        '⚠️ API Admin indisponível. Crie o usuário manualmente: Supabase → Auth → Users → Add User → Create New User, com e-mail "' + email + '" e a senha desejada. Depois clique em 💾 Salvar perfil.',
-        'warning'
+  // Preserva sessão atual do diretor (signUp pode trocar a sessão ativa)
+  let _savedSession = null;
+  try {
+    const _s = await sb.auth.getSession();
+    _savedSession = (_s && _s.data && _s.data.session) ? _s.data.session : null;
+  } catch(_) { /* ignore */ }
+
+  async function _persistProfileAndFinish(viaFallback) {
+    // [v48] Register plant in dynamic map if new
+    if (_ctryStr && _uniStr !== 'DIRECTOR' && !_DYNAMIC_PLANTS[_uniStr]) {
+      var flag = _countryFlagEmoji(_ctryStr);
+      _DYNAMIC_PLANTS[_uniStr] = { label:(flag?flag+' ':''+(_nameStr||_uniStr)), country:_ctryStr };
+      _UNIDADE_LABELS[_uniStr] = _DYNAMIC_PLANTS[_uniStr].label;
+    }
+    try {
+      const { error: upErr } = await sb.from('user_profiles').upsert(
+        { email:_emailStr, unidade:_uniStr, country:_ctryStr, display_name:_nameStr, updated_at:new Date().toISOString() },
+        { onConflict:'email' }
       );
+      if (upErr) throw upErr;
+    } catch(profErr) {
+      _handleProfilesError(profErr, 'Vincular planta');
       return;
     }
 
-    // Salva perfil em user_profiles vinculando à planta
-    const { error: upErr } = await sb.from('user_profiles').upsert(
-      { email: email, unidade: unidade, display_name: displayName || null, updated_at: new Date().toISOString() },
-      { onConflict: 'email' }
-    );
-    if (upErr) throw upErr;
-
-    showToast('✅ Usuário criado: ' + email + ' → ' + (_UNIDADE_LABELS[unidade] || unidade) + '. Pode fazer login imediatamente.', 'success');
+    showToast('✅ Usuário criado: ' + _emailStr + ' → ' + _getPlantLabel(_uniStr) +
+      (viaFallback ? ' (via signUp — pode exigir confirmação de e-mail se ativada no projeto).' : '. Pode fazer login imediatamente.'),
+      'success');
 
     // Limpa formulário
-    document.getElementById('admin-email').value        = '';
-    document.getElementById('admin-unidade').value      = '';
-    document.getElementById('admin-display-name').value = '';
-    document.getElementById('admin-password').value     = '';
-    window.adminLoadUsers();
+    ['admin-email','admin-unidade','admin-country','admin-display-name','admin-password'].forEach(function(id){
+      var el = document.getElementById(id); if (el) el.value = '';
+    });
+    if (typeof window.adminLoadUsers === 'function') window.adminLoadUsers();
+  }
+
+  async function _restoreDirectorSession() {
+    if (!_savedSession || !_savedSession.access_token || !_savedSession.refresh_token) return;
+    try {
+      const cur = await sb.auth.getSession();
+      const curTok = cur && cur.data && cur.data.session && cur.data.session.access_token;
+      if (curTok && curTok === _savedSession.access_token) return; // ainda é o diretor
+      await sb.auth.setSession({
+        access_token: _savedSession.access_token,
+        refresh_token: _savedSession.refresh_token
+      });
+    } catch(_) { /* ignore */ }
+  }
+
+  try {
+    // [v49.2] Tenta via Edge Function (admin-create-user) — usa service_role no servidor.
+    var fnUrl = (_supabaseUrl || '').replace(/\/+$/, '') + '/functions/v1/admin-create-user';
+    var accessToken = (_savedSession && _savedSession.access_token) || _supabaseKey;
+    var resp = null, payload = {}, fetchFailed = false;
+    try {
+      resp = await fetch(fnUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + accessToken,
+          'apikey': _supabaseKey
+        },
+        body: JSON.stringify({ email:_emailStr, password:_passStr, unidade:_uniStr, country:_ctryStr, display_name:_nameStr })
+      });
+      payload = await resp.json().catch(function(){ return {}; });
+    } catch(netErr) {
+      fetchFailed = true; // CORS / 404 / offline → cai no fallback signUp
+    }
+
+    if (!fetchFailed && resp && resp.ok) {
+      await _persistProfileAndFinish(false);
+      return;
+    }
+
+    // ── Fallback: cria via sb.auth.signUp (sem service_role) ──
+    // Funciona sem Edge Function. Limitação: respeita configuração de confirmação de e-mail do projeto.
+    showToast('ℹ️ Edge Function indisponível — usando criação direta (signUp)…', 'info');
+    let signUpData = null, signUpErr = null;
+    try {
+      const r = await sb.auth.signUp({
+        email: _emailStr,
+        password: _passStr,
+        options: { data: { display_name: _nameStr, unidade: _uniStr, country: _ctryStr } }
+      });
+      signUpData = r && r.data; signUpErr = r && r.error;
+    } catch(ex) {
+      signUpErr = ex;
+    }
+
+    // Restaura sessão do diretor mesmo se signUp setou uma nova sessão
+    await _restoreDirectorSession();
+
+    if (signUpErr) {
+      var emsg = (signUpErr && signUpErr.message) ? String(signUpErr.message) : String(signUpErr);
+      // Se o usuário já existe no Auth, ainda vinculamos perfil
+      if (/already.*registered|already.*exists|user.*exists/i.test(emsg)) {
+        showToast('ℹ️ Usuário já existia no Auth — vinculando à planta…', 'info');
+        await _persistProfileAndFinish(true);
+        return;
+      }
+      // Se a Edge Function respondeu erro estruturado, mostra esse erro original
+      if (!fetchFailed && resp && !resp.ok) {
+        showToast('❌ Falha ao criar usuário: ' + ((payload && payload.error) || ('HTTP ' + resp.status)) + ' — ' + emsg, 'error');
+      } else {
+        showToast('❌ Falha ao criar usuário: ' + emsg, 'error');
+      }
+      return;
+    }
+
+    await _persistProfileAndFinish(true);
 
   } catch(e) {
+    await _restoreDirectorSession();
     _handleProfilesError(e, 'Criar usuário');
   }
 };
+
 
 // ✉ CONVIDAR — cria usuário no Supabase Auth (envia e-mail convite) + salva em user_profiles
 // Não precisa de SQL manual nem do Dashboard do Supabase.
@@ -5451,7 +6832,8 @@ window.adminInviteUser = async function() {
   const sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
   const email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
-  const unidade     = document.getElementById('admin-unidade').value;
+  const unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
+  const country     = (document.getElementById('admin-country') ? document.getElementById('admin-country').value : '').trim().toUpperCase() || null;
   const displayName = (document.getElementById('admin-display-name').value || '').trim();
 
   if (!email || !unidade) { showToast('⚠️ Preencha e-mail e planta antes de convidar.', 'warning'); return; }
@@ -5472,7 +6854,7 @@ window.adminInviteUser = async function() {
       // Apenas salva em user_profiles e orienta o usuário.
       console.warn('[adminInviteUser] Admin API indisponível — salvando só perfil:', inviteErr.message);
       const { error: upErr } = await sb.from('user_profiles').upsert(
-        { email: email, unidade: unidade, display_name: displayName || null, updated_at: new Date().toISOString() },
+        { email: email, unidade: unidade, country: country, display_name: displayName || null, updated_at: new Date().toISOString() },
         { onConflict: 'email' }
       );
       if (upErr) throw upErr;
@@ -5480,16 +6862,17 @@ window.adminInviteUser = async function() {
     } else {
       // Passo 2: Salvar perfil em user_profiles com a planta
       const { error: upErr } = await sb.from('user_profiles').upsert(
-        { email: email, unidade: unidade, display_name: displayName || null, updated_at: new Date().toISOString() },
+        { email: email, unidade: unidade, country: country, display_name: displayName || null, updated_at: new Date().toISOString() },
         { onConflict: 'email' }
       );
       if (upErr) throw upErr;
-      showToast('✅ Convite enviado para ' + email + ' — planta: ' + (_UNIDADE_LABELS[unidade] || unidade), 'success');
+      showToast('✅ Convite enviado para ' + email + ' — planta: ' + _getPlantLabel(unidade), 'success');
     }
 
     // Limpa o formulário e recarrega a lista
     document.getElementById('admin-email').value = '';
     document.getElementById('admin-unidade').value = '';
+    if(document.getElementById('admin-country')) document.getElementById('admin-country').value = '';
     document.getElementById('admin-display-name').value = '';
     window.adminLoadUsers();
 
@@ -5498,15 +6881,17 @@ window.adminInviteUser = async function() {
   }
 };
 
-window.adminUpdateUnidade = async function(email, unidade) {
+window.adminUpdateUnidade = async function(email, unidade, country) {
   const sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
   try {
+    var upd = { unidade: unidade, updated_at: new Date().toISOString() };
+    if (country) upd.country = country;
     const { error } = await sb.from('user_profiles')
-      .update({ unidade: unidade, updated_at: new Date().toISOString() })
+      .update(upd)
       .eq('email', email);
     if (error) throw error;
-    showToast('✅ Planta atualizada: ' + email + ' → ' + unidade, 'success');
+    showToast('✅ Planta atualizada: ' + email + ' → ' + _getPlantLabel(unidade), 'success');
   } catch(e) {
     _handleProfilesError(e, 'Atualizar planta');
   }
@@ -5539,7 +6924,138 @@ window.adminCopySql = function() {
     showToast('Selecione e copie o SQL manualmente.', 'info');
   }
 };
+
+// ═══════════════════════════════════════════════════════════════════
+// [FIX] NOVA PLANTA — Modal + persistência + re-render global de <select>s
+// ═══════════════════════════════════════════════════════════════════
+
+// Re-popula TODOS os <select> de plantas do sistema sem precisar de F5.
+// Heurística: qualquer <select> cujo conjunto de <option> contenha pelo
+// menos um código de _PLANTAS_FIXAS é tratado como seletor de planta.
+window._repopulatePlantSelects = function _repopulatePlantSelects() {
+  try {
+    var all = Array.from(new Set([].concat(
+      (typeof _PLANTAS_FIXAS !== 'undefined' ? _PLANTAS_FIXAS : []),
+      (typeof _DYNAMIC_PLANTS !== 'undefined' ? Object.keys(_DYNAMIC_PLANTS) : []),
+      ['DIRECTOR']
+    ))).sort(function(a, b){
+      if (a === 'DIRECTOR') return 1;
+      if (b === 'DIRECTOR') return -1;
+      return a.localeCompare(b);
+    });
+    var fixed = (typeof _PLANTAS_FIXAS !== 'undefined') ? _PLANTAS_FIXAS : [];
+    document.querySelectorAll('select').forEach(function(sel){
+      var values = Array.from(sel.options).map(function(o){ return o.value; });
+      var marked = sel.hasAttribute('data-plant-select');
+      var looksLikePlant = marked || fixed.some(function(p){ return values.indexOf(p) >= 0; }) || values.indexOf('DIRECTOR') >= 0;
+      if (!looksLikePlant) return;
+      var current = sel.value;
+      var firstOpt = sel.options[0];
+      var hasPlaceholder = firstOpt && firstOpt.value === '';
+      var placeholderText = hasPlaceholder ? (firstOpt.text || 'Selecionar planta...') : '';
+      var html = (hasPlaceholder ? '<option value="">' + placeholderText + '</option>' : '') +
+        all.map(function(v){
+          return '<option value="' + v + '">' +
+            (typeof _getPlantLabel === 'function' ? _getPlantLabel(v) : v) +
+            '</option>';
+        }).join('');
+      sel.innerHTML = html;
+      if (current && all.indexOf(current) >= 0) sel.value = current;
+      sel.dataset.populated = '1';
+    });
+  } catch(e) { console.warn('[_repopulatePlantSelects]', e); }
+};
+
+window.adminOpenNewPlantModal = function() {
+  if (typeof _isDirector !== 'undefined' && !_isDirector) {
+    showToast('⚠️ Apenas o Diretor pode criar plantas.', 'warning');
+    return;
+  }
+  var m = document.getElementById('np-modal');
+  if (!m) return;
+  ['np-code','np-name','np-country'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  m.style.display = 'flex';
+  setTimeout(function(){ var c = document.getElementById('np-code'); if (c) c.focus(); }, 60);
+};
+
+window.adminCloseNewPlantModal = function() {
+  var m = document.getElementById('np-modal');
+  if (!m) return;
+  m.style.display = 'none';
+  ['np-code','np-name','np-country'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+};
+
+window.adminCreatePlant = async function() {
+  if (typeof _isDirector !== 'undefined' && !_isDirector) {
+    showToast('⚠️ Apenas o Diretor pode criar plantas.', 'warning');
+    return;
+  }
+  var code    = (document.getElementById('np-code').value    || '').trim().toUpperCase();
+  var name    = (document.getElementById('np-name').value    || '').trim();
+  var country = (document.getElementById('np-country').value || '').trim().toUpperCase() || null;
+
+  if (!code)                              { showToast('⚠️ Informe o código da planta (ex.: SP, MX).', 'warning'); return; }
+  if (!/^[A-Z0-9_-]{2,12}$/.test(code))   { showToast('⚠️ Código inválido. Use 2 a 12 letras, números, _ ou -.', 'warning'); return; }
+  if (code === 'DIRECTOR')                { showToast('⚠️ "DIRECTOR" é um código reservado.', 'warning'); return; }
+
+  var jaExiste = (typeof _PLANTAS_FIXAS !== 'undefined' && _PLANTAS_FIXAS.indexOf(code) >= 0) ||
+                 (typeof _DYNAMIC_PLANTS !== 'undefined' && _DYNAMIC_PLANTS[code]);
+  if (jaExiste) { showToast('⚠️ Já existe uma planta com o código "' + code + '".', 'warning'); return; }
+
+  // 1) Registra in-memory (efeito imediato em toda a UI)
+  if (typeof _DYNAMIC_PLANTS === 'undefined') { window._DYNAMIC_PLANTS = {}; }
+  var flag = (country && typeof _countryFlagEmoji === 'function') ? _countryFlagEmoji(country) : '';
+  _DYNAMIC_PLANTS[code] = { label: (flag ? flag + ' ' : '') + (name || code), country: country };
+  if (typeof _UNIDADE_LABELS !== 'undefined') {
+    _UNIDADE_LABELS[code] = _DYNAMIC_PLANTS[code].label;
+  }
+
+  // 2) Persistência (sentinel row em user_profiles — sobrevive a reload, oculta da tabela)
+  var sb = window._globalSupabaseClient || window._sb;
+  if (sb) {
+    try {
+      var sentinelEmail = '__plant__' + code.toLowerCase() + '@plant.local';
+      var { error: upErr } = await sb.from('user_profiles').upsert(
+        {
+          email: sentinelEmail,
+          unidade: code,
+          country: country,
+          display_name: '[PLANT] ' + (name || code),
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: 'email' }
+      );
+      if (upErr) { console.warn('[adminCreatePlant] persistência falhou:', upErr.message); }
+    } catch(e) { console.warn('[adminCreatePlant] erro persistência:', e); }
+  }
+
+  // 3) Atualiza TODOS os <select> de planta (topo, cadastro de equipamentos, filtros, form admin)
+  window._repopulatePlantSelects();
+
+  // 4) Feedback + fecha modal + limpa campos
+  showToast('✅ Planta criada com sucesso: ' + (typeof _getPlantLabel === 'function' ? _getPlantLabel(code) : code), 'success');
+  window.adminCloseNewPlantModal();
+};
+
+// [FIX] Garante que após criar/atualizar/convidar usuário, todos os <select>
+// de planta sejam atualizados (caso uma nova planta tenha sido inferida do form).
+(function patchAdminUserFlowsToRefreshPlants(){
+  ['adminSaveUser','adminCreateWithPassword','adminInviteUser','adminUpdateUnidade','adminDeleteUser'].forEach(function(fn){
+    var orig = window[fn];
+    if (typeof orig !== 'function') return;
+    window[fn] = async function() {
+      var r = await orig.apply(this, arguments);
+      try { window._repopulatePlantSelects(); } catch(_){}
+      return r;
+    };
+  });
+})();
 // ══════════════════════════════════════════════════════════════════
+
 
 // Inicializa o cliente Supabase (lê config do localStorage se disponível)
 function _initSupabaseClient() {
@@ -6571,10 +8087,19 @@ function showApp(user) {
         if (window._globalSupabaseClient && user.email) {
           const { data } = await window._globalSupabaseClient
             .from('user_profiles')
-            .select('unidade')
+            .select('unidade, country, display_name')
             .eq('email', user.email)
             .maybeSingle();
           if (data && data.unidade) {
+            // [v48] Register plant in dynamic map before setting unidade
+            if (data.country && data.unidade !== 'DIRECTOR') {
+              var _flag = _countryFlagEmoji(data.country);
+              _DYNAMIC_PLANTS[data.unidade] = {
+                label: (_flag?_flag+' ':'') + (data.display_name || data.unidade),
+                country: data.country
+              };
+              _UNIDADE_LABELS[data.unidade] = _DYNAMIC_PLANTS[data.unidade].label;
+            }
             _setUnidade(data.unidade);
           } else {
             // [BUG-SEC FIX] Usuário sem planta configurada NÃO vira Diretor.
@@ -6594,7 +8119,13 @@ function showApp(user) {
         // então showApp() já terminou sem mostrar a tela de seleção de planta.
         // Corrigido: tratamos o caso do diretor explicitamente neste bloco.
         if (_isDirector) {
-          _mostrarSelecaoPlanta();
+          // [v49.5 FIX] Restaura planta persistida do Diretor (sessão anterior)
+          var _savedPlant = StorageService.get('rochling_director_plant', '');
+          if (_savedPlant) {
+            switchPlanta(_savedPlant);
+          } else {
+            _mostrarSelecaoPlanta();
+          }
           if (typeof window._loadPlantasDisponiveis === 'function') window._loadPlantasDisponiveis();
         } else if (typeof sbPull === 'function' && typeof window.sbActive === 'function' && window.sbActive()) {
           sbPull().then(function(ok) { if (ok && typeof updateAll === 'function') updateAll(); });
@@ -6619,10 +8150,15 @@ function showApp(user) {
   if (_appInitialized) return;
   _appInitialized = true;
 
-  // [FIX-DIRECTOR] Director sem planta selecionada → mostra tela de seleção, não carrega dados.
-  // Antes: updateAll() + initSupabase() → sbPull() carregava todos os dados (SP dominava).
+  // [FIX-DIRECTOR] Director sem planta selecionada → verifica persistência ou mostra seleção.
   if (_isDirector && !_currentUnidade) {
-    _mostrarSelecaoPlanta();
+    var _savedPlant = StorageService.get('rochling_director_plant', '');
+    if (_savedPlant) {
+      // [v49.5 FIX] Restaura planta persistida — evita exibir tela de seleção desnecessariamente
+      switchPlanta(_savedPlant);
+    } else {
+      _mostrarSelecaoPlanta();
+    }
     initSupabase(); // conecta mas sbPull vai retornar cedo (sem planta)
     return;
   }
@@ -9490,6 +11026,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Aplica idioma e formato de data salvos
   document.getElementById('lb-pt')?.classList.toggle('on', LANG==='pt');
   document.getElementById('lb-en')?.classList.toggle('on', LANG==='en');
+  document.getElementById('lb-es')?.classList.toggle('on', LANG==='es');
+  document.getElementById('lb-de')?.classList.toggle('on', LANG==='de');
+  document.getElementById('lb-fr')?.classList.toggle('on', LANG==='fr');
+  document.getElementById('lb-it')?.classList.toggle('on', LANG==='it');
+  document.getElementById('lb-pl')?.classList.toggle('on', LANG==='pl');
   document.getElementById('df-dmy')?.classList.toggle('on', DATE_FMT==='dmy');
   document.getElementById('df-iso')?.classList.toggle('on', DATE_FMT==='iso');
   applyLang();
@@ -15824,6 +17365,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   _DEV && console.log('[QR Scanner v46] Carregado — jsQR + getUserMedia com fallback iOS + histórico de sessão.'); // [BUG22 FIX]
+})();
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
@@ -15854,6 +17396,694 @@ document.addEventListener('DOMContentLoaded', function() {
 
   </div>
 </div>
+
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   [v49.1] ADMIN — Plantas (lista/edit/excluir), Editar Usuário, i18n
+   ──────────────────────────────────────────────────────────────────── */
+(function(){
+  // ── i18n local do painel admin (não polui o T global) ──
+  var _ADM_T = {
+    pt:{plants_title:'🏭 Plantas cadastradas',admin_title:'🌎 Administração de Usuários',btn_new_plant:'🏭 Nova Planta',btn_refresh:'🔄 Atualizar',btn_refresh_users:'🔄 Atualizar Lista',th_code:'Código',th_name:'Nome',th_country:'País',th_lang:'Idioma',th_actions:'Ações',th_email:'E-mail',th_plant:'Planta',loading_plants:'Clique em Atualizar para carregar as plantas.',no_plants:'Nenhuma planta cadastrada.',act_edit:'Editar',act_delete:'Excluir',act_remove:'Remover',fixed_plant:'(fixa)',confirm_del_plant:'Excluir a planta "{c}"? Usuários vinculados ficarão sem planta.',confirm_del_fixed:'Plantas fixas não podem ser excluídas.',plant_updated:'✅ Planta atualizada',plant_deleted:'🗑 Planta excluída',user_updated:'✅ Usuário atualizado',modal_new_plant:'🏭 Nova Planta',modal_edit_plant:'✏️ Editar Planta',modal_edit_user:'✏️ Editar Usuário',btn_save_plant:'💾 Criar planta',btn_save_changes:'💾 Salvar alterações',btn_cancel:'Cancelar',lbl_code:'Código da planta *',lbl_name:'Nome (opcional)',lbl_country:'País (código ISO, opcional)',lbl_email:'E-mail',lbl_user_name:'Nome',lbl_plant:'Planta'},
+    en:{plants_title:'🏭 Registered plants',admin_title:'🌎 User administration',btn_new_plant:'🏭 New plant',btn_refresh:'🔄 Refresh',btn_refresh_users:'🔄 Refresh list',th_code:'Code',th_name:'Name',th_country:'Country',th_lang:'Language',th_actions:'Actions',th_email:'E-mail',th_plant:'Plant',loading_plants:'Click Refresh to load plants.',no_plants:'No plants registered.',act_edit:'Edit',act_delete:'Delete',act_remove:'Remove',fixed_plant:'(fixed)',confirm_del_plant:'Delete plant "{c}"? Linked users will lose their plant.',confirm_del_fixed:'Fixed plants cannot be deleted.',plant_updated:'✅ Plant updated',plant_deleted:'🗑 Plant deleted',user_updated:'✅ User updated',modal_new_plant:'🏭 New plant',modal_edit_plant:'✏️ Edit plant',modal_edit_user:'✏️ Edit user',btn_save_plant:'💾 Create plant',btn_save_changes:'💾 Save changes',btn_cancel:'Cancel',lbl_code:'Plant code *',lbl_name:'Name (optional)',lbl_country:'Country (ISO code, optional)',lbl_email:'E-mail',lbl_user_name:'Name',lbl_plant:'Plant'},
+    es:{plants_title:'🏭 Plantas registradas',admin_title:'🌎 Administración de Usuarios',btn_new_plant:'🏭 Nueva Planta',btn_refresh:'🔄 Actualizar',btn_refresh_users:'🔄 Actualizar lista',th_code:'Código',th_name:'Nombre',th_country:'País',th_lang:'Idioma',th_actions:'Acciones',th_email:'Correo',th_plant:'Planta',loading_plants:'Haz clic en Actualizar para cargar las plantas.',no_plants:'Ninguna planta registrada.',act_edit:'Editar',act_delete:'Eliminar',act_remove:'Quitar',fixed_plant:'(fija)',confirm_del_plant:'¿Eliminar la planta "{c}"? Los usuarios vinculados quedarán sin planta.',confirm_del_fixed:'Las plantas fijas no pueden eliminarse.',plant_updated:'✅ Planta actualizada',plant_deleted:'🗑 Planta eliminada',user_updated:'✅ Usuario actualizado',modal_new_plant:'🏭 Nueva planta',modal_edit_plant:'✏️ Editar planta',modal_edit_user:'✏️ Editar usuario',btn_save_plant:'💾 Crear planta',btn_save_changes:'💾 Guardar cambios',btn_cancel:'Cancelar',lbl_code:'Código de planta *',lbl_name:'Nombre (opcional)',lbl_country:'País (ISO, opcional)',lbl_email:'Correo',lbl_user_name:'Nombre',lbl_plant:'Planta'},
+    de:{plants_title:'🏭 Registrierte Werke',admin_title:'🌎 Benutzerverwaltung',btn_new_plant:'🏭 Neues Werk',btn_refresh:'🔄 Aktualisieren',btn_refresh_users:'🔄 Liste aktualisieren',th_code:'Code',th_name:'Name',th_country:'Land',th_lang:'Sprache',th_actions:'Aktionen',th_email:'E-Mail',th_plant:'Werk',loading_plants:'Klicken Sie auf Aktualisieren, um die Werke zu laden.',no_plants:'Keine Werke registriert.',act_edit:'Bearbeiten',act_delete:'Löschen',act_remove:'Entfernen',fixed_plant:'(fix)',confirm_del_plant:'Werk "{c}" löschen? Verknüpfte Benutzer verlieren ihr Werk.',confirm_del_fixed:'Feste Werke können nicht gelöscht werden.',plant_updated:'✅ Werk aktualisiert',plant_deleted:'🗑 Werk gelöscht',user_updated:'✅ Benutzer aktualisiert',modal_new_plant:'🏭 Neues Werk',modal_edit_plant:'✏️ Werk bearbeiten',modal_edit_user:'✏️ Benutzer bearbeiten',btn_save_plant:'💾 Werk anlegen',btn_save_changes:'💾 Änderungen speichern',btn_cancel:'Abbrechen',lbl_code:'Werks-Code *',lbl_name:'Name (optional)',lbl_country:'Land (ISO-Code, optional)',lbl_email:'E-Mail',lbl_user_name:'Name',lbl_plant:'Werk'},
+    fr:{plants_title:'🏭 Sites enregistrés',admin_title:'🌎 Administration des utilisateurs',btn_new_plant:'🏭 Nouveau site',btn_refresh:'🔄 Actualiser',btn_refresh_users:'🔄 Actualiser la liste',th_code:'Code',th_name:'Nom',th_country:'Pays',th_lang:'Langue',th_actions:'Actions',th_email:'E-mail',th_plant:'Site',loading_plants:'Cliquez sur Actualiser pour charger les sites.',no_plants:'Aucun site enregistré.',act_edit:'Modifier',act_delete:'Supprimer',act_remove:'Retirer',fixed_plant:'(fixe)',confirm_del_plant:'Supprimer le site "{c}" ? Les utilisateurs liés perdront leur site.',confirm_del_fixed:'Les sites fixes ne peuvent pas être supprimés.',plant_updated:'✅ Site mis à jour',plant_deleted:'🗑 Site supprimé',user_updated:'✅ Utilisateur mis à jour',modal_new_plant:'🏭 Nouveau site',modal_edit_plant:'✏️ Modifier le site',modal_edit_user:'✏️ Modifier l’utilisateur',btn_save_plant:'💾 Créer le site',btn_save_changes:'💾 Enregistrer',btn_cancel:'Annuler',lbl_code:'Code du site *',lbl_name:'Nom (optionnel)',lbl_country:'Pays (ISO, optionnel)',lbl_email:'E-mail',lbl_user_name:'Nom',lbl_plant:'Site'},
+    it:{plants_title:'🏭 Stabilimenti registrati',admin_title:'🌎 Amministrazione utenti',btn_new_plant:'🏭 Nuovo stabilimento',btn_refresh:'🔄 Aggiorna',btn_refresh_users:'🔄 Aggiorna elenco',th_code:'Codice',th_name:'Nome',th_country:'Paese',th_lang:'Lingua',th_actions:'Azioni',th_email:'E-mail',th_plant:'Stabilimento',loading_plants:'Clicca Aggiorna per caricare gli stabilimenti.',no_plants:'Nessuno stabilimento registrato.',act_edit:'Modifica',act_delete:'Elimina',act_remove:'Rimuovi',fixed_plant:'(fisso)',confirm_del_plant:'Eliminare lo stabilimento "{c}"? Gli utenti collegati perderanno lo stabilimento.',confirm_del_fixed:'Gli stabilimenti fissi non possono essere eliminati.',plant_updated:'✅ Stabilimento aggiornato',plant_deleted:'🗑 Stabilimento eliminato',user_updated:'✅ Utente aggiornato',modal_new_plant:'🏭 Nuovo stabilimento',modal_edit_plant:'✏️ Modifica stabilimento',modal_edit_user:'✏️ Modifica utente',btn_save_plant:'💾 Crea stabilimento',btn_save_changes:'💾 Salva modifiche',btn_cancel:'Annulla',lbl_code:'Codice stabilimento *',lbl_name:'Nome (opzionale)',lbl_country:'Paese (ISO, opzionale)',lbl_email:'E-mail',lbl_user_name:'Nome',lbl_plant:'Stabilimento'},
+    pl:{plants_title:'🏭 Zarejestrowane zakłady',admin_title:'🌎 Administracja użytkowników',btn_new_plant:'🏭 Nowy zakład',btn_refresh:'🔄 Odśwież',btn_refresh_users:'🔄 Odśwież listę',th_code:'Kod',th_name:'Nazwa',th_country:'Kraj',th_lang:'Język',th_actions:'Akcje',th_email:'E-mail',th_plant:'Zakład',loading_plants:'Kliknij Odśwież, aby załadować zakłady.',no_plants:'Brak zakładów.',act_edit:'Edytuj',act_delete:'Usuń',act_remove:'Usuń',fixed_plant:'(stały)',confirm_del_plant:'Usunąć zakład "{c}"? Powiązani użytkownicy stracą zakład.',confirm_del_fixed:'Stałe zakłady nie mogą zostać usunięte.',plant_updated:'✅ Zakład zaktualizowany',plant_deleted:'🗑 Zakład usunięty',user_updated:'✅ Użytkownik zaktualizowany',modal_new_plant:'🏭 Nowy zakład',modal_edit_plant:'✏️ Edytuj zakład',modal_edit_user:'✏️ Edytuj użytkownika',btn_save_plant:'💾 Utwórz zakład',btn_save_changes:'💾 Zapisz zmiany',btn_cancel:'Anuluj',lbl_code:'Kod zakładu *',lbl_name:'Nazwa (opcjonalnie)',lbl_country:'Kraj (ISO, opcjonalnie)',lbl_email:'E-mail',lbl_user_name:'Nazwa',lbl_plant:'Zakład'}
+  };
+  window._at = function(key){
+    var lang = (typeof LANG !== 'undefined' && LANG) ? LANG : 'pt';
+    var dict = _ADM_T[lang] || _ADM_T.pt;
+    return (dict && dict[key]) || (_ADM_T.pt[key]) || key;
+  };
+
+  // Aplica i18n a todos os elementos com data-adm-i18n + relabels modais
+  window.adminApplyI18n = function(){
+    document.querySelectorAll('[data-adm-i18n]').forEach(function(el){
+      el.textContent = window._at(el.getAttribute('data-adm-i18n'));
+    });
+    // Modal Nova/Editar Planta
+    var npTitle = document.getElementById('np-title');
+    if (npTitle) npTitle.textContent = window._at(window._editingPlantCode ? 'modal_edit_plant' : 'modal_new_plant');
+    var m = function(id,k){ var e=document.getElementById(id); if(e) e.textContent = window._at(k); };
+    m('np-lbl-code','lbl_code'); m('np-lbl-name','lbl_name'); m('np-lbl-country','lbl_country');
+    m('np-btn-cancel','btn_cancel');
+    var saveBtn = document.getElementById('np-btn-save');
+    if (saveBtn) saveBtn.textContent = window._at(window._editingPlantCode ? 'btn_save_changes' : 'btn_save_plant');
+    // Modal Editar Usuário
+    m('eu-title','modal_edit_user'); m('eu-lbl-email','lbl_email'); m('eu-lbl-name','lbl_user_name');
+    m('eu-lbl-plant','lbl_plant'); m('eu-lbl-country','lbl_country');
+    m('eu-btn-cancel','btn_cancel'); m('eu-btn-save','btn_save_changes');
+  };
+
+  // Hook em setLang para re-aplicar i18n do admin + re-render tabelas admin
+  if (typeof window.setLang === 'function') {
+    var _origSetLang = window.setLang;
+    window.setLang = function(lang){
+      var r = _origSetLang.apply(this, arguments);
+      try { window.adminApplyI18n(); } catch(e){}
+      try {
+        if (document.getElementById('admin-plants-tbody') &&
+            document.getElementById('admin-plants-tbody').children.length > 1) {
+          window.adminLoadPlants();
+        }
+      } catch(e){}
+      return r;
+    };
+  }
+
+  // ── Lista de plantas ──
+  window.adminLoadPlants = function(){
+    var tbody = document.getElementById('admin-plants-tbody');
+    if (!tbody) return;
+    var fixed = (typeof _PLANTAS_FIXAS !== 'undefined') ? _PLANTAS_FIXAS : [];
+    var dyn   = (typeof _DYNAMIC_PLANTS !== 'undefined') ? _DYNAMIC_PLANTS : {};
+    var all = Array.from(new Set([].concat(fixed, Object.keys(dyn)))).sort();
+    if (!all.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="padding:18px;text-align:center;color:var(--tx3);font-size:12px">'+window._at('no_plants')+'</td></tr>';
+      return;
+    }
+    var th = 'padding:9px 12px;border-bottom:1px solid var(--bdr2);';
+    tbody.innerHTML = all.map(function(code){
+      var isFixed = fixed.indexOf(code) >= 0;
+      var meta = dyn[code] || {};
+      var country = meta.country || '';
+      var label = (typeof _getPlantLabel === 'function' ? _getPlantLabel(code) : code);
+      var lang = (typeof _langForPlant === 'function' ? (_langForPlant(code, country) || '—') : '—');
+      var flag = (country && typeof _countryFlagEmoji === 'function') ? _countryFlagEmoji(country) : '';
+      var actions = '<button class="btn-g" onclick="adminEditPlant(\''+code+'\')" style="font-size:10px;padding:4px 10px;margin-right:4px;background:#0ea5e9;border-color:#0ea5e9;color:#fff">✏️ '+window._at('act_edit')+'</button>'
+          + '<button class="btn-g" onclick="adminDeletePlant(\''+code+'\')" style="font-size:10px;padding:4px 10px;background:var(--red,#dc2626);border-color:var(--red,#dc2626);color:#fff">🗑 '+window._at('act_delete')+'</button>';
+      return '<tr style="border-bottom:1px solid var(--bdr2)">'
+        + '<td style="'+th+'"><b>'+code+'</b></td>'
+        + '<td style="'+th+'">'+label+'</td>'
+        + '<td style="'+th+'">'+(country ? (flag+' '+country) : '<span style="color:var(--tx3)">—</span>')+'</td>'
+        + '<td style="'+th+'"><code style="background:var(--surf2);padding:2px 6px;border-radius:4px;font-size:10px">'+lang+'</code></td>'
+        + '<td style="'+th+'text-align:center;white-space:nowrap">'+actions+'</td>'
+        + '</tr>';
+    }).join('');
+  };
+
+  // ── Editar planta (reusa np-modal em modo edição) ──
+  window._editingPlantCode = null;
+  window.adminEditPlant = function(code){
+    if (typeof _isDirector !== 'undefined' && !_isDirector) { showToast('⚠️ '+(window._at('act_edit')), 'warning'); return; }
+    var meta = (window._DYNAMIC_PLANTS && window._DYNAMIC_PLANTS[code]) || {};
+    var rawName = (meta.label || code).replace(/^[^\w]+\s*/, ''); // tira flag
+    window._editingPlantCode = code;
+    var m = document.getElementById('np-modal'); if (!m) return;
+    document.getElementById('np-code').value = code;
+    document.getElementById('np-code').disabled = true;
+    document.getElementById('np-name').value = rawName;
+    document.getElementById('np-country').value = meta.country || '';
+    m.style.display = 'flex';
+    window.adminApplyI18n();
+  };
+
+  // ── Excluir planta (fixas e dinâmicas) ──
+  window.adminDeletePlant = async function(code){
+    if (typeof _isDirector !== 'undefined' && !_isDirector) return;
+    if (!confirm(window._at('confirm_del_plant').replace('{c}', code))) return;
+    var sb = window._globalSupabaseClient || window._sb;
+    if (sb) {
+      try {
+        // [v49.6] Remove sentinel do Supabase (funciona para fixas e dinâmicas)
+        var sentinel = '__plant__' + code.toLowerCase() + '@plant.local';
+        await sb.from('user_profiles').delete().eq('email', sentinel);
+      } catch(e) { console.warn('[adminDeletePlant]', e); }
+    }
+    // [v49.6] Se era planta fixa, registra exclusão no localStorage para o seed não reinseri-la
+    var _origFixed = ['SP','MX','USA','DUNCAN','AKRON'];
+    if (_origFixed.indexOf(code) >= 0) {
+      window._addDeletedFixed && window._addDeletedFixed(code);
+    }
+    if (window._DYNAMIC_PLANTS) delete window._DYNAMIC_PLANTS[code];
+    if (window._UNIDADE_LABELS) delete window._UNIDADE_LABELS[code];
+    window._repopulatePlantSelects && window._repopulatePlantSelects();
+    window.adminLoadPlants();
+    showToast(window._at('plant_deleted')+': '+code, 'success');
+  };
+
+  // ── Wrap adminCreatePlant para suportar EDIT + atualizar lista ──
+  var _origCreate = window.adminCreatePlant;
+  window.adminCreatePlant = async function(){
+    var editing = window._editingPlantCode;
+    if (editing) {
+      var name    = (document.getElementById('np-name').value    || '').trim();
+      var country = (document.getElementById('np-country').value || '').trim().toUpperCase() || null;
+      var flag = (country && typeof _countryFlagEmoji === 'function') ? _countryFlagEmoji(country) : '';
+      window._DYNAMIC_PLANTS[editing] = { label:(flag?flag+' ':'')+(name||editing), country:country };
+      if (window._UNIDADE_LABELS) window._UNIDADE_LABELS[editing] = window._DYNAMIC_PLANTS[editing].label;
+      // [v49.6] Persiste alteração no Supabase via sentinel — funciona para fixas e dinâmicas
+      var sb = window._globalSupabaseClient || window._sb;
+      if (sb) {
+        try {
+          var sentinel = '__plant__' + editing.toLowerCase() + '@plant.local';
+          await sb.from('user_profiles').upsert({
+            email: sentinel,
+            unidade: editing,
+            country: country,
+            display_name: '[PLANT] ' + (name || editing),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'email' });
+        } catch(e){ console.warn('[adminCreatePlant/edit]', e); }
+      }
+      // [v49.6] Se era planta fixa que havia sido excluída, remove da lista de excluídas
+      window._removeDeletedFixed && window._removeDeletedFixed(editing);
+      window._editingPlantCode = null;
+      document.getElementById('np-code').disabled = false;
+      window._repopulatePlantSelects && window._repopulatePlantSelects();
+      window.adminLoadPlants();
+      window.adminCloseNewPlantModal();
+      showToast(window._at('plant_updated')+': '+editing, 'success');
+      return;
+    }
+    var r = await _origCreate.apply(this, arguments);
+    try { window.adminLoadPlants(); } catch(_){}
+    return r;
+  };
+
+  // Wrap close — resetar estado edição
+  var _origClose = window.adminCloseNewPlantModal;
+  window.adminCloseNewPlantModal = function(){
+    window._editingPlantCode = null;
+    var c = document.getElementById('np-code'); if (c) c.disabled = false;
+    return _origClose && _origClose.apply(this, arguments);
+  };
+  var _origOpen = window.adminOpenNewPlantModal;
+  window.adminOpenNewPlantModal = function(){
+    window._editingPlantCode = null;
+    var c = document.getElementById('np-code'); if (c) c.disabled = false;
+    var r = _origOpen && _origOpen.apply(this, arguments);
+    window.adminApplyI18n();
+    return r;
+  };
+
+  // ── Editar Usuário ──
+  window._editingUserEmail = null;
+  window.adminEditUser = function(email){
+    if (typeof _isDirector !== 'undefined' && !_isDirector) return;
+    window._editingUserEmail = email;
+    var sb = window._globalSupabaseClient || window._sb;
+    var fill = function(u){
+      document.getElementById('eu-email').value = u.email || email;
+      document.getElementById('eu-name').value = u.display_name || '';
+      document.getElementById('eu-country').value = u.country || '';
+      window._repopulatePlantSelects && window._repopulatePlantSelects();
+      var sel = document.getElementById('eu-plant');
+      if (sel && u.unidade) sel.value = u.unidade;
+      document.getElementById('eu-modal').style.display = 'flex';
+      window.adminApplyI18n();
+    };
+    if (sb) {
+      sb.from('user_profiles').select('*').eq('email', email).maybeSingle().then(function(res){
+        fill(res && res.data ? res.data : {email:email});
+      }).catch(function(){ fill({email:email}); });
+    } else { fill({email:email}); }
+  };
+  window.adminCloseEditUserModal = function(){
+    window._editingUserEmail = null;
+    var m = document.getElementById('eu-modal'); if (m) m.style.display = 'none';
+    ['eu-email','eu-name','eu-country'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  };
+  window.adminSaveEditUser = async function(){
+    var email = window._editingUserEmail; if (!email) return;
+    var sb = window._globalSupabaseClient || window._sb; if (!sb) return;
+    var name = (document.getElementById('eu-name').value||'').trim();
+    var unidade = document.getElementById('eu-plant').value || null;
+    var country = (document.getElementById('eu-country').value||'').trim().toUpperCase() || null;
+    if (!unidade) { showToast('⚠️ '+window._at('lbl_plant'), 'warning'); return; }
+    try {
+      var { error } = await sb.from('user_profiles').update({
+        display_name: name || null, unidade: unidade, country: country, updated_at: new Date().toISOString()
+      }).eq('email', email);
+      if (error) throw error;
+      showToast(window._at('user_updated')+': '+email, 'success');
+      window.adminCloseEditUserModal();
+      window.adminLoadUsers();
+    } catch(e){
+      if (typeof _handleProfilesError === 'function') _handleProfilesError(e, 'Editar usuário');
+      else showToast('❌ '+(e.message||e), 'error');
+    }
+  };
+
+  // adminLoadUsers wrap — também recarrega plantas
+  var _origLoadUsers = window.adminLoadUsers;
+  window.adminLoadUsers = async function(){
+    var r = await _origLoadUsers.apply(this, arguments);
+    try { window.adminLoadPlants(); } catch(_){}
+    try { window.adminApplyI18n(); } catch(_){}
+    return r;
+  };
+
+  // Auto-carrega lista de plantas ao abrir a aba admin + i18n inicial
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      try { window.adminApplyI18n(); } catch(_){}
+      try { window.adminLoadPlants(); } catch(_){}
+    }, 500);
+  });
+})();
+</script>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     [v49.2] AUTO-TRADUTOR DE RUNTIME
+     Varre o DOM e traduz textos PT para o idioma atual (LANG).
+     - Roda em setLang(), troca de planta e mutações do DOM.
+     - Ignora <script>, <style>, <code>, <input>, <textarea>, [contenteditable].
+     - Preserva números, datas, e-mails e códigos.
+     ──────────────────────────────────────────────────────────────────── */
+<script>
+(function(){
+  // ── Dicionário PT → outros idiomas ─────────────────────────────────
+  // Chave = texto PT exato (case-sensitive na frase, normalizado por trim).
+  var DICT = {
+    en: {
+      // Abas
+      'Dashboard':'Dashboard','Alertas':'Alerts','Equipamentos':'Equipment','Relatórios':'Reports',
+      'Cadastrar':'Register','Auditoria':'Audit','Responsáveis':'Owners','Admin Plantas':'Plants admin',
+      // Header
+      'Controle de Equipamentos de Medição':'Measuring Equipment Control',
+      'Importar':'Import','Exportar':'Export','Resetar':'Reset','Novo':'New','Atualizar':'Refresh',
+      'Sair':'Sign out','Entrar':'Sign in','Salvar':'Save','Cancelar':'Cancel','Fechar':'Close',
+      'Editar':'Edit','Excluir':'Delete','Remover':'Remove','Confirmar':'Confirm','Voltar':'Back',
+      'Buscar':'Search','Filtrar':'Filter','Limpar':'Clear','Aplicar':'Apply','Salvar perfil':'Save profile',
+      'Convidar':'Invite','Criar c/ senha':'Create with password','Criar planta':'Create plant',
+      'Nova Planta':'New plant','Salvar alterações':'Save changes',
+      // Tabelas
+      'Código':'Code','Nome':'Name','País':'Country','Idioma':'Language','Ações':'Actions',
+      'E-mail':'E-mail','Planta':'Plant','Status':'Status','Tipo':'Type','Marca':'Brand',
+      'Modelo':'Model','Série':'Serial','Faixa':'Range','Resolução':'Resolution','Setor':'Sector',
+      'Localização':'Location','Responsável':'Owner','Última calibração':'Last calibration',
+      'Próxima calibração':'Next calibration','Frequência':'Frequency','Certificado':'Certificate',
+      'Observações':'Notes','Data':'Date','Hora':'Time','Usuário':'User','Ação':'Action',
+      'Unidade':'Unit','Total':'Total','Vencidos':'Overdue','Vence em breve':'Due soon',
+      'OK':'OK','Em uso':'In use','Inativo':'Inactive','Calibração OK':'Calibration OK','Vencida':'Overdue',
+      // Mensagens / placeholders
+      'Carregando…':'Loading…','Carregando...':'Loading...','Aguarde':'Please wait',
+      'Nenhum registro':'No records','Nenhum log registado ainda. As ações críticas aparecerão aqui.':
+        'No logs yet. Critical actions will appear here.',
+      'Nenhuma planta cadastrada.':'No plants registered.',
+      'Plantas cadastradas':'Registered plants','Administração de Usuários':'User administration',
+      'Logs de Auditoria':'Audit logs','Últimos 50 registos':'Last 50 records',
+      'Selecionar unidade':'Select unit','Selecionar planta...':'Select plant...',
+      'Configuração inicial — clique para ver o SQL necessário':
+        'Initial setup — click to see the required SQL',
+      'Exportar Logs CSV':'Export logs CSV','Atualizar Lista':'Refresh list',
+      'E-mail do usuário':'User e-mail','País (código)':'Country (code)','Nome (opcional)':'Name (optional)',
+      'Senha (criar com senha)':'Password (create with password)','Mín. 6 caracteres':'Min. 6 characters',
+      'Nome do usuário':'User name',
+      'Sistema interno Röchling Automotive':'Röchling Automotive internal system',
+      'Plantas fixas não podem ser excluídas.':'Fixed plants cannot be deleted.',
+      'Planta atualizada':'Plant updated','Planta excluída':'Plant deleted','Usuário atualizado':'User updated',
+      'Usuário criado':'User created','Pode fazer login imediatamente.':'Can sign in immediately.',
+      'Senha':'Password','Preencha e-mail e planta.':'Fill in e-mail and plant.',
+      'Digite uma senha para o usuário.':'Enter a password for the user.',
+      'A senha deve ter no mínimo 6 caracteres.':'Password must be at least 6 characters.',
+      'E-mail inválido.':'Invalid e-mail.','Criando usuário':'Creating user',
+      'Falha ao criar usuário':'Failed to create user',
+      'Edge Function indisponível':'Edge Function unavailable',
+      // Dashboard cards
+      'Total de equipamentos':'Total equipment','Equipamentos calibrados':'Calibrated equipment',
+      'Em calibração':'In calibration','Equipamentos vencidos':'Overdue equipment',
+      'Vencimento próximo':'Due soon','Por planta':'By plant','Por tipo':'By type',
+      'Por responsável':'By owner','Por status':'By status'
+    },
+    es: {
+      'Dashboard':'Panel','Alertas':'Alertas','Equipamentos':'Equipos','Relatórios':'Informes',
+      'Cadastrar':'Registrar','Auditoria':'Auditoría','Responsáveis':'Responsables','Admin Plantas':'Admin plantas',
+      'Controle de Equipamentos de Medição':'Control de Equipos de Medición',
+      'Importar':'Importar','Exportar':'Exportar','Resetar':'Restablecer','Novo':'Nuevo','Atualizar':'Actualizar',
+      'Sair':'Salir','Entrar':'Entrar','Salvar':'Guardar','Cancelar':'Cancelar','Fechar':'Cerrar',
+      'Editar':'Editar','Excluir':'Eliminar','Remover':'Quitar','Confirmar':'Confirmar','Voltar':'Volver',
+      'Buscar':'Buscar','Filtrar':'Filtrar','Limpar':'Limpiar','Aplicar':'Aplicar','Salvar perfil':'Guardar perfil',
+      'Convidar':'Invitar','Criar c/ senha':'Crear con contraseña','Criar planta':'Crear planta',
+      'Nova Planta':'Nueva planta','Salvar alterações':'Guardar cambios',
+      'Código':'Código','Nome':'Nombre','País':'País','Idioma':'Idioma','Ações':'Acciones',
+      'E-mail':'Correo','Planta':'Planta','Status':'Estado','Tipo':'Tipo','Marca':'Marca',
+      'Modelo':'Modelo','Série':'Serie','Faixa':'Rango','Resolução':'Resolución','Setor':'Sector',
+      'Localização':'Ubicación','Responsável':'Responsable','Última calibração':'Última calibración',
+      'Próxima calibração':'Próxima calibración','Frequência':'Frecuencia','Certificado':'Certificado',
+      'Observações':'Observaciones','Data':'Fecha','Hora':'Hora','Usuário':'Usuario','Ação':'Acción',
+      'Unidade':'Unidad','Total':'Total','Vencidos':'Vencidos','Vence em breve':'Vence pronto',
+      'OK':'OK','Em uso':'En uso','Inativo':'Inactivo','Calibração OK':'Calibración OK','Vencida':'Vencida',
+      'Carregando…':'Cargando…','Carregando...':'Cargando...','Aguarde':'Espere',
+      'Nenhum registro':'Sin registros',
+      'Nenhum log registado ainda. As ações críticas aparecerão aqui.':
+        'Aún no hay registros. Las acciones críticas aparecerán aquí.',
+      'Nenhuma planta cadastrada.':'Ninguna planta registrada.',
+      'Plantas cadastradas':'Plantas registradas','Administração de Usuários':'Administración de Usuarios',
+      'Logs de Auditoria':'Registros de Auditoría','Últimos 50 registos':'Últimos 50 registros',
+      'Selecionar unidade':'Seleccionar unidad','Selecionar planta...':'Seleccionar planta...',
+      'Configuração inicial — clique para ver o SQL necessário':
+        'Configuración inicial — haga clic para ver el SQL necesario',
+      'Exportar Logs CSV':'Exportar registros CSV','Atualizar Lista':'Actualizar lista',
+      'E-mail do usuário':'Correo del usuario','País (código)':'País (código)','Nome (opcional)':'Nombre (opcional)',
+      'Senha (criar com senha)':'Contraseña (crear con contraseña)','Mín. 6 caracteres':'Mín. 6 caracteres',
+      'Nome do usuário':'Nombre del usuario',
+      'Plantas fixas não podem ser excluídas.':'Las plantas fijas no se pueden eliminar.',
+      'Planta atualizada':'Planta actualizada','Planta excluída':'Planta eliminada','Usuário atualizado':'Usuario actualizado',
+      'Usuário criado':'Usuario creado','Pode fazer login imediatamente.':'Puede iniciar sesión inmediatamente.',
+      'Senha':'Contraseña','Preencha e-mail e planta.':'Complete el correo y la planta.',
+      'Digite uma senha para o usuário.':'Introduzca una contraseña.',
+      'A senha deve ter no mínimo 6 caracteres.':'La contraseña debe tener al menos 6 caracteres.',
+      'E-mail inválido.':'Correo inválido.','Criando usuário':'Creando usuario',
+      'Falha ao criar usuário':'Error al crear usuario',
+      'Total de equipamentos':'Total de equipos','Equipamentos calibrados':'Equipos calibrados',
+      'Em calibração':'En calibración','Equipamentos vencidos':'Equipos vencidos',
+      'Vencimento próximo':'Vencimiento próximo','Por planta':'Por planta','Por tipo':'Por tipo',
+      'Por responsável':'Por responsable','Por status':'Por estado'
+    },
+    de: {
+      'Dashboard':'Dashboard','Alertas':'Warnungen','Equipamentos':'Geräte','Relatórios':'Berichte',
+      'Cadastrar':'Erfassen','Auditoria':'Audit','Responsáveis':'Verantwortliche','Admin Plantas':'Werke-Admin',
+      'Controle de Equipamentos de Medição':'Verwaltung der Messmittel',
+      'Importar':'Importieren','Exportar':'Exportieren','Resetar':'Zurücksetzen','Novo':'Neu','Atualizar':'Aktualisieren',
+      'Sair':'Abmelden','Entrar':'Anmelden','Salvar':'Speichern','Cancelar':'Abbrechen','Fechar':'Schließen',
+      'Editar':'Bearbeiten','Excluir':'Löschen','Remover':'Entfernen','Confirmar':'Bestätigen','Voltar':'Zurück',
+      'Buscar':'Suchen','Filtrar':'Filtern','Limpar':'Leeren','Aplicar':'Anwenden','Salvar perfil':'Profil speichern',
+      'Convidar':'Einladen','Criar c/ senha':'Mit Passwort anlegen','Criar planta':'Werk anlegen',
+      'Nova Planta':'Neues Werk','Salvar alterações':'Änderungen speichern',
+      'Código':'Code','Nome':'Name','País':'Land','Idioma':'Sprache','Ações':'Aktionen',
+      'E-mail':'E-Mail','Planta':'Werk','Status':'Status','Tipo':'Typ','Marca':'Marke',
+      'Modelo':'Modell','Série':'Serie','Faixa':'Bereich','Resolução':'Auflösung','Setor':'Bereich',
+      'Localização':'Standort','Responsável':'Verantwortlich','Última calibração':'Letzte Kalibrierung',
+      'Próxima calibração':'Nächste Kalibrierung','Frequência':'Frequenz','Certificado':'Zertifikat',
+      'Observações':'Bemerkungen','Data':'Datum','Hora':'Uhrzeit','Usuário':'Benutzer','Ação':'Aktion',
+      'Unidade':'Werk','Total':'Gesamt','Vencidos':'Überfällig','Vence em breve':'Bald fällig',
+      'OK':'OK','Em uso':'In Gebrauch','Inativo':'Inaktiv','Calibração OK':'Kalibrierung OK','Vencida':'Überfällig',
+      'Carregando…':'Laden…','Carregando...':'Laden...','Aguarde':'Bitte warten',
+      'Nenhum registro':'Keine Einträge',
+      'Nenhum log registado ainda. As ações críticas aparecerão aqui.':
+        'Noch keine Logs. Kritische Aktionen erscheinen hier.',
+      'Nenhuma planta cadastrada.':'Keine Werke erfasst.',
+      'Plantas cadastradas':'Erfasste Werke','Administração de Usuários':'Benutzerverwaltung',
+      'Logs de Auditoria':'Audit-Logs','Últimos 50 registos':'Letzte 50 Einträge',
+      'Selecionar unidade':'Werk wählen','Selecionar planta...':'Werk wählen...',
+      'Configuração inicial — clique para ver o SQL necessário':
+        'Erstkonfiguration — klicken, um das benötigte SQL anzuzeigen',
+      'Exportar Logs CSV':'Logs als CSV exportieren','Atualizar Lista':'Liste aktualisieren',
+      'E-mail do usuário':'Benutzer-E-Mail','País (código)':'Land (Code)','Nome (opcional)':'Name (optional)',
+      'Senha (criar com senha)':'Passwort (mit Passwort anlegen)','Mín. 6 caracteres':'Min. 6 Zeichen',
+      'Nome do usuário':'Benutzername',
+      'Plantas fixas não podem ser excluídas.':'Feste Werke können nicht gelöscht werden.',
+      'Planta atualizada':'Werk aktualisiert','Planta excluída':'Werk gelöscht','Usuário atualizado':'Benutzer aktualisiert',
+      'Usuário criado':'Benutzer angelegt','Pode fazer login imediatamente.':'Kann sich sofort anmelden.',
+      'Senha':'Passwort','Preencha e-mail e planta.':'E-Mail und Werk ausfüllen.',
+      'Digite uma senha para o usuário.':'Passwort für den Benutzer eingeben.',
+      'A senha deve ter no mínimo 6 caracteres.':'Passwort muss mindestens 6 Zeichen haben.',
+      'E-mail inválido.':'Ungültige E-Mail.','Criando usuário':'Benutzer wird angelegt',
+      'Falha ao criar usuário':'Fehler beim Anlegen des Benutzers',
+      'Total de equipamentos':'Geräte gesamt','Equipamentos calibrados':'Kalibrierte Geräte',
+      'Em calibração':'In Kalibrierung','Equipamentos vencidos':'Überfällige Geräte',
+      'Vencimento próximo':'Bald fällig','Por planta':'Nach Werk','Por tipo':'Nach Typ',
+      'Por responsável':'Nach Verantwortlichem','Por status':'Nach Status'
+    },
+    fr: {
+      'Dashboard':'Tableau de bord','Alertas':'Alertes','Equipamentos':'Équipements','Relatórios':'Rapports',
+      'Cadastrar':'Enregistrer','Auditoria':'Audit','Responsáveis':'Responsables','Admin Plantas':'Admin sites',
+      'Controle de Equipamentos de Medição':'Gestion des équipements de mesure',
+      'Importar':'Importer','Exportar':'Exporter','Resetar':'Réinitialiser','Novo':'Nouveau','Atualizar':'Actualiser',
+      'Sair':'Déconnexion','Entrar':'Connexion','Salvar':'Enregistrer','Cancelar':'Annuler','Fechar':'Fermer',
+      'Editar':'Modifier','Excluir':'Supprimer','Remover':'Retirer','Confirmar':'Confirmer','Voltar':'Retour',
+      'Buscar':'Rechercher','Filtrar':'Filtrer','Limpar':'Effacer','Aplicar':'Appliquer','Salvar perfil':'Enregistrer le profil',
+      'Convidar':'Inviter','Criar c/ senha':'Créer avec mot de passe','Criar planta':'Créer le site',
+      'Nova Planta':'Nouveau site','Salvar alterações':'Enregistrer',
+      'Código':'Code','Nome':'Nom','País':'Pays','Idioma':'Langue','Ações':'Actions',
+      'E-mail':'E-mail','Planta':'Site','Status':'Statut','Tipo':'Type','Marca':'Marque',
+      'Modelo':'Modèle','Série':'Série','Faixa':'Plage','Resolução':'Résolution','Setor':'Secteur',
+      'Localização':'Emplacement','Responsável':'Responsable','Última calibração':'Dernière calibration',
+      'Próxima calibração':'Prochaine calibration','Frequência':'Fréquence','Certificado':'Certificat',
+      'Observações':'Notes','Data':'Date','Hora':'Heure','Usuário':'Utilisateur','Ação':'Action',
+      'Unidade':'Site','Total':'Total','Vencidos':'En retard','Vence em breve':'Bientôt dû',
+      'OK':'OK','Em uso':'En usage','Inativo':'Inactif','Calibração OK':'Calibration OK','Vencida':'Échue',
+      'Carregando…':'Chargement…','Carregando...':'Chargement...','Aguarde':'Patientez',
+      'Nenhum registro':'Aucun enregistrement',
+      'Nenhum log registado ainda. As ações críticas aparecerão aqui.':
+        'Aucun journal. Les actions critiques apparaîtront ici.',
+      'Nenhuma planta cadastrada.':'Aucun site enregistré.',
+      'Plantas cadastradas':'Sites enregistrés','Administração de Usuários':'Administration des utilisateurs',
+      'Logs de Auditoria':'Journaux d’audit','Últimos 50 registos':'50 derniers enregistrements',
+      'Selecionar unidade':'Sélectionner le site','Selecionar planta...':'Sélectionner le site...',
+      'Configuração inicial — clique para ver o SQL necessário':
+        'Configuration initiale — cliquez pour voir le SQL requis',
+      'Exportar Logs CSV':'Exporter les journaux CSV','Atualizar Lista':'Actualiser la liste',
+      'E-mail do usuário':'E-mail utilisateur','País (código)':'Pays (code)','Nome (opcional)':'Nom (optionnel)',
+      'Senha (criar com senha)':'Mot de passe (créer avec mot de passe)','Mín. 6 caracteres':'Min. 6 caractères',
+      'Nome do usuário':'Nom d’utilisateur',
+      'Plantas fixas não podem ser excluídas.':'Les sites fixes ne peuvent pas être supprimés.',
+      'Planta atualizada':'Site mis à jour','Planta excluída':'Site supprimé','Usuário atualizado':'Utilisateur mis à jour',
+      'Usuário criado':'Utilisateur créé','Pode fazer login imediatamente.':'Connexion possible immédiatement.',
+      'Senha':'Mot de passe','Preencha e-mail e planta.':'Renseignez e-mail et site.',
+      'Digite uma senha para o usuário.':'Saisissez un mot de passe.',
+      'A senha deve ter no mínimo 6 caracteres.':'Le mot de passe doit comporter au moins 6 caractères.',
+      'E-mail inválido.':'E-mail invalide.','Criando usuário':'Création de l’utilisateur',
+      'Falha ao criar usuário':'Échec de la création',
+      'Total de equipamentos':'Total équipements','Equipamentos calibrados':'Équipements calibrés',
+      'Em calibração':'En calibration','Equipamentos vencidos':'Équipements en retard',
+      'Vencimento próximo':'Bientôt dû','Por planta':'Par site','Por tipo':'Par type',
+      'Por responsável':'Par responsable','Por status':'Par statut'
+    },
+    it: {
+      'Dashboard':'Dashboard','Alertas':'Avvisi','Equipamentos':'Apparecchiature','Relatórios':'Report',
+      'Cadastrar':'Registrare','Auditoria':'Audit','Responsáveis':'Responsabili','Admin Plantas':'Admin stabilimenti',
+      'Controle de Equipamentos de Medição':'Controllo Strumenti di Misura',
+      'Importar':'Importa','Exportar':'Esporta','Resetar':'Reimposta','Novo':'Nuovo','Atualizar':'Aggiorna',
+      'Sair':'Esci','Entrar':'Accedi','Salvar':'Salva','Cancelar':'Annulla','Fechar':'Chiudi',
+      'Editar':'Modifica','Excluir':'Elimina','Remover':'Rimuovi','Confirmar':'Conferma','Voltar':'Indietro',
+      'Buscar':'Cerca','Filtrar':'Filtra','Limpar':'Pulisci','Aplicar':'Applica','Salvar perfil':'Salva profilo',
+      'Convidar':'Invita','Criar c/ senha':'Crea con password','Criar planta':'Crea stabilimento',
+      'Nova Planta':'Nuovo stabilimento','Salvar alterações':'Salva modifiche',
+      'Código':'Codice','Nome':'Nome','País':'Paese','Idioma':'Lingua','Ações':'Azioni',
+      'E-mail':'E-mail','Planta':'Stabilimento','Status':'Stato','Tipo':'Tipo','Marca':'Marca',
+      'Modelo':'Modello','Série':'Serie','Faixa':'Intervallo','Resolução':'Risoluzione','Setor':'Settore',
+      'Localização':'Posizione','Responsável':'Responsabile','Última calibração':'Ultima taratura',
+      'Próxima calibração':'Prossima taratura','Frequência':'Frequenza','Certificado':'Certificato',
+      'Observações':'Note','Data':'Data','Hora':'Ora','Usuário':'Utente','Ação':'Azione',
+      'Unidade':'Stabilimento','Total':'Totale','Vencidos':'Scaduti','Vence em breve':'In scadenza',
+      'OK':'OK','Em uso':'In uso','Inativo':'Inattivo','Calibração OK':'Taratura OK','Vencida':'Scaduta',
+      'Carregando…':'Caricamento…','Carregando...':'Caricamento...','Aguarde':'Attendere',
+      'Nenhum registro':'Nessun record',
+      'Nenhum log registado ainda. As ações críticas aparecerão aqui.':
+        'Nessun log. Le azioni critiche appariranno qui.',
+      'Nenhuma planta cadastrada.':'Nessuno stabilimento registrato.',
+      'Plantas cadastradas':'Stabilimenti registrati','Administração de Usuários':'Amministrazione utenti',
+      'Logs de Auditoria':'Log di audit','Últimos 50 registos':'Ultimi 50 record',
+      'Selecionar unidade':'Seleziona stabilimento','Selecionar planta...':'Seleziona stabilimento...',
+      'Configuração inicial — clique para ver o SQL necessário':
+        'Configurazione iniziale — clicca per vedere lo SQL richiesto',
+      'Exportar Logs CSV':'Esporta log CSV','Atualizar Lista':'Aggiorna elenco',
+      'E-mail do usuário':'E-mail utente','País (código)':'Paese (codice)','Nome (opcional)':'Nome (opzionale)',
+      'Senha (criar com senha)':'Password (crea con password)','Mín. 6 caracteres':'Min. 6 caratteri',
+      'Nome do usuário':'Nome utente',
+      'Plantas fixas não podem ser excluídas.':'Gli stabilimenti fissi non possono essere eliminati.',
+      'Planta atualizada':'Stabilimento aggiornato','Planta excluída':'Stabilimento eliminato','Usuário atualizado':'Utente aggiornato',
+      'Usuário criado':'Utente creato','Pode fazer login imediatamente.':'Può accedere immediatamente.',
+      'Senha':'Password','Preencha e-mail e planta.':'Compila e-mail e stabilimento.',
+      'Digite uma senha para o usuário.':'Inserisci una password.',
+      'A senha deve ter no mínimo 6 caracteres.':'La password deve avere almeno 6 caratteri.',
+      'E-mail inválido.':'E-mail non valida.','Criando usuário':'Creazione utente',
+      'Falha ao criar usuário':'Errore nella creazione utente',
+      'Total de equipamentos':'Totale apparecchiature','Equipamentos calibrados':'Apparecchiature tarate',
+      'Em calibração':'In taratura','Equipamentos vencidos':'Apparecchiature scadute',
+      'Vencimento próximo':'In scadenza','Por planta':'Per stabilimento','Por tipo':'Per tipo',
+      'Por responsável':'Per responsabile','Por status':'Per stato'
+    },
+    pl: {
+      'Dashboard':'Pulpit','Alertas':'Alerty','Equipamentos':'Urządzenia','Relatórios':'Raporty',
+      'Cadastrar':'Zarejestruj','Auditoria':'Audyt','Responsáveis':'Odpowiedzialni','Admin Plantas':'Admin zakładów',
+      'Controle de Equipamentos de Medição':'Zarządzanie sprzętem pomiarowym',
+      'Importar':'Importuj','Exportar':'Eksportuj','Resetar':'Resetuj','Novo':'Nowy','Atualizar':'Odśwież',
+      'Sair':'Wyloguj','Entrar':'Zaloguj','Salvar':'Zapisz','Cancelar':'Anuluj','Fechar':'Zamknij',
+      'Editar':'Edytuj','Excluir':'Usuń','Remover':'Usuń','Confirmar':'Potwierdź','Voltar':'Wróć',
+      'Buscar':'Szukaj','Filtrar':'Filtruj','Limpar':'Wyczyść','Aplicar':'Zastosuj','Salvar perfil':'Zapisz profil',
+      'Convidar':'Zaproś','Criar c/ senha':'Utwórz z hasłem','Criar planta':'Utwórz zakład',
+      'Nova Planta':'Nowy zakład','Salvar alterações':'Zapisz zmiany',
+      'Código':'Kod','Nome':'Nazwa','País':'Kraj','Idioma':'Język','Ações':'Akcje',
+      'E-mail':'E-mail','Planta':'Zakład','Status':'Status','Tipo':'Typ','Marca':'Marka',
+      'Modelo':'Model','Série':'Numer seryjny','Faixa':'Zakres','Resolução':'Rozdzielczość','Setor':'Sektor',
+      'Localização':'Lokalizacja','Responsável':'Odpowiedzialny','Última calibração':'Ostatnia kalibracja',
+      'Próxima calibração':'Następna kalibracja','Frequência':'Częstotliwość','Certificado':'Certyfikat',
+      'Observações':'Uwagi','Data':'Data','Hora':'Godzina','Usuário':'Użytkownik','Ação':'Akcja',
+      'Unidade':'Zakład','Total':'Razem','Vencidos':'Zaległe','Vence em breve':'Wkrótce upływa',
+      'OK':'OK','Em uso':'W użyciu','Inativo':'Nieaktywny','Calibração OK':'Kalibracja OK','Vencida':'Zaległa',
+      'Carregando…':'Ładowanie…','Carregando...':'Ładowanie...','Aguarde':'Proszę czekać',
+      'Nenhum registro':'Brak rekordów',
+      'Nenhum log registado ainda. As ações críticas aparecerão aqui.':
+        'Brak logów. Krytyczne akcje pojawią się tutaj.',
+      'Nenhuma planta cadastrada.':'Brak zarejestrowanych zakładów.',
+      'Plantas cadastradas':'Zarejestrowane zakłady','Administração de Usuários':'Administracja użytkowników',
+      'Logs de Auditoria':'Logi audytu','Últimos 50 registos':'Ostatnie 50 rekordów',
+      'Selecionar unidade':'Wybierz zakład','Selecionar planta...':'Wybierz zakład...',
+      'Configuração inicial — clique para ver o SQL necessário':
+        'Konfiguracja początkowa — kliknij, aby zobaczyć wymagany SQL',
+      'Exportar Logs CSV':'Eksportuj logi CSV','Atualizar Lista':'Odśwież listę',
+      'E-mail do usuário':'E-mail użytkownika','País (código)':'Kraj (kod)','Nome (opcional)':'Nazwa (opcjonalnie)',
+      'Senha (criar com senha)':'Hasło (utwórz z hasłem)','Mín. 6 caracteres':'Min. 6 znaków',
+      'Nome do usuário':'Nazwa użytkownika',
+      'Plantas fixas não podem ser excluídas.':'Stałych zakładów nie można usunąć.',
+      'Planta atualizada':'Zakład zaktualizowany','Planta excluída':'Zakład usunięty','Usuário atualizado':'Użytkownik zaktualizowany',
+      'Usuário criado':'Użytkownik utworzony','Pode fazer login imediatamente.':'Można się zalogować od razu.',
+      'Senha':'Hasło','Preencha e-mail e planta.':'Uzupełnij e-mail i zakład.',
+      'Digite uma senha para o usuário.':'Wpisz hasło dla użytkownika.',
+      'A senha deve ter no mínimo 6 caracteres.':'Hasło musi mieć co najmniej 6 znaków.',
+      'E-mail inválido.':'Nieprawidłowy e-mail.','Criando usuário':'Tworzenie użytkownika',
+      'Falha ao criar usuário':'Błąd tworzenia użytkownika',
+      'Total de equipamentos':'Łączna liczba urządzeń','Equipamentos calibrados':'Skalibrowane urządzenia',
+      'Em calibração':'W kalibracji','Equipamentos vencidos':'Zaległe urządzenia',
+      'Vencimento próximo':'Wkrótce upływa','Por planta':'Wg zakładu','Por tipo':'Wg typu',
+      'Por responsável':'Wg odpowiedzialnego','Por status':'Wg statusu'
+    }
+  };
+
+  // ── Idioma derivado de país (planta) ─────────────────────────────
+  // Pode ser estendido conforme aparecerem novos países.
+  var COUNTRY_LANG = {
+    BR:'pt', PT:'pt',
+    US:'en', GB:'en', CA:'en', AU:'en', IN:'en', ZA:'en',
+    MX:'es', ES:'es', AR:'es', CL:'es', CO:'es',
+    DE:'de', AT:'de', CH:'de',
+    FR:'fr', BE:'fr',
+    IT:'it',
+    PL:'pl'
+  };
+
+  // Expõe para uso externo se quiserem ajustar
+
+  // [v49.5] Form fields, status options, modal & audit strings.
+  var _EXTRA2 = {"en": {"Código de Controle": "Control Code", "Tipo de Equipamento": "Equipment Type", "Código Labortec": "Labortec Code", "Cliente": "Customer", "Descrição": "Description", "Fabricante": "Manufacturer", "Localização / Máquina": "Location / Machine", "Empresa Executante": "Executing Company", "Última Calibração": "Last Calibration", "Próxima Calibração": "Next Calibration", "Frequência (dias)": "Frequency (days)", "Status Operacional": "Operational Status", "Status Calibração": "Calibration Status", "Observações": "Notes", "Validade estimada": "Estimated validity", "Salvar Equipamento": "Save Equipment", "Limpar": "Clear", "Calibrado e Aprovado": "Calibrated & Approved", "Calibração Necessária": "Calibration Needed", "Descartado": "Discarded", "Não Encontrado": "Not Found", "ATIVO": "ACTIVE", "INATIVO": "INACTIVE", "Logs de Auditoria": "Audit Logs", "Últimos 50 registos": "Last 50 records", "Data / Hora": "Date / Time", "Tipo": "Type", "ID Equip.": "Equip. ID", "Utilizador": "User", "Exportar Logs CSV": "Export Logs CSV", "Importar Dados": "Import Data", "Arraste o ficheiro JSON aqui": "Drop the JSON file here", "ou use o botão abaixo": "or use the button below", "Selecionar arquivo JSON": "Select JSON file", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Drop the file or click \"Select file\"", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "A preview will be shown before any change is applied.", "Ex: BAL-020": "e.g. BAL-020", "Ex: Balança Eletrônica": "e.g. Electronic Scale", "Ex: 61714545": "e.g. 61714545", "Ex: Honda / Todos": "e.g. Honda / All", "Descrição completa do equipamento": "Full equipment description", "Ex: Mitutoyo": "e.g. Mitutoyo", "Ex: Metrologia": "e.g. Metrology", "Ex: Wellington Freitas": "e.g. Wellington Freitas", "Ex: Labortec": "e.g. Labortec", "Observações adicionais (opcional)": "Additional notes (optional)", "Todos": "All", "Responsável": "Owner"}, "es": {"Código de Controle": "Código de Control", "Tipo de Equipamento": "Tipo de Equipo", "Código Labortec": "Código Labortec", "Cliente": "Cliente", "Descrição": "Descripción", "Fabricante": "Fabricante", "Localização / Máquina": "Ubicación / Máquina", "Empresa Executante": "Empresa Ejecutora", "Última Calibração": "Última Calibración", "Próxima Calibração": "Próxima Calibración", "Frequência (dias)": "Frecuencia (días)", "Status Operacional": "Estado Operativo", "Status Calibração": "Estado Calibración", "Observações": "Observaciones", "Validade estimada": "Validez estimada", "Salvar Equipamento": "Guardar Equipo", "Limpar": "Limpiar", "Calibrado e Aprovado": "Calibrado y Aprobado", "Calibração Necessária": "Calibración Necesaria", "Descartado": "Descartado", "Não Encontrado": "No Encontrado", "ATIVO": "ACTIVO", "INATIVO": "INACTIVO", "Logs de Auditoria": "Registros de Auditoría", "Últimos 50 registos": "Últimos 50 registros", "Data / Hora": "Fecha / Hora", "Tipo": "Tipo", "ID Equip.": "ID Equipo", "Utilizador": "Usuario", "Exportar Logs CSV": "Exportar Registros CSV", "Importar Dados": "Importar Datos", "Arraste o ficheiro JSON aqui": "Arrastre el archivo JSON aquí", "ou use o botão abaixo": "o use el botón de abajo", "Selecionar arquivo JSON": "Seleccionar archivo JSON", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Arrastre el archivo o haga clic en \"Seleccionar archivo\"", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Se mostrará una vista previa antes de aplicar cualquier cambio.", "Ex: BAL-020": "Ej: BAL-020", "Ex: Balança Eletrônica": "Ej: Balanza Electrónica", "Ex: 61714545": "Ej: 61714545", "Ex: Honda / Todos": "Ej: Honda / Todos", "Descrição completa do equipamento": "Descripción completa del equipo", "Ex: Mitutoyo": "Ej: Mitutoyo", "Ex: Metrologia": "Ej: Metrología", "Ex: Wellington Freitas": "Ej: Wellington Freitas", "Ex: Labortec": "Ej: Labortec", "Observações adicionais (opcional)": "Observaciones adicionales (opcional)", "Todos": "Todos", "Responsável": "Responsable"}, "de": {"Código de Controle": "Kontrollcode", "Tipo de Equipamento": "Gerätetyp", "Código Labortec": "Labortec-Code", "Cliente": "Kunde", "Descrição": "Beschreibung", "Fabricante": "Hersteller", "Localização / Máquina": "Standort / Maschine", "Empresa Executante": "Ausführendes Unternehmen", "Última Calibração": "Letzte Kalibrierung", "Próxima Calibração": "Nächste Kalibrierung", "Frequência (dias)": "Frequenz (Tage)", "Status Operacional": "Betriebsstatus", "Status Calibração": "Kalibrierstatus", "Observações": "Bemerkungen", "Validade estimada": "Geschätzte Gültigkeit", "Salvar Equipamento": "Gerät speichern", "Limpar": "Leeren", "Calibrado e Aprovado": "Kalibriert & freigegeben", "Calibração Necessária": "Kalibrierung nötig", "Descartado": "Verworfen", "Não Encontrado": "Nicht gefunden", "ATIVO": "AKTIV", "INATIVO": "INAKTIV", "Logs de Auditoria": "Audit-Protokolle", "Últimos 50 registos": "Letzte 50 Einträge", "Data / Hora": "Datum / Uhrzeit", "Tipo": "Typ", "ID Equip.": "Geräte-ID", "Utilizador": "Benutzer", "Exportar Logs CSV": "Logs als CSV exportieren", "Importar Dados": "Daten importieren", "Arraste o ficheiro JSON aqui": "JSON-Datei hier ablegen", "ou use o botão abaixo": "oder Knopf unten verwenden", "Selecionar arquivo JSON": "JSON-Datei auswählen", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Datei ablegen oder „Datei auswählen“ klicken", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Eine Vorschau wird vor jeder Änderung angezeigt.", "Ex: BAL-020": "z.B. BAL-020", "Ex: Balança Eletrônica": "z.B. Elektronische Waage", "Ex: 61714545": "z.B. 61714545", "Ex: Honda / Todos": "z.B. Honda / Alle", "Descrição completa do equipamento": "Vollständige Gerätebeschreibung", "Ex: Mitutoyo": "z.B. Mitutoyo", "Ex: Metrologia": "z.B. Messtechnik", "Ex: Wellington Freitas": "z.B. Wellington Freitas", "Ex: Labortec": "z.B. Labortec", "Observações adicionais (opcional)": "Zusätzliche Bemerkungen (optional)", "Todos": "Alle", "Responsável": "Verantwortlich"}, "fr": {"Código de Controle": "Code de contrôle", "Tipo de Equipamento": "Type d’équipement", "Código Labortec": "Code Labortec", "Cliente": "Client", "Descrição": "Description", "Fabricante": "Fabricant", "Localização / Máquina": "Emplacement / Machine", "Empresa Executante": "Société exécutante", "Última Calibração": "Dernière calibration", "Próxima Calibração": "Prochaine calibration", "Frequência (dias)": "Fréquence (jours)", "Status Operacional": "Statut opérationnel", "Status Calibração": "Statut calibration", "Observações": "Notes", "Validade estimada": "Validité estimée", "Salvar Equipamento": "Enregistrer l’équipement", "Limpar": "Effacer", "Calibrado e Aprovado": "Calibré et approuvé", "Calibração Necessária": "Calibration requise", "Descartado": "Mis au rebut", "Não Encontrado": "Introuvable", "ATIVO": "ACTIF", "INATIVO": "INACTIF", "Logs de Auditoria": "Journaux d’audit", "Últimos 50 registos": "50 derniers enregistrements", "Data / Hora": "Date / Heure", "Tipo": "Type", "ID Equip.": "ID équip.", "Utilizador": "Utilisateur", "Exportar Logs CSV": "Exporter les journaux CSV", "Importar Dados": "Importer des données", "Arraste o ficheiro JSON aqui": "Glissez le fichier JSON ici", "ou use o botão abaixo": "ou utilisez le bouton ci-dessous", "Selecionar arquivo JSON": "Sélectionner un fichier JSON", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Glissez le fichier ou cliquez sur « Sélectionner un fichier »", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Un aperçu sera affiché avant toute modification.", "Ex: BAL-020": "Ex : BAL-020", "Ex: Balança Eletrônica": "Ex : Balance électronique", "Ex: 61714545": "Ex : 61714545", "Ex: Honda / Todos": "Ex : Honda / Tous", "Descrição completa do equipamento": "Description complète de l’équipement", "Ex: Mitutoyo": "Ex : Mitutoyo", "Ex: Metrologia": "Ex : Métrologie", "Ex: Wellington Freitas": "Ex : Wellington Freitas", "Ex: Labortec": "Ex : Labortec", "Observações adicionais (opcional)": "Notes supplémentaires (optionnel)", "Todos": "Tous", "Responsável": "Responsable"}, "it": {"Código de Controle": "Codice di Controllo", "Tipo de Equipamento": "Tipo di Strumento", "Código Labortec": "Codice Labortec", "Cliente": "Cliente", "Descrição": "Descrizione", "Fabricante": "Produttore", "Localização / Máquina": "Posizione / Macchina", "Empresa Executante": "Azienda Esecutrice", "Última Calibração": "Ultima Taratura", "Próxima Calibração": "Prossima Taratura", "Frequência (dias)": "Frequenza (giorni)", "Status Operacional": "Stato Operativo", "Status Calibração": "Stato Taratura", "Observações": "Note", "Validade estimada": "Validità stimata", "Salvar Equipamento": "Salva Strumento", "Limpar": "Pulisci", "Calibrado e Aprovado": "Tarato e Approvato", "Calibração Necessária": "Taratura Necessaria", "Descartado": "Scartato", "Não Encontrado": "Non Trovato", "ATIVO": "ATTIVO", "INATIVO": "INATTIVO", "Logs de Auditoria": "Log di Audit", "Últimos 50 registos": "Ultime 50 voci", "Data / Hora": "Data / Ora", "Tipo": "Tipo", "ID Equip.": "ID Strum.", "Utilizador": "Utente", "Exportar Logs CSV": "Esporta Log CSV", "Importar Dados": "Importa Dati", "Arraste o ficheiro JSON aqui": "Trascina qui il file JSON", "ou use o botão abaixo": "oppure usa il pulsante sotto", "Selecionar arquivo JSON": "Seleziona file JSON", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Trascina il file o clicca su \"Seleziona file\"", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Verrà mostrata un’anteprima prima di applicare qualsiasi modifica.", "Ex: BAL-020": "Es: BAL-020", "Ex: Balança Eletrônica": "Es: Bilancia Elettronica", "Ex: 61714545": "Es: 61714545", "Ex: Honda / Todos": "Es: Honda / Tutti", "Descrição completa do equipamento": "Descrizione completa dello strumento", "Ex: Mitutoyo": "Es: Mitutoyo", "Ex: Metrologia": "Es: Metrologia", "Ex: Wellington Freitas": "Es: Wellington Freitas", "Ex: Labortec": "Es: Labortec", "Observações adicionais (opcional)": "Note aggiuntive (opzionale)", "Todos": "Tutti", "Responsável": "Responsabile"}, "pl": {"Código de Controle": "Kod kontrolny", "Tipo de Equipamento": "Typ urządzenia", "Código Labortec": "Kod Labortec", "Cliente": "Klient", "Descrição": "Opis", "Fabricante": "Producent", "Localização / Máquina": "Lokalizacja / Maszyna", "Empresa Executante": "Wykonawca", "Última Calibração": "Ostatnia kalibracja", "Próxima Calibração": "Następna kalibracja", "Frequência (dias)": "Częstotliwość (dni)", "Status Operacional": "Status operacyjny", "Status Calibração": "Status kalibracji", "Observações": "Uwagi", "Validade estimada": "Szacowana ważność", "Salvar Equipamento": "Zapisz urządzenie", "Limpar": "Wyczyść", "Calibrado e Aprovado": "Skalibrowane i zatwierdzone", "Calibração Necessária": "Wymagana kalibracja", "Descartado": "Wycofane", "Não Encontrado": "Nie znaleziono", "ATIVO": "AKTYWNE", "INATIVO": "NIEAKTYWNE", "Logs de Auditoria": "Logi audytu", "Últimos 50 registos": "Ostatnie 50 wpisów", "Data / Hora": "Data / Godzina", "Tipo": "Typ", "ID Equip.": "ID urządz.", "Utilizador": "Użytkownik", "Exportar Logs CSV": "Eksportuj logi CSV", "Importar Dados": "Importuj dane", "Arraste o ficheiro JSON aqui": "Przeciągnij plik JSON tutaj", "ou use o botão abaixo": "lub użyj przycisku poniżej", "Selecionar arquivo JSON": "Wybierz plik JSON", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Przeciągnij plik lub kliknij „Wybierz plik”", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Przed wprowadzeniem zmian zostanie pokazany podgląd.", "Ex: BAL-020": "np. BAL-020", "Ex: Balança Eletrônica": "np. Waga elektroniczna", "Ex: 61714545": "np. 61714545", "Ex: Honda / Todos": "np. Honda / Wszyscy", "Descrição completa do equipamento": "Pełny opis urządzenia", "Ex: Mitutoyo": "np. Mitutoyo", "Ex: Metrologia": "np. Metrologia", "Ex: Wellington Freitas": "np. Wellington Freitas", "Ex: Labortec": "np. Labortec", "Observações adicionais (opcional)": "Dodatkowe uwagi (opcjonalnie)", "Todos": "Wszyscy", "Responsável": "Odpowiedzialny"}};
+  Object.keys(_EXTRA2).forEach(function(lang){
+    if (!DICT[lang]) DICT[lang] = {};
+    var src = _EXTRA2[lang];
+    Object.keys(src).forEach(function(k){ if (!(k in DICT[lang])) DICT[lang][k] = src[k]; });
+  });
+  // [v49.4] Extra translations for strings reported as untranslated.
+  var _EXTRA = {"en": {"Nenhum equipamento cadastrado": "No equipment registered", "Nenhum equipamento cadastrado nesta sessão.": "No equipment registered in this session.", "Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.": "This plant has no measuring equipment registered yet. Start by adding a new one.", "Adicionar primeiro equipamento": "Add first equipment", "Cadastrar Novo Equipamento": "Register New Equipment", "Últimos Cadastros nesta Sessão": "Latest entries in this session", "Log de Auditoria": "Audit log", "Selecione uma unidade": "Select a unit", "Escolha uma planta para acessar o sistema": "Choose a plant to access the system", "Clique em um pin no mapa para acessar o sistema daquela planta": "Click a plant below to access its system", "Carregando plantas…": "Loading plants…", "Calibração OK": "Calibration OK", "Vence em breve": "Due soon", "Vencida": "Overdue", "Sem equipamentos cadastrados": "No equipment registered", "Visão Geral": "Overview", "Gestão": "Manage", "Análise": "Analysis", "Total": "Total", "Ativos": "Active", "Inativos": "Inactive", "Calib. OK": "Calib. OK", "Vencidos": "Overdue", "Vencem 30d": "Due 30d", "Vencem 90d": "Due 90d", "Índice Saúde": "Health Index", "registros": "records", "em operação": "in operation", "fora de uso": "out of service", "aprovados": "approved", "prazo expirado": "expired", "urgente": "urgent", "monitorar": "monitor", "equip. em dia": "on-track", "planta": "plant", "plantas": "plants", "São Paulo": "São Paulo", "México": "Mexico", "EUA": "USA"}, "es": {"Nenhum equipamento cadastrado": "Sin equipos registrados", "Nenhum equipamento cadastrado nesta sessão.": "Sin equipos registrados en esta sesión.", "Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.": "Esta planta aún no tiene instrumentos de medición registrados. Comience agregando uno nuevo.", "Adicionar primeiro equipamento": "Agregar primer equipo", "Cadastrar Novo Equipamento": "Registrar nuevo equipo", "Últimos Cadastros nesta Sessão": "Últimos registros de esta sesión", "Log de Auditoria": "Registro de auditoría", "Selecione uma unidade": "Seleccione una unidad", "Escolha uma planta para acessar o sistema": "Elija una planta para acceder al sistema", "Clique em um pin no mapa para acessar o sistema daquela planta": "Haga clic en una planta abajo para acceder a su sistema", "Carregando plantas…": "Cargando plantas…", "Calibração OK": "Calibración OK", "Vence em breve": "Vence pronto", "Vencida": "Vencida", "Sem equipamentos cadastrados": "Sin equipos registrados", "Visão Geral": "Resumen", "Gestão": "Gestión", "Análise": "Análisis", "Total": "Total", "Ativos": "Activos", "Inativos": "Inactivos", "Calib. OK": "Calib. OK", "Vencidos": "Vencidos", "Vencem 30d": "Vencen 30d", "Vencem 90d": "Vencen 90d", "Índice Saúde": "Índice de Salud", "registros": "registros", "em operação": "en operación", "fora de uso": "fuera de uso", "aprovados": "aprobados", "prazo expirado": "plazo vencido", "urgente": "urgente", "monitorar": "monitorear", "equip. em dia": "al día", "planta": "planta", "plantas": "plantas", "São Paulo": "São Paulo", "México": "México", "EUA": "EE. UU."}, "de": {"Nenhum equipamento cadastrado": "Keine Geräte erfasst", "Nenhum equipamento cadastrado nesta sessão.": "In dieser Sitzung wurden keine Geräte erfasst.", "Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.": "Dieses Werk hat noch keine Messmittel erfasst. Fügen Sie zuerst ein neues Gerät hinzu.", "Adicionar primeiro equipamento": "Erstes Gerät hinzufügen", "Cadastrar Novo Equipamento": "Neues Gerät erfassen", "Últimos Cadastros nesta Sessão": "Letzte Einträge dieser Sitzung", "Log de Auditoria": "Audit-Protokoll", "Selecione uma unidade": "Werk auswählen", "Escolha uma planta para acessar o sistema": "Wählen Sie ein Werk, um das System zu öffnen", "Clique em um pin no mapa para acessar o sistema daquela planta": "Klicken Sie unten auf ein Werk, um das System zu öffnen", "Carregando plantas…": "Werke werden geladen…", "Calibração OK": "Kalibrierung OK", "Vence em breve": "Bald fällig", "Vencida": "Überfällig", "Sem equipamentos cadastrados": "Keine Geräte erfasst", "Visão Geral": "Übersicht", "Gestão": "Verwaltung", "Análise": "Analyse", "Total": "Gesamt", "Ativos": "Aktiv", "Inativos": "Inaktiv", "Calib. OK": "Kalib. OK", "Vencidos": "Überfällig", "Vencem 30d": "Fällig 30T", "Vencem 90d": "Fällig 90T", "Índice Saúde": "Gesundheitsindex", "registros": "Einträge", "em operação": "in Betrieb", "fora de uso": "außer Betrieb", "aprovados": "genehmigt", "prazo expirado": "Frist abgelaufen", "urgente": "dringend", "monitorar": "überwachen", "equip. em dia": "auf Stand", "planta": "Werk", "plantas": "Werke", "São Paulo": "São Paulo", "México": "Mexiko", "EUA": "USA"}, "fr": {"Nenhum equipamento cadastrado": "Aucun équipement enregistré", "Nenhum equipamento cadastrado nesta sessão.": "Aucun équipement enregistré dans cette session.", "Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.": "Ce site n’a pas encore d’instruments de mesure enregistrés. Commencez par en ajouter un nouveau.", "Adicionar primeiro equipamento": "Ajouter le premier équipement", "Cadastrar Novo Equipamento": "Enregistrer un nouvel équipement", "Últimos Cadastros nesta Sessão": "Derniers enregistrements de cette session", "Log de Auditoria": "Journal d’audit", "Selecione uma unidade": "Sélectionnez un site", "Escolha uma planta para acessar o sistema": "Choisissez un site pour accéder au système", "Clique em um pin no mapa para acessar o sistema daquela planta": "Cliquez sur un site ci-dessous pour accéder à son système", "Carregando plantas…": "Chargement des sites…", "Calibração OK": "Calibration OK", "Vence em breve": "Bientôt dû", "Vencida": "Échue", "Sem equipamentos cadastrados": "Aucun équipement enregistré", "Visão Geral": "Aperçu", "Gestão": "Gestion", "Análise": "Analyse", "Total": "Total", "Ativos": "Actifs", "Inativos": "Inactifs", "Calib. OK": "Calib. OK", "Vencidos": "En retard", "Vencem 30d": "Échus 30j", "Vencem 90d": "Échus 90j", "Índice Saúde": "Indice de santé", "registros": "enregistrements", "em operação": "en service", "fora de uso": "hors service", "aprovados": "approuvés", "prazo expirado": "délai dépassé", "urgente": "urgent", "monitorar": "surveiller", "equip. em dia": "à jour", "planta": "site", "plantas": "sites", "São Paulo": "São Paulo", "México": "Mexique", "EUA": "États-Unis"}, "it": {"Nenhum equipamento cadastrado": "Nessuno strumento registrato", "Nenhum equipamento cadastrado nesta sessão.": "Nessuno strumento registrato in questa sessione.", "Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.": "Questo stabilimento non ha ancora strumenti di misura registrati. Inizia aggiungendone uno nuovo.", "Adicionar primeiro equipamento": "Aggiungi primo strumento", "Cadastrar Novo Equipamento": "Registra nuovo strumento", "Últimos Cadastros nesta Sessão": "Ultime registrazioni di questa sessione", "Log de Auditoria": "Log di audit", "Selecione uma unidade": "Seleziona uno stabilimento", "Escolha uma planta para acessar o sistema": "Scegli uno stabilimento per accedere al sistema", "Clique em um pin no mapa para acessar o sistema daquela planta": "Fai clic su uno stabilimento qui sotto per accedere al sistema", "Carregando plantas…": "Caricamento stabilimenti…", "Calibração OK": "Taratura OK", "Vence em breve": "In scadenza", "Vencida": "Scaduta", "Sem equipamentos cadastrados": "Nessuno strumento registrato", "Visão Geral": "Panoramica", "Gestão": "Gestione", "Análise": "Analisi", "Total": "Totale", "Ativos": "Attivi", "Inativos": "Inattivi", "Calib. OK": "Taratura OK", "Vencidos": "Scaduti", "Vencem 30d": "Scadono 30g", "Vencem 90d": "Scadono 90g", "Índice Saúde": "Indice di salute", "registros": "registrazioni", "em operação": "in servizio", "fora de uso": "fuori servizio", "aprovados": "approvati", "prazo expirado": "scaduto", "urgente": "urgente", "monitorar": "monitorare", "equip. em dia": "aggiornati", "planta": "stabilimento", "plantas": "stabilimenti", "São Paulo": "San Paolo", "México": "Messico", "EUA": "USA"}, "pl": {"Nenhum equipamento cadastrado": "Brak zarejestrowanych urządzeń", "Nenhum equipamento cadastrado nesta sessão.": "Brak urządzeń zarejestrowanych w tej sesji.", "Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.": "Ten zakład nie ma jeszcze zarejestrowanych przyrządów pomiarowych. Zacznij od dodania nowego.", "Adicionar primeiro equipamento": "Dodaj pierwsze urządzenie", "Cadastrar Novo Equipamento": "Zarejestruj nowe urządzenie", "Últimos Cadastros nesta Sessão": "Ostatnie wpisy w tej sesji", "Log de Auditoria": "Dziennik audytu", "Selecione uma unidade": "Wybierz zakład", "Escolha uma planta para acessar o sistema": "Wybierz zakład, aby uzyskać dostęp do systemu", "Clique em um pin no mapa para acessar o sistema daquela planta": "Kliknij zakład poniżej, aby przejść do systemu", "Carregando plantas…": "Ładowanie zakładów…", "Calibração OK": "Kalibracja OK", "Vence em breve": "Wkrótce upływa", "Vencida": "Zaległa", "Sem equipamentos cadastrados": "Brak zarejestrowanych urządzeń", "Visão Geral": "Przegląd", "Gestão": "Zarządzanie", "Análise": "Analiza", "Total": "Razem", "Ativos": "Aktywne", "Inativos": "Nieaktywne", "Calib. OK": "Kalib. OK", "Vencidos": "Zaległe", "Vencem 30d": "Termin 30d", "Vencem 90d": "Termin 90d", "Índice Saúde": "Wskaźnik stanu", "registros": "rekordy", "em operação": "w eksploatacji", "fora de uso": "wyłączone", "aprovados": "zatwierdzone", "prazo expirado": "termin upłynął", "urgente": "pilne", "monitorar": "monitorować", "equip. em dia": "aktualne", "planta": "zakład", "plantas": "zakłady", "São Paulo": "São Paulo", "México": "Meksyk", "EUA": "USA"}};
+  Object.keys(_EXTRA).forEach(function(lang){
+    if (!DICT[lang]) DICT[lang] = {};
+    var src = _EXTRA[lang];
+    Object.keys(src).forEach(function(k){ if (!(k in DICT[lang])) DICT[lang][k] = src[k]; });
+  });
+  window._I18N_DICT = DICT;
+  window._COUNTRY_LANG = COUNTRY_LANG;
+
+  // Núcleo de tradução de texto
+  function tr(txt){
+    var lang = (typeof LANG !== 'undefined' && LANG) ? LANG : 'pt';
+    if (lang === 'pt') return txt; // origem é PT, sem mudança
+    var d = DICT[lang]; if (!d) return txt;
+    var key = txt.trim();
+    if (!key) return txt;
+    // tenta direto
+    if (d[key]) return txt.replace(key, d[key]);
+    // tenta sem emoji inicial (👍 Texto)
+    var m = key.match(/^([\p{Emoji_Presentation}\p{Extended_Pictographic}\u{1F300}-\u{1FAFF}\u2600-\u27BF✕＋🔄🔑✉🏭🌎🌐⏳📥📤✏️🗑💾✅⚠️❌🔍📷]+\s*)(.+)$/u);
+    if (m && d[m[2].trim()]) return txt.replace(m[2].trim(), d[m[2].trim()]);
+    return txt;
+  }
+
+  var SKIP = { SCRIPT:1, STYLE:1, NOSCRIPT:1, CODE:1, PRE:1, TEXTAREA:1, INPUT:1, SELECT:1, OPTION:1, SVG:1 };
+  function walk(root){
+    if (!root || !root.nodeType) return;
+    if (root.nodeType === 3) { // text
+      var p = root.parentNode;
+      if (!p || SKIP[p.nodeName] || p.isContentEditable) return;
+      var raw = root.nodeValue;
+      if (!raw || !raw.trim()) return;
+      var out = tr(raw);
+      if (out !== raw) root.nodeValue = out;
+      return;
+    }
+    if (root.nodeType !== 1) return;
+    if (SKIP[root.nodeName] || root.isContentEditable) return;
+    // Atributos visíveis
+    ['title','placeholder','aria-label'].forEach(function(a){
+      if (root.hasAttribute && root.hasAttribute(a)) {
+        var v = root.getAttribute(a); var t = tr(v);
+        if (t !== v) root.setAttribute(a, t);
+      }
+    });
+    // OPTION com texto
+    if (root.nodeName === 'OPTION' && root.textContent) {
+      var ot = tr(root.textContent);
+      if (ot !== root.textContent) root.textContent = ot;
+    }
+    var ch = root.childNodes;
+    for (var i=0; i<ch.length; i++) walk(ch[i]);
+  }
+
+  var _scheduled = false;
+  function scheduleSweep(){
+    if (_scheduled) return; _scheduled = true;
+    setTimeout(function(){ _scheduled = false; try { walk(document.body); } catch(e){} }, 60);
+  }
+
+  // ── Hook em setLang: dispara varredura ────────────────────────────
+  function hookSetLang(){
+    if (typeof window.setLang !== 'function' || window.setLang.__autoI18nHooked) return;
+    var orig = window.setLang;
+    window.setLang = function(){
+      var r = orig.apply(this, arguments);
+      scheduleSweep();
+      return r;
+    };
+    window.setLang.__autoI18nHooked = true;
+  }
+
+  // ── Troca de planta → muda idioma conforme country da planta ──────
+  window._applyLangFromPlanta = function(code){
+    try {
+      var meta = (window._DYNAMIC_PLANTS||{})[code];
+      var country = meta && meta.country;
+      if (!country) return;
+      var lang = COUNTRY_LANG[String(country).toUpperCase()];
+      if (lang && typeof window.setLang === 'function' && lang !== LANG) {
+        window.setLang(lang);
+      }
+    } catch(e){}
+  };
+
+  // Hook em switchPlanta se existir
+  function hookSwitchPlanta(){
+    if (typeof window.switchPlanta !== 'function' || window.switchPlanta.__autoI18nHooked) return;
+    var orig = window.switchPlanta;
+    window.switchPlanta = function(code){
+      var r = orig.apply(this, arguments);
+      window._applyLangFromPlanta(code);
+      scheduleSweep();
+      return r;
+    };
+    window.switchPlanta.__autoI18nHooked = true;
+  }
+
+  // ── Observa mutações (toasts, modais novos, tabelas re-renderizadas) ──
+  function startObserver(){
+    try {
+      var obs = new MutationObserver(function(muts){
+        if ((typeof LANG === 'undefined') || LANG === 'pt') return;
+        scheduleSweep();
+      });
+      obs.observe(document.body, { childList:true, subtree:true, characterData:true });
+    } catch(e){}
+  }
+
+  function boot(){
+    hookSetLang();
+    hookSwitchPlanta();
+    startObserver();
+    scheduleSweep();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else { boot(); }
+
+  // Re-tenta hooks após scripts tardios
+  setTimeout(boot, 800);
+  setTimeout(boot, 2500);
+})();
+</script>
 
 </body>
 </html>
