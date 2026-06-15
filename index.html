@@ -172,18 +172,39 @@ window._undoRedoManager = {
   undo: function() {
     if (this.currentIdx <= 0) { window.showToast('⚠️ Nada para desfazer', 'info'); return false; }
     var action = this.history[this.currentIdx - 1];
-    Object.assign(DB[0] || {}, action.before);
+    // [v49.9 FIX] Substitui o array DB completo em vez de corromper apenas DB[0]
+    try {
+      var restored = JSON.parse(JSON.stringify(action.before));
+      if (Array.isArray(restored)) {
+        DB = restored;
+      } else if (restored && typeof restored === 'object') {
+        // Compatibilidade: estado salvo como objeto único → encapsula em array
+        DB = [restored];
+      }
+      if (typeof recalcDias === 'function') DB = recalcDias(DB);
+    } catch(e) { console.error('[undoRedoManager.undo]', e); }
     this.currentIdx--;
     window.showToast('↶ Desfeito: ' + action.desc, 'success');
+    if (typeof updateAll === 'function') try { updateAll(); } catch(_) {}
     return true;
   },
   
   redo: function() {
     if (this.currentIdx >= this.history.length - 1) { window.showToast('⚠️ Nada para refazer', 'info'); return false; }
     var action = this.history[this.currentIdx + 1];
-    Object.assign(DB[0] || {}, action.after);
+    // [v49.9 FIX] Substitui o array DB completo em vez de corromper apenas DB[0]
+    try {
+      var restored = JSON.parse(JSON.stringify(action.after));
+      if (Array.isArray(restored)) {
+        DB = restored;
+      } else if (restored && typeof restored === 'object') {
+        DB = [restored];
+      }
+      if (typeof recalcDias === 'function') DB = recalcDias(DB);
+    } catch(e) { console.error('[undoRedoManager.redo]', e); }
     this.currentIdx++;
     window.showToast('↷ Refeito: ' + action.desc, 'success');
+    if (typeof updateAll === 'function') try { updateAll(); } catch(_) {}
     return true;
   }
 };
@@ -298,12 +319,28 @@ window.bulkMarkCalibrated = function() {
 };
 
 window.bulkDelete = function() {
+  // [v49.9 FIX] Guarda _bloqueioSemPlanta
+  if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
+    showToast('🔒 Acesso bloqueado: nenhuma planta configurada para este usuário.', 'err');
+    return;
+  }
   var ids = Array.from(window._bulkSelectedIds);
   if (ids.length === 0) return;
   
   if (!confirm('⚠️ DELETAR ' + ids.length + ' equipamento(s)?\n\nEsta ação não pode ser desfeita!')) return;
   if (!confirm('TEM CERTEZA? Esta é a última chance!')) return;
   
+  // [v49.9 FIX] Supabase: deleta via Promise.allSettled para evitar race condition no Safari/iOS
+  if (typeof sbActive === 'function' && sbActive() && typeof sbDeleteRecord === 'function') {
+    var deletePromises = ids.map(function(id) { return sbDeleteRecord(id); });
+    Promise.allSettled(deletePromises).then(function(results) {
+      var failed = results.filter(function(r) { return r.status === 'rejected'; });
+      if (failed.length > 0) {
+        showToast('⚠️ ' + failed.length + ' exclusão(ões) falharam no servidor.', 'err');
+      }
+    });
+  }
+
   ids.forEach(function(id) {
     var idx = DB.findIndex(function(r) { return r.id === id; });
     if (idx >= 0) DB.splice(idx, 1);
@@ -7201,10 +7238,22 @@ async function sbPull() {
         return true;
       }
       // Mapeia as colunas do Supabase para os campos internos do DB
-      DB = recalcDias(data.map(r => ({
-        ...r,
-        _uid: r._uid || r.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)),
-      })));
+      // [v49.9 FIX] _uid determinístico: usa _uid salvo no Supabase quando disponível.
+      // Se ausente, deriva do campo 'id' via hash numérico estável — evita colisão entre
+      // registros processados no mesmo milissegundo (ex: L2015057 e L2015057 DISP recebiam
+      // o mesmo Date.now()*1000 e o filter por _uid excluía ambos ao deletar um deles).
+      let _uidCounter = 0;
+      DB = recalcDias(data.map(r => {
+        let uid = r._uid || r.id_interno;
+        if (!uid) {
+          // Hash numérico estável a partir do campo id (string → número único)
+          const s = String(r.id || '').trim();
+          let h = 5381;
+          for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+          uid = (Math.abs(h) * 1000) + (++_uidCounter);
+        }
+        return { ...r, _uid: uid };
+      }));
       saveLS(true); // [v15 FIX] silent=true: pull do cloud não é mudança local, não marcar como unsaved
     } else if (data && data.length === 0 && _currentUnidade) {
       // [FIX] Planta sem equipamentos cadastrados (ou diretor em planta vazia) —
@@ -7321,11 +7370,14 @@ const payload = Array.from(uniqueMap.values());
 // EXCLUSÃO de um registro específico pelo campo 'id' (código do equipamento)
 async function sbDeleteRecord(codigoEquipamento) {
   if(!sbActive()) return;
+  // [v49.9 FIX] trim() garante que espaços invisíveis não causem falha no match do Supabase
+  const _safeId = String(codigoEquipamento || '').trim();
+  if (!_safeId) return;
   try {
     const { error } = await _sb
       .from('equipamentos')
       .delete()
-      .eq('id', codigoEquipamento);
+      .eq('id', _safeId);
     if (error) throw error;
   } catch(e) {
     console.error('[Supabase] sbDeleteRecord error:', e.message || e);
@@ -7370,7 +7422,18 @@ function fbStartListen() {
         _rtFrom += _RT_PAGE;
       }
       if (!_rtAll || _rtAll.length === 0) return;
-      const newDB = recalcDias(_rtAll.map(r => ({ ...r, _uid: r._uid || r.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)) })));
+      // [v49.9 FIX] _uid determinístico no polling — mesma lógica do sbPull para evitar colisão
+      let _pollUidCtr = 0;
+      const newDB = recalcDias(_rtAll.map(r => {
+        let uid = r._uid || r.id_interno;
+        if (!uid) {
+          const s = String(r.id || '').trim();
+          let h = 5381;
+          for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+          uid = (Math.abs(h) * 1000) + (++_pollUidCtr);
+        }
+        return { ...r, _uid: uid };
+      }));
       const stripDias = arr => arr.map(r => { const {dias_vencer, _updated, ...rest} = r; return rest; });
       const newHash = JSON.stringify(stripDias(newDB));
       if (newHash !== _pollingLastHash) {
@@ -8125,13 +8188,13 @@ function showApp(user) {
         // então showApp() já terminou sem mostrar a tela de seleção de planta.
         // Corrigido: tratamos o caso do diretor explicitamente neste bloco.
         if (_isDirector) {
-          // [v49.5 FIX] Restaura planta persistida do Diretor (sessão anterior)
-          var _savedPlant = StorageService.get('rochling_director_plant', '');
-          if (_savedPlant) {
-            switchPlanta(_savedPlant);
-          } else {
-            _mostrarSelecaoPlanta();
-          }
+          // [v49.9 FIX] Diretor SEMPRE deve escolher a planta ao logar.
+          // A restauração automática da sessão anterior causava inconsistências silenciosas
+          // (diretores acessavam dados da planta errada sem perceber).
+          // Agora: limpa a planta persistida e sempre exibe a tela de seleção.
+          StorageService.set('rochling_director_plant', '');
+          _currentUnidade = null;
+          _mostrarSelecaoPlanta();
           if (typeof window._loadPlantasDisponiveis === 'function') window._loadPlantasDisponiveis();
         } else if (typeof sbPull === 'function' && typeof window.sbActive === 'function' && window.sbActive()) {
           sbPull().then(function(ok) { if (ok && typeof updateAll === 'function') updateAll(); });
@@ -8156,15 +8219,11 @@ function showApp(user) {
   if (_appInitialized) return;
   _appInitialized = true;
 
-  // [FIX-DIRECTOR] Director sem planta selecionada → verifica persistência ou mostra seleção.
+  // [v49.9 FIX] Diretor SEMPRE deve escolher a planta ao logar.
+  // Bloco corrigido: remove restauração automática que permitia bypass da tela de seleção.
   if (_isDirector && !_currentUnidade) {
-    var _savedPlant = StorageService.get('rochling_director_plant', '');
-    if (_savedPlant) {
-      // [v49.5 FIX] Restaura planta persistida — evita exibir tela de seleção desnecessariamente
-      switchPlanta(_savedPlant);
-    } else {
-      _mostrarSelecaoPlanta();
-    }
+    StorageService.set('rochling_director_plant', ''); // limpa planta persistida
+    _mostrarSelecaoPlanta();
     initSupabase(); // conecta mas sbPull vai retornar cedo (sem planta)
     return;
   }
@@ -10407,6 +10466,11 @@ function _safeConfirm(msg, onYes, onNo) {
 }
 
 function deleteRecord(){
+  // [v49.9 FIX] Guarda _bloqueioSemPlanta: exibe toast em vez de falhar silenciosamente
+  if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
+    showToast('🔒 Acesso bloqueado: nenhuma planta configurada para este usuário.', 'err');
+    return;
+  }
   if(editUID === null) return;
   const r = DB.find(x => x._uid === editUID);
   if(!r) return;
@@ -10420,7 +10484,11 @@ function deleteRecord(){
     pushUndo();
     v12AuditLog('del', r.id || editUID, `Equipamento eliminado: ${r.descricao||r.tipo||name}`);
     const deletedId = r.id;
-    DB = DB.filter(x => x._uid !== editUID);
+    // [v49.9 FIX] Filtra por _uid E por id.trim() para garantir exclusão correta mesmo
+    // quando _uid for regenerado por instabilidade de sincronização.
+    // O trim() evita que espaços invisíveis façam 'L2015057 DISP' ser excluído junto com 'L2015057'.
+    const _deletedIdTrimmed = String(deletedId || '').trim();
+    DB = DB.filter(x => x._uid !== editUID && String(x.id || '').trim() !== _deletedIdTrimmed);
     closeModal();
     updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
     refreshInPlace();
@@ -10432,6 +10500,11 @@ function deleteRecord(){
 
 
 function deleteInline(uid){
+  // [v49.9 FIX] Guarda _bloqueioSemPlanta: exibe toast em vez de falhar silenciosamente
+  if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
+    showToast('🔒 Acesso bloqueado: nenhuma planta configurada para este usuário.', 'err');
+    return;
+  }
   const r = DB.find(x => x._uid === uid);
   if(!r) return;
   const name = r.id || r.descricao || 'registro';
@@ -10439,7 +10512,9 @@ function deleteInline(uid){
   _safeConfirm(LANG==='en' ? `Delete "${name}"? This action cannot be undone.` : `Excluir "${name}"? Esta ação não pode ser desfeita.`, function() {
     pushUndo();
     const deletedId = r.id;
-    DB = DB.filter(x => x._uid !== uid);
+    // [v49.9 FIX] Filtra por _uid E id.trim() — evita exclusão acidental de registros com prefixo igual
+    const _deletedIdTrimmed = String(deletedId || '').trim();
+    DB = DB.filter(x => x._uid !== uid && String(x.id || '').trim() !== _deletedIdTrimmed);
     updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
     refreshInPlace();
     if(deletedId) sbDeleteRecord(deletedId);
@@ -12110,6 +12185,12 @@ function onBulkFieldChange(tbl) {
 }
 
 function applyBulkEdit(tbl) {
+  // [v49.9 FIX] Guarda _bloqueioSemPlanta: impede ação sem planta configurada
+  if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
+    showToast('🔒 Acesso bloqueado: nenhuma planta configurada para este usuário.', 'err');
+    return;
+  }
+
   const field    = document.getElementById('bulk-field-'+tbl)?.value;
   const valueEl  = document.getElementById('bulk-value-'+tbl);
   const applyBtn = document.getElementById('bulk-apply-'+tbl);
@@ -12169,25 +12250,45 @@ window.quickRefresh = quickRefresh;
 function bulkDelete(tbl) {
   const uids = _selectedUIDs[tbl];
   if(uids.size === 0) return;
+  // [v49.9 FIX] Guarda _bloqueioSemPlanta antes de abrir o modal
+  if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
+    showToast('🔒 Acesso bloqueado: nenhuma planta configurada para este usuário.', 'err');
+    return;
+  }
   // [v25 FIX] replaced blocking confirm()
-  _confirmModal(`Excluir ${uids.size} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`, function() { _v25BulkDeleteBody(uids); }); return;
+  _confirmModal(`Excluir ${uids.size} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`, function() { _v25BulkDeleteBody(uids, tbl); }); return;
 }
-function _v25BulkDeleteBody(uids) {
-
-  // Supabase: deleta cada registro pelo campo 'id' (código do equipamento)
-  if(sbActive()) {
-    uids.forEach(uid => {
-      const r = DB.find(x => String(x._uid) === String(uid));
-      if(r && r.id) {
-        sbDeleteRecord(r.id).catch(e => console.warn('[Supabase] bulkDelete:', r.id, e));
-      }
-    });
+function _v25BulkDeleteBody(uids, tbl) {
+  // [v49.9 FIX] Guarda _bloqueioSemPlanta: impede ação sem planta configurada
+  if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
+    showToast('🔒 Acesso bloqueado: nenhuma planta configurada para este usuário.', 'err');
+    return;
   }
 
-  DB = DB.filter(r => !uids.has(String(r._uid)));
+  // [v49.9 FIX] Supabase: deleta em paralelo controlado via Promise.allSettled (sem race condition)
+  // A versão anterior usava forEach+catch solto, o que causava condição de corrida no Safari/iOS.
+  if (sbActive()) {
+    var deletePromises = [];
+    uids.forEach(function(uid) {
+      var r = DB.find(function(x) { return String(x._uid) === String(uid); });
+      if (r && r.id) {
+        deletePromises.push(sbDeleteRecord(r.id));
+      }
+    });
+    if (deletePromises.length > 0) {
+      Promise.allSettled(deletePromises).then(function(results) {
+        var failed = results.filter(function(r) { return r.status === 'rejected'; });
+        if (failed.length > 0) {
+          showToast('⚠️ ' + failed.length + ' exclusão(ões) falharam no servidor. Verifique a conexão.', 'err');
+        }
+      });
+    }
+  }
+
+  DB = DB.filter(function(r) { return !uids.has(String(r._uid)); });
   saveLS();
-  clearSelection(tbl);
-  showToast(`🗑 ${uids.size} registro(s) excluído(s)`, 'warn');
+  if (tbl) clearSelection(tbl);
+  showToast('🗑 ' + uids.size + ' registro(s) excluído(s)', 'warn');
   refreshInPlace();
 }
 
