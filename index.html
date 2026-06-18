@@ -160,6 +160,11 @@ window._undoRedoManager = {
   maxHistory: 50,
   
   record: function(before, after, description) {
+    // [v49.9 FIX] Valida arrays antes de gravar no histórico para evitar estado corrompido
+    if (!Array.isArray(before) || !Array.isArray(after)) {
+      console.warn('[undoRedoManager.record] before/after devem ser arrays — ignorado. before:', typeof before, 'after:', typeof after);
+      return;
+    }
     this.history = this.history.slice(0, this.currentIdx + 1);
     this.history.push({ before: JSON.parse(JSON.stringify(before)), after: JSON.parse(JSON.stringify(after)), desc: description });
     this.currentIdx++;
@@ -170,7 +175,7 @@ window._undoRedoManager = {
   },
   
   undo: function() {
-    if (this.currentIdx <= 0) { window.showToast('⚠️ Nada para desfazer', 'info'); return false; }
+    if (this.currentIdx <= 0) { window.showToast(t('toast_undo_empty'), 'info'); return false; }
     var action = this.history[this.currentIdx - 1];
     // [v49.9 FIX] Substitui o array DB completo em vez de corromper apenas DB[0]
     try {
@@ -190,7 +195,7 @@ window._undoRedoManager = {
   },
   
   redo: function() {
-    if (this.currentIdx >= this.history.length - 1) { window.showToast('⚠️ Nada para refazer', 'info'); return false; }
+    if (this.currentIdx >= this.history.length - 1) { window.showToast(t('toast_redo_empty'), 'info'); return false; }
     var action = this.history[this.currentIdx + 1];
     // [v49.9 FIX] Substitui o array DB completo em vez de corromper apenas DB[0]
     try {
@@ -211,6 +216,9 @@ window._undoRedoManager = {
 
 window.showToast = function(msg, type) {
   type = type || 'info';
+  // [v49.9 FIX] Normaliza aliases: 'err'→'error', 'warn'→'warning' para garantir cor correta
+  var _typeMap = { err: 'error', warn: 'warning', success: 'success', error: 'error', info: 'info', warning: 'warning' };
+  type = _typeMap[type] || 'info';
   var colors = { success: '#4CAF50', error: '#F44336', info: '#2196F3', warning: '#FF9800' };
   var toast = document.createElement('div');
   toast.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:14px 20px;background:' + (colors[type] || colors.info) + ';color:white;border-radius:8px;z-index:10000;font-size:14px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,0.2);animation:slideInToast 0.3s ease;font-family:var(--font)';
@@ -299,21 +307,31 @@ window.updateBulkActionButtons = function() {
 };
 
 window.bulkMarkCalibrated = function() {
+  // [v49.9 FIX] Guarda _bloqueioSemPlanta
+  if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
+    showToast(t('toast_blocked'), 'err');
+    return;
+  }
   var ids = Array.from(window._bulkSelectedIds);
   if (ids.length === 0) return;
   
   if (!confirm('Marcar ' + ids.length + ' equipamento(s) como calibrado?')) return;
   
+  var today = new Date().toISOString().slice(0, 10);
   ids.forEach(function(id) {
     var rec = DB.find(function(r) { return r.id === id; });
     if (rec) {
-      rec.status_calib = 'APROVADO';
-      rec.data_calibracao = new Date().toISOString().slice(0, 10);
+      rec.status_calib = 'Instrumento Calibrado e aprovado';
+      // [v49.9 FIX] Atualiza ult_calib com hoje e recalcula prox_calib se freq_dias definida
+      rec.ult_calib = today;
+      if (typeof recalcRecord === 'function') recalcRecord(rec);
     }
   });
   
   if (typeof saveLS === 'function') saveLS();
   if (typeof updateAll === 'function') updateAll();
+  // [v49.9 FIX] Sincroniza com Supabase após marcação em massa
+  if (typeof sbSchedulePush === 'function') sbSchedulePush();
   showToast('✅ ' + ids.length + ' equipamento(s) marcado(s) como calibrado', 'success');
   bulkClearSelection();
 };
@@ -321,7 +339,7 @@ window.bulkMarkCalibrated = function() {
 window.bulkDelete = function() {
   // [v49.9 FIX] Guarda _bloqueioSemPlanta
   if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
-    showToast('🔒 Acesso bloqueado: nenhuma planta configurada para este usuário.', 'err');
+    showToast(t('toast_blocked'), 'err');
     return;
   }
   var ids = Array.from(window._bulkSelectedIds);
@@ -2771,14 +2789,14 @@ input[type="checkbox"], input[type="radio"] {
       <div class="kpi-footer"><span class="kpi-sub" id="ks-total">registros</span><canvas class="kpi-sparkline" id="sp-total"></canvas></div>
       <span class="kpi-drill-hint">↗ ver todos</span>
     </div>
-    <div class="kpi c-green" onclick="openDrill('ativos','Ativo')">
-      <div class="kpi-header"><span class="kpi-lbl">Ativos</span><span class="kpi-icon">✅</span></div>
+    <div class="kpi c-green" onclick="openDrill('ativos', t('tab_active') || 'Ativo')">
+      <div class="kpi-header"><span class="kpi-lbl" data-i18n="tab_active">Ativos</span><span class="kpi-icon">✅</span></div>
       <div class="kpi-val" id="k-ativos">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-ativos">em operação</span><canvas class="kpi-sparkline" id="sp-ativos"></canvas></div>
       <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
-    <div class="kpi c-gray" onclick="openDrill('inativos','Inativo')">
-      <div class="kpi-header"><span class="kpi-lbl">Inativos</span><span class="kpi-icon">⏸</span></div>
+    <div class="kpi c-gray" onclick="openDrill('inativos', t('tab_inactive') || 'Inativo')">
+      <div class="kpi-header"><span class="kpi-lbl" data-i18n="tab_inactive">Inativos</span><span class="kpi-icon">⏸</span></div>
       <div class="kpi-val" id="k-inativos">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-inativos">fora de uso</span><canvas class="kpi-sparkline" id="sp-inativos"></canvas></div>
       <span class="kpi-drill-hint">↗ ver registros</span>
@@ -2789,25 +2807,25 @@ input[type="checkbox"], input[type="radio"] {
       <div class="kpi-footer"><span class="kpi-sub" id="ks-calib-ok">aprovados</span><canvas class="kpi-sparkline" id="sp-calib"></canvas></div>
       <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
-    <div class="kpi c-red" onclick="openDrill('vencidos','Vencidos')">
-      <div class="kpi-header"><span class="kpi-lbl">Vencidos</span><span class="kpi-icon">🚨</span></div>
+    <div class="kpi c-red" onclick="openDrill('vencidos', t('tab_expired') || 'Vencidos')">
+      <div class="kpi-header"><span class="kpi-lbl" data-i18n="tab_expired">Vencidos</span><span class="kpi-icon">🚨</span></div>
       <div class="kpi-val" id="k-venc">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-venc">prazo expirado</span><canvas class="kpi-sparkline" id="sp-venc"></canvas></div>
       <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
-    <div class="kpi c-orange" onclick="openDrill('vence30','Vencem em 30 dias')">
-      <div class="kpi-header"><span class="kpi-lbl">Vencem 30d</span><span class="kpi-icon">⚠️</span></div>
+    <div class="kpi c-orange" onclick="openDrill('vence30', t('tab_due30') || 'Vencem em 30 dias')">
+      <div class="kpi-header"><span class="kpi-lbl" data-i18n="tab_due30">Vencem 30d</span><span class="kpi-icon">⚠️</span></div>
       <div class="kpi-val" id="k-30d">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-30d">urgente</span><canvas class="kpi-sparkline" id="sp-30d"></canvas></div>
       <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
-    <div class="kpi c-accent" onclick="openDrill('vence90','Vencem em 90 dias')">
-      <div class="kpi-header"><span class="kpi-lbl">Vencem 90d</span><span class="kpi-icon">📅</span></div>
+    <div class="kpi c-accent" onclick="openDrill('vence90', t('tab_due90') || 'Vencem em 90 dias')">
+      <div class="kpi-header"><span class="kpi-lbl" data-i18n="tab_due90">Vencem 90d</span><span class="kpi-icon">📅</span></div>
       <div class="kpi-val" id="k-90d">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-90d">monitorar</span><canvas class="kpi-sparkline" id="sp-90d"></canvas></div>
       <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
-    <div class="kpi c-purple" onclick="openDrill('saude','Índice de Saúde')">
+    <div class="kpi c-purple" onclick="openDrill('saude',t('lbl_health_idx'))">
       <div class="kpi-header"><span class="kpi-lbl">Índice Saúde</span><span class="kpi-icon">💚</span></div>
       <div class="kpi-val" id="k-saude">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-saude">equip. em dia</span><canvas class="kpi-sparkline" id="sp-saude"></canvas></div>
@@ -2818,10 +2836,10 @@ input[type="checkbox"], input[type="radio"] {
   <!-- [v49] Mensagem amigável para planta vazia -->
   <div id="charts-empty-state" style="display:none;padding:32px 24px;text-align:center;background:var(--surf);border-radius:12px;margin:20px;border:2px dashed var(--bdr2)">
     <div style="font-size:32px;margin-bottom:12px">📭</div>
-    <div style="font-size:18px;font-weight:600;color:var(--tx);margin-bottom:8px">Nenhum equipamento cadastrado</div>
+    <div style="font-size:18px;font-weight:600;color:var(--tx);margin-bottom:8px" data-i18n="empty_equip_title">Nenhum equipamento cadastrado</div>
     <div style="font-size:13px;color:var(--tx2);margin-bottom:20px">Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.</div>
     <button onclick="document.getElementById('edit-modal').style.display='flex';initEquipModal('new')" style="padding:10px 20px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-family:var(--font)">
-      ➕ Adicionar primeiro equipamento
+      ➕ <span data-i18n="empty_equip_btn">Adicionar primeiro equipamento</span>
     </button>
   </div>
 
@@ -2978,7 +2996,7 @@ input[type="checkbox"], input[type="radio"] {
           <span class="tbl-cnt" id="eq-cnt">—</span>
           <button class="btn-g" onclick="quickRefresh()" title="Atualizar tabela sem recarregar a página" style="padding:6px 12px;font-size:12px">🔄 Atualizar</button>
           <button class="btn-p" onclick="openAdd()" style="padding:6px 14px;font-size:12px;font-weight:700">＋ <span data-i18n="btn_new_lbl">Novo</span></button>
-          <input class="search-box" id="f-search" aria-label="Buscar equipamentos por código ou descrição" placeholder="🔍 Buscar código, descrição..." oninput="applyF()" style="min-width:200px">
+          <input class="search-box" id="f-search" aria-label="Buscar equipamentos por código ou descrição" placeholder="🔍 Buscar código, descrição..." data-i18n-ph="ph_search" oninput="applyF()" style="min-width:200px">
           <!-- [v36 NOVO] Botão de filtros avançados -->
           <button class="btn-g" onclick="toggleAdvancedSearch()" title="Filtros avançados" style="font-size:12px;padding:6px 12px">⚙️ Filtros</button>
           <div id="advanced-search-panel" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:12px;margin-top:8px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.1)">
@@ -3045,7 +3063,7 @@ input[type="checkbox"], input[type="radio"] {
           <span class="tbl-cnt" id="eq-cnt-tbl">—</span>
           <button class="btn-g" onclick="quickRefresh()" title="Atualizar tabela sem recarregar a página" style="padding:6px 12px;font-size:12px">🔄 Atualizar</button>
           <button class="btn-p" onclick="openAdd()" style="padding:6px 14px;font-size:12px;font-weight:700">＋ <span data-i18n="btn_new_lbl">Novo</span></button>
-          <input class="search-box" id="ft-search" placeholder="🔍 Buscar código, descrição..." oninput="syncTblFilter('f-search',this.value)" style="min-width:200px">
+          <input class="search-box" id="ft-search" placeholder="🔍 Buscar código, descrição..." data-i18n-ph="ph_search" oninput="syncTblFilter('f-search',this.value)" style="min-width:200px">
           <button class="btn-g" onclick="clearF()" title="Limpar todos os filtros">✕ Limpar</button>
           <div class="col-panel"><button class="btn-g" id="btn-cols-eq" onclick="showColMenu('geral',this,event)">⚙ <span data-i18n="btn_cols_lbl">Colunas</span></button></div>
           <button class="btn-g" onclick="exportCSV('geral')">↓ CSV</button>
@@ -3197,7 +3215,7 @@ input[type="checkbox"], input[type="radio"] {
           <input type="month" id="rep-f-prox-mes-ate" onchange="applyRepF()" style="flex:1;min-width:0" title="Até">
         </div>
       </div>
-      <div class="fg"><label>Buscar</label><input id="rep-f-search" type="text" placeholder="Código, descrição..." oninput="applyRepF()"></div>
+      <div class="fg"><label>Buscar</label><input id="rep-f-search" type="text" placeholder="Código, descrição..." data-i18n-ph="ph_search_short" oninput="applyRepF()"></div>
       <div style="display:flex;gap:5px;align-items:end">
         <button class="btn-g" onclick="applyRepF()" title="Reaplicar filtros">🔄 Aplicar</button>
         <button class="btn-g" onclick="clearRepF()">✕ Limpar</button>
@@ -3572,11 +3590,11 @@ input[type="checkbox"], input[type="radio"] {
 <div id="v12-backup-banner">
   <div class="v12-bb-text">
     <span class="v12-bb-icon">💾</span>
-    <span id="v12-bb-msg">Aviso: O seu último backup em ficheiro foi há mais de 7 dias. Faça o download de segurança.</span>
+    <span id="v12-bb-msg" data-i18n-backup="1">Aviso: O seu último backup em ficheiro foi há mais de 7 dias. Faça o download de segurança.</span>
   </div>
   <div class="v12-bb-btns">
-    <button class="v12-bb-btn primary" onclick="v12ExportData();v12DismissBackupBanner()">📥 Fazer Backup Agora</button>
-    <button class="v12-bb-btn dismiss" onclick="v12DismissBackupBanner()">Dispensar</button>
+    <button class="v12-bb-btn primary" onclick="v12ExportData();v12DismissBackupBanner()">📥 <span data-i18n="btn_backup_short">Fazer Backup Agora</span></button>
+    <button class="v12-bb-btn dismiss" onclick="v12DismissBackupBanner()" data-i18n="btn_dismiss">Dispensar</button>
   </div>
 </div>
 <div id="v10-proc-overlay">
@@ -3716,7 +3734,7 @@ input[type="checkbox"], input[type="radio"] {
       <span class="tbl-title">&#128220; Log de Auditoria</span>
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
         <span class="tbl-cnt" id="audit-cnt">0</span>
-        <input class="search-box" id="audit-search" placeholder="&#128269; Filtrar log..." oninput="renderAuditLog()" style="min-width:200px">
+        <input class="search-box" id="audit-search" placeholder="&#128269; Filtrar log..." data-i18n-ph="ph_filter_log" oninput="renderAuditLog()" style="min-width:200px">
         <button class="btn-g" onclick="clearAuditLog()">&#128465; Limpar Log</button>
         <button class="btn-g" onclick="exportAuditCSV()">&#8595; CSV</button>
       </div>
@@ -4063,20 +4081,20 @@ window.addEventListener('unhandledrejection', function(e) {
 // ═══════════════════════════════════════════════════════
 // [v20] STORAGE SERVICE — cached, version-aware, fail-safe
 // ═══════════════════════════════════════════════════════
-const StorageService = (() => {
-  const _cache = {};
+var StorageService = (() => {
+  var _cache = {};
   return {
     get(key, fallback = null) {
       if (key in _cache) return _cache[key];
       try {
-        const v = localStorage.getItem(key);
+        var v = localStorage.getItem(key);
         _cache[key] = v !== null ? v : fallback;
         return _cache[key];
       } catch(e) { console.warn('[StorageService.get]', key, e); return fallback; }
     },
     set(key, value) {
       try {
-        const s = typeof value === 'string' ? value : JSON.stringify(value);
+        var s = typeof value === 'string' ? value : JSON.stringify(value);
         localStorage.setItem(key, s);
         _cache[key] = value;
         return true;
@@ -4088,7 +4106,7 @@ const StorageService = (() => {
     },
     getJSON(key, fallback = null) {
       try {
-        const raw = this.get(key);
+        var raw = this.get(key);
         return raw ? JSON.parse(raw) : fallback;
       } catch(e) { console.warn('[StorageService.getJSON] parse error', key, e); return fallback; }
     },
@@ -4096,14 +4114,14 @@ const StorageService = (() => {
   };
 })();
 
-const LS_KEY    = 'rochling_db_v1';
-const LS_SB_CFG = 'rochling_sb_cfg'; // Supabase config key (URL + anon key)
+var LS_KEY    = 'rochling_db_v1';
+var LS_SB_CFG = 'rochling_sb_cfg'; // Supabase config key (URL + anon key)
 
 // ═══════════════════════════════════════════════════════
 // i18n — Bilíngue PT / EN
 // ═══════════════════════════════════════════════════════
-let LANG     = StorageService.get('rochling_lang', 'pt');
-let DATE_FMT = StorageService.get('rochling_datefmt', 'dmy'); // 'dmy' = DD/MM/AAAA | 'iso' = AAAA-MM-DD
+var LANG     = StorageService.get('rochling_lang', 'pt');
+var DATE_FMT = StorageService.get('rochling_datefmt', 'dmy'); // 'dmy' = DD/MM/AAAA | 'iso' = AAAA-MM-DD
 
 // fmtDate é mantido por compatibilidade; delega para fmtDateSafe (timezone-safe)
 // Toda a formatação de datas passa por string-splitting — zero risco de desvio iOS/Safari.
@@ -4122,7 +4140,7 @@ function setDateFmt(fmt) {
   renderTable('alert');
 }
 
-const T = {
+var T = {
   pt: {
     // Header / nav
     title:          'Controle de Equipamentos de Medição',
@@ -4224,10 +4242,10 @@ const T = {
     rep_evolucao:   '📈 Evolução Acumulada (7 meses)',
     rep_resp:       '👤 Por Responsável',
     rep_emp_venc:   '🏭 Vencidos por Empresa',
-    rep_freq:       '⏱ Frequência de Calibração',
+    rep_freq:       t('ch_lbl_freq'),
     rep_heatmap:    '🌡️ Status por Localização',
-    rep_resumo:     '🔢 Resumo Geral',
-    rep_urgentes:   '⏱️ Top 15 Mais Urgentes',
+    rep_resumo:     t('lbl_general_summary'),
+    rep_urgentes:   t('lbl_top_urgent'),
     rep_kpi_venc:   'Vencidos',
     rep_kpi_30d:    'Vencem 30d',
     rep_kpi_90d:    'Vencem 90d',
@@ -4283,6 +4301,133 @@ const T = {
     sync_pending:   '⏸ Aguardando sync…',
     sync_offline:   '⚠️ Supabase offline — usando cache local',
     sync_fail:      '⚠️ Falha — nova tentativa em 30s',
+  
+    s_calib_other: 'Outros',
+    s_due_soon: 'Vence em breve',
+    lbl_expired_d: 'Vencido há {d} dias',
+    lbl_expires_d: 'Vence em {d} dias',
+    ch_lbl_active: 'Ativos',
+    ch_lbl_inactive: 'Inativos',
+    ch_lbl_expired: 'Vencidos',
+    ch_lbl_due30: 'Vencem em 30 dias',
+    ch_lbl_due90: 'Vencem em 90 dias',
+    ch_lbl_ontime: 'Em dia (>90d)',
+    ch_lbl_nodate: t('lbl_no_date'),
+    ch_lbl_avg: 'Média',
+    ch_lbl_done: t('ch_lbl_done'),
+    ch_lbl_sched: t('ch_lbl_sched'),
+    ch_lbl_missed: t('ch_lbl_missed'),
+    ch_lbl_freq: t('ch_lbl_freq'),
+    ch_lbl_exp_type: t('ch_lbl_exp_type'),
+    ch_lbl_calib_ok: t('ch_lbl_calib_ok'),
+    ch_lbl_exp_calib: t('ch_lbl_exp_calib'),
+    ch_lbl_location: t('ch_lbl_location'),
+    ch_lbl_resp: t('ch_lbl_resp'),
+    lbl_click_edit: 'Clique para editar',
+    lbl_edit: 'Editar',
+    lbl_duplicate: 'Duplicar linha — copiar para novo cadastro',
+    lbl_delete: 'Excluir',
+    lbl_add_blank: 'Adicionar nova linha em branco',
+    lbl_add_row: 'Adicionar linha',
+    lbl_fill_details: 'Preencha os dados',
+    toast_saved_inline: '✅ Salvo — tabela mantida. Clique em 🔄 para atualizar filtros',
+    toast_deleted: '🗑 Excluído: {name}',
+    toast_duplicated: '⧉ Linha duplicada — preencha o novo Código',
+    toast_row_added: '＋ Nova linha adicionada — preencha os campos',
+    toast_filters_ok: '🔄 Filtros e gráficos atualizados',
+    toast_no_match: 'Nenhum registro corresponde aos filtros',
+    toast_clear_f: 'Limpar filtros',
+    toast_blocked: '🔒 Acesso bloqueado: nenhuma planta configurada.',
+    toast_code_req: '⚠ Código de Controle é obrigatório.',
+    toast_type_req: '⚠ Tipo de Equipamento é obrigatório.',
+    toast_freq_req: '⚠ Frequência (dias) é obrigatória.',
+    toast_sb_ok: '☁ Supabase conectado',
+    toast_backup_warn: 'Aviso: O seu último backup foi há {d} dias. Faça o download de segurança.',
+    toast_backup_now: 'Aviso: Ainda não fez nenhum backup. Exporte agora para não perder dados.',
+    empty_equip_title: 'Nenhum equipamento cadastrado',
+    empty_equip_sub: 'Esta planta ainda não possui instrumentos de medição registrados.',
+    empty_equip_btn: '+ Adicionar primeiro equipamento',
+    empty_no_match: 'Nenhum registro corresponde aos filtros ativos.',
+    rep_title_equip: 'Controle de Equipamentos de Medição',
+    rep_title_alerts: 'Alertas de Calibração',
+    rep_period_lbl: 'Relatório por Período',
+    btn_backup: '⬇ Fazer Backup Agora',
+    btn_dismiss: 'Dispensar',
+    lbl_storage_used: '% usado',
+    bulk_calibrated: 'Marcar como calibrado',
+    bulk_delete_confirm: 'Excluir {n} registro(s) selecionado(s)? Esta ação não pode ser desfeita.',
+    lbl_health_idx: t('lbl_health_idx'),
+    lbl_total_equip: t('lbl_total_equip'),
+    lbl_active_equip: 'Ativos',
+    lbl_inactive_equip: 'Inativos',
+    lbl_no_date: t('lbl_no_date'),
+    lbl_top_urgent: t('lbl_top_urgent'),
+    lbl_general_summary: t('lbl_general_summary'),
+  
+    s_calib_approved: 'Instrumento Calibrado e aprovado',
+    s_calib_required: 'Calibração Necessária',
+    s_calib_discarded: 'Descartado',
+    s_not_found: 'Não Encontrado',
+  
+    btn_backup_short: 'Fazer Backup Agora',
+  
+    ph_search: '🔍 Buscar código, descrição...',
+    ph_search_short: 'Código, descrição...',
+    ph_filter_log: 'Filtrar log...',
+    ph_filter_resp: 'Filtrar responsável...',
+  
+    confirm_delete: 'Excluir "{name}"?\nEsta ação não pode ser desfeita.',
+  
+    toast_undo_empty: t('toast_undo_empty'),
+    toast_redo_empty: t('toast_redo_empty'),
+    toast_directors_only: t('toast_directors_only'),
+    toast_email_invalid: t('toast_email_invalid'),
+    toast_fill_email_plant: t('toast_fill_email_plant'),
+    toast_pwd_required: t('toast_pwd_required'),
+    toast_pwd_short: t('toast_pwd_short'),
+    toast_creating_user: '⏳ Criando usuário...',
+    toast_edge_unavail: 'ℹ️ Edge Function indisponível — usando criação direta...',
+    toast_user_existed: 'ℹ️ Usuário já existia no Auth — vinculando à planta...',
+    toast_invite_fill: t('toast_invite_fill'),
+    toast_sql_copied: t('toast_sql_copied'),
+    toast_dir_only_plant: t('toast_dir_only_plant'),
+    toast_plant_code_req: t('toast_plant_code_req'),
+    toast_plant_code_inv: t('toast_plant_code_inv'),
+    toast_private_mode: t('toast_private_mode'),
+    toast_sb_not_config: t('toast_sb_not_config'),
+    toast_desc_required: t('toast_desc_required'),
+    toast_loc_required: t('toast_loc_required'),
+    toast_date_order: t('toast_date_order'),
+    toast_file_too_big: t('toast_file_too_big'),
+    toast_none_selected: t('toast_none_selected'),
+    toast_updated_ok: t('toast_updated_ok'),
+    toast_none_visible: t('toast_none_visible'),
+    toast_not_found: t('toast_not_found'),
+    toast_changes_discarded: t('toast_changes_discarded'),
+    toast_json_only: t('toast_json_only'),
+    toast_import_invalid: t('toast_import_invalid'),
+    toast_import_cancel: t('toast_import_cancel'),
+    toast_backup_ok: t('toast_backup_ok'),
+    toast_fill_required: t('toast_fill_required'),
+    toast_cam_unsupported: t('toast_cam_unsupported'),
+    toast_scan_unavail: t('toast_scan_unavail'),
+  
+    toast_creating_user_name: '⏳ Criando usuário {name}...',
+    toast_user_created: '✅ Usuário criado: {name}',
+    toast_user_create_fail: '❌ Falha ao criar usuário: {err}',
+    toast_profile_saved: '💾 Perfil salvo. Para convidar, crie o usuário manualmente no Supabase Dashboard → Auth → Users.',
+    toast_plant_code_exists: '⚠️ Já existe uma planta com o código "{code}".',
+    toast_session_err: 'Erro ao verificar sessão: {err}',
+    toast_reset_link_sent: '📧 Link de redefinição enviado para {email}',
+    toast_reset_link_ok: '✅ Se o e-mail estiver cadastrado, você receberá um link em instantes.',
+    toast_code_dup: '⚠ Código "{code}" já existe. Use um código diferente.',
+    toast_cells_filled: '✅ {n} célula(s) preenchida(s) — clique em 🔄 para atualizar filtros',
+    toast_instr_not_found: '⚠️ Instrumento não encontrado',
+  
+    toast_inline_edited: '✏️ Editado — clique em 💾 Salvar alterações para confirmar',
+  
+    btn_new_lbl: 'Novo',
+    sb_overview: 'Visão Geral',
   },
   en: {
     title:          'Measurement Equipment Control',
@@ -4433,6 +4578,133 @@ const T = {
     sync_pending:   '⏸ Pending sync…',
     sync_offline:   '⚠️ Supabase offline — using local cache',
     sync_fail:      '⚠️ Failed — retrying in 30s',
+  
+    s_calib_other: 'Other',
+    s_due_soon: 'Due soon',
+    lbl_expired_d: 'Expired {d} days ago',
+    lbl_expires_d: 'Expires in {d} days',
+    ch_lbl_active: 'Active',
+    ch_lbl_inactive: 'Inactive',
+    ch_lbl_expired: 'Expired',
+    ch_lbl_due30: 'Due in 30 days',
+    ch_lbl_due90: 'Due in 90 days',
+    ch_lbl_ontime: 'Up to date (>90d)',
+    ch_lbl_nodate: 'No calib. date',
+    ch_lbl_avg: 'Average',
+    ch_lbl_done: '✅ Calibrations Done This Month',
+    ch_lbl_sched: '📋 Calibrations Scheduled This Month',
+    ch_lbl_missed: '🚨 Scheduled But Not Done',
+    ch_lbl_freq: '⏱ Calibration Frequency',
+    ch_lbl_exp_type: '🔴 Types with Expired Calibration',
+    ch_lbl_calib_ok: '🎯 Calibration OK (up to date)',
+    ch_lbl_exp_calib: '🚨 Expired Calibration',
+    ch_lbl_location: '📍 Location',
+    ch_lbl_resp: '👤 Responsible',
+    lbl_click_edit: 'Click to edit',
+    lbl_edit: 'Edit',
+    lbl_duplicate: 'Duplicate row (like Excel copy)',
+    lbl_delete: 'Delete',
+    lbl_add_blank: 'Add new blank row',
+    lbl_add_row: 'Add row',
+    lbl_fill_details: 'Fill in the details',
+    toast_saved_inline: '✅ Saved — filters will update when you click Apply',
+    toast_deleted: '🗑 Deleted: {name}',
+    toast_duplicated: '⧉ Row duplicated — fill in the new ID',
+    toast_row_added: '＋ New row added — fill in the fields',
+    toast_filters_ok: '🔄 Filters and charts updated',
+    toast_no_match: 'No records match the filters',
+    toast_clear_f: 'Clear filters',
+    toast_blocked: '🔒 Access blocked: no plant configured.',
+    toast_code_req: '⚠ Control Code is required.',
+    toast_type_req: '⚠ Equipment Type is required.',
+    toast_freq_req: '⚠ Frequency (days) is required.',
+    toast_sb_ok: '☁ Supabase connected',
+    toast_backup_warn: 'Warning: Your last backup was {d} days ago. Download a safety copy.',
+    toast_backup_now: 'Warning: No backup yet. Export now to avoid data loss.',
+    empty_equip_title: 'No equipment registered',
+    empty_equip_sub: 'This plant has no measurement instruments registered yet.',
+    empty_equip_btn: '+ Add first equipment',
+    empty_no_match: 'No records match the active filters.',
+    rep_title_equip: 'Measurement Equipment Control',
+    rep_title_alerts: 'Calibration Alerts',
+    rep_period_lbl: 'Period Report',
+    btn_backup: '⬇ Download Backup Now',
+    btn_dismiss: 'Dismiss',
+    lbl_storage_used: '% used',
+    bulk_calibrated: 'Mark as calibrated',
+    bulk_delete_confirm: 'Delete {n} selected record(s)? This action cannot be undone.',
+    lbl_health_idx: 'Health Index',
+    lbl_total_equip: 'Total Equipment',
+    lbl_active_equip: 'Active',
+    lbl_inactive_equip: 'Inactive',
+    lbl_no_date: 'No calib. date',
+    lbl_top_urgent: '⏱️ Top 15 Most Urgent',
+    lbl_general_summary: '🔢 General Summary',
+  
+    s_calib_approved: 'Calibrated & Approved',
+    s_calib_required: 'Calibration Required',
+    s_calib_discarded: 'Discarded',
+    s_not_found: 'Not Found',
+  
+    btn_backup_short: 'Download Backup Now',
+  
+    ph_search: '🔍 Search code, description...',
+    ph_search_short: 'Code, description...',
+    ph_filter_log: 'Filter log...',
+    ph_filter_resp: 'Filter responsible...',
+  
+    confirm_delete: 'Delete "{name}"?\nThis action cannot be undone.',
+  
+    toast_undo_empty: '⚠️ Nothing to undo',
+    toast_redo_empty: '⚠️ Nothing to redo',
+    toast_directors_only: '⚠️ Only directors can access this area.',
+    toast_email_invalid: '⚠️ Invalid e-mail.',
+    toast_fill_email_plant: '⚠️ Please fill in e-mail and plant.',
+    toast_pwd_required: '⚠️ Please enter a password for the user.',
+    toast_pwd_short: '⚠️ Password must be at least 6 characters.',
+    toast_creating_user: '⏳ Creating user...',
+    toast_edge_unavail: 'ℹ️ Edge Function unavailable — using direct sign-up...',
+    toast_user_existed: 'ℹ️ User already existed in Auth — linking to plant...',
+    toast_invite_fill: '⚠️ Please fill in e-mail and plant before inviting.',
+    toast_sql_copied: '📋 SQL copied to clipboard!',
+    toast_dir_only_plant: '⚠️ Only Directors can create plants.',
+    toast_plant_code_req: '⚠️ Please enter the plant code (e.g.: SP, MX).',
+    toast_plant_code_inv: '⚠️ Invalid code. Use 2–12 letters, numbers, _ or -.',
+    toast_private_mode: '⚠️ Private/incognito mode — data saved in session only',
+    toast_sb_not_config: '⚠️ Supabase not configured. Please set up credentials first.',
+    toast_desc_required: '⚠ Description is required.',
+    toast_loc_required: '⚠ Location is required.',
+    toast_date_order: '⚠ Next Calibration cannot be before Last Calibration.',
+    toast_file_too_big: 'File too large (max. 10 MB).',
+    toast_none_selected: '⚠️ No equipment selected.',
+    toast_updated_ok: '✅ Updated successfully',
+    toast_none_visible: 'No visible records to print.',
+    toast_not_found: 'Instrument not found',
+    toast_changes_discarded: '↩️ Changes discarded',
+    toast_json_only: 'Only .json files are accepted.',
+    toast_import_invalid: 'Import cancelled — invalid data',
+    toast_import_cancel: 'Import cancelled.',
+    toast_backup_ok: '✅ Backup exported successfully.',
+    toast_fill_required: 'Please fill in the required fields (*)',
+    toast_cam_unsupported: '📵 Camera not supported in this browser.',
+    toast_scan_unavail: 'Scanner not available',
+  
+    toast_creating_user_name: '⏳ Creating user {name}...',
+    toast_user_created: '✅ User created: {name}',
+    toast_user_create_fail: '❌ Failed to create user: {err}',
+    toast_profile_saved: '💾 Profile saved. To invite, create the user manually in Supabase Dashboard → Auth → Users.',
+    toast_plant_code_exists: '⚠️ A plant with code "{code}" already exists.',
+    toast_session_err: 'Error verifying session: {err}',
+    toast_reset_link_sent: '📧 Password reset link sent to {email}',
+    toast_reset_link_ok: '✅ If the e-mail is registered, you will receive a link shortly.',
+    toast_code_dup: '⚠ Code "{code}" already exists. Use a different code.',
+    toast_cells_filled: '✅ {n} cell(s) filled — click 🔄 to update filters',
+    toast_instr_not_found: '⚠️ Instrument not found',
+  
+    toast_inline_edited: '✏️ Edited — click 💾 Save Changes to confirm',
+  
+    btn_new_lbl: 'New',
+    sb_overview: 'Overview',
   },
 
   // ── [v47] ESPAÑOL ──────────────────────────────────────────────
@@ -4585,6 +4857,133 @@ const T = {
     sync_pending:   '⏸ Sincronización pendiente…',
     sync_offline:   '⚠️ Supabase sin conexión — usando caché local',
     sync_fail:      '⚠️ Error — reintentando en 30s',
+  
+    s_calib_other: 'Otros',
+    s_due_soon: 'Por vencer',
+    lbl_expired_d: 'Vencido hace {d} días',
+    lbl_expires_d: 'Vence en {d} días',
+    ch_lbl_active: 'Activos',
+    ch_lbl_inactive: 'Inactivos',
+    ch_lbl_expired: 'Vencidos',
+    ch_lbl_due30: 'Vencen en 30 días',
+    ch_lbl_due90: 'Vencen en 90 días',
+    ch_lbl_ontime: 'Al día (>90d)',
+    ch_lbl_nodate: 'Sin fecha calib.',
+    ch_lbl_avg: 'Promedio',
+    ch_lbl_done: '✅ Calibraciones Realizadas',
+    ch_lbl_sched: '📋 Calibraciones Programadas',
+    ch_lbl_missed: '🚨 Programadas Sin Realizar',
+    ch_lbl_freq: '⏱ Frecuencia de Calibración',
+    ch_lbl_exp_type: '🔴 Tipos con Calibración Vencida',
+    ch_lbl_calib_ok: '🎯 Calibración OK (al día)',
+    ch_lbl_exp_calib: '🚨 Calibración Vencida',
+    ch_lbl_location: '📍 Localización',
+    ch_lbl_resp: '👤 Responsable',
+    lbl_click_edit: 'Clic para editar',
+    lbl_edit: 'Editar',
+    lbl_duplicate: 'Duplicar fila',
+    lbl_delete: 'Eliminar',
+    lbl_add_blank: 'Agregar nueva fila en blanco',
+    lbl_add_row: 'Agregar fila',
+    lbl_fill_details: 'Complete los datos',
+    toast_saved_inline: '✅ Guardado — los filtros se actualizarán al hacer clic en Aplicar',
+    toast_deleted: '🗑 Eliminado: {name}',
+    toast_duplicated: '⧉ Fila duplicada — complete el nuevo Código',
+    toast_row_added: '＋ Nueva fila agregada — complete los campos',
+    toast_filters_ok: '🔄 Filtros y gráficos actualizados',
+    toast_no_match: 'Ningún registro coincide con los filtros',
+    toast_clear_f: 'Limpiar filtros',
+    toast_blocked: '🔒 Acceso bloqueado: ninguna planta configurada.',
+    toast_code_req: '⚠ El Código de Control es obligatorio.',
+    toast_type_req: '⚠ El Tipo de Equipo es obligatorio.',
+    toast_freq_req: '⚠ La Frecuencia (días) es obligatoria.',
+    toast_sb_ok: '☁ Supabase conectado',
+    toast_backup_warn: 'Aviso: Su último respaldo fue hace {d} días.',
+    toast_backup_now: 'Aviso: Aún no ha hecho respaldo. Exporte ahora.',
+    empty_equip_title: 'Sin equipos registrados',
+    empty_equip_sub: 'Esta planta aún no tiene instrumentos de medición registrados.',
+    empty_equip_btn: '+ Agregar primer equipo',
+    empty_no_match: 'Ningún registro coincide con los filtros activos.',
+    rep_title_equip: 'Control de Equipos de Medición',
+    rep_title_alerts: 'Alertas de Calibración',
+    rep_period_lbl: 'Informe por Período',
+    btn_backup: '⬇ Descargar Respaldo Ahora',
+    btn_dismiss: 'Dispensar',
+    lbl_storage_used: '% usado',
+    bulk_calibrated: 'Marcar como calibrado',
+    bulk_delete_confirm: '¿Eliminar {n} registro(s) seleccionado(s)? Esta acción no se puede deshacer.',
+    lbl_health_idx: 'Índice de Salud',
+    lbl_total_equip: 'Total de Equipos',
+    lbl_active_equip: 'Activos',
+    lbl_inactive_equip: 'Inactivos',
+    lbl_no_date: 'Sin fecha calib.',
+    lbl_top_urgent: '⏱️ Top 15 Más Urgentes',
+    lbl_general_summary: '🔢 Resumen General',
+  
+    s_calib_approved: 'Calibrado y Aprobado',
+    s_calib_required: 'Calibración Requerida',
+    s_calib_discarded: 'Descartado',
+    s_not_found: 'No Encontrado',
+  
+    btn_backup_short: 'Descargar Respaldo',
+  
+    ph_search: '🔍 Buscar código, descripción...',
+    ph_search_short: 'Código, descripción...',
+    ph_filter_log: 'Filtrar registro...',
+    ph_filter_resp: 'Filtrar responsable...',
+  
+    confirm_delete: 'Eliminar "{name}"?\nEsta acción no se puede deshacer.',
+  
+    toast_undo_empty: '⚠️ Nada para deshacer',
+    toast_redo_empty: '⚠️ Nada para rehacer',
+    toast_directors_only: '⚠️ Solo los directores pueden acceder a esta área.',
+    toast_email_invalid: t('toast_email_invalid'),
+    toast_fill_email_plant: '⚠️ Complete e-mail y planta.',
+    toast_pwd_required: '⚠️ Ingrese una contraseña para el usuario.',
+    toast_pwd_short: '⚠️ La contraseña debe tener al menos 6 caracteres.',
+    toast_creating_user: '⏳ Creando usuario...',
+    toast_edge_unavail: 'ℹ️ Edge Function no disponible — usando registro directo...',
+    toast_user_existed: 'ℹ️ El usuario ya existía en Auth — vinculando a la planta...',
+    toast_invite_fill: '⚠️ Complete e-mail y planta antes de invitar.',
+    toast_sql_copied: '📋 SQL copiado al portapapeles.',
+    toast_dir_only_plant: '⚠️ Solo el Director puede crear plantas.',
+    toast_plant_code_req: '⚠️ Ingrese el código de planta (ej.: SP, MX).',
+    toast_plant_code_inv: '⚠️ Código inválido. Use 2-12 letras, números, _ o -.',
+    toast_private_mode: '⚠️ Modo privado/incógnito — datos guardados solo en sesión',
+    toast_sb_not_config: '⚠️ Supabase no configurado. Configure las credenciales primero.',
+    toast_desc_required: '⚠ La descripción es obligatoria.',
+    toast_loc_required: '⚠ La localización es obligatoria.',
+    toast_date_order: '⚠ La próxima calibración no puede ser anterior a la última.',
+    toast_file_too_big: 'Archivo demasiado grande (máx. 10 MB).',
+    toast_none_selected: '⚠️ Ningún equipo seleccionado.',
+    toast_updated_ok: '✅ Actualizado con éxito',
+    toast_none_visible: 'No hay registros visibles para imprimir.',
+    toast_not_found: 'Instrumento no encontrado',
+    toast_changes_discarded: '↩️ Cambios descartados',
+    toast_json_only: 'Solo se aceptan archivos .json.',
+    toast_import_invalid: 'Importación cancelada — datos inválidos',
+    toast_import_cancel: 'Importación cancelada.',
+    toast_backup_ok: '✅ Copia de seguridad exportada con éxito.',
+    toast_fill_required: 'Complete los campos obligatorios (*)',
+    toast_cam_unsupported: '📵 Cámara no compatible con este navegador.',
+    toast_scan_unavail: 'Escáner no disponible',
+  
+    toast_creating_user_name: '⏳ Creando usuario {name}...',
+    toast_user_created: '✅ Usuario creado: {name}',
+    toast_user_create_fail: '❌ Error al crear usuario: {err}',
+    toast_profile_saved: '💾 Perfil guardado. Para invitar, cree el usuario manualmente en Supabase Dashboard → Auth → Users.',
+    toast_plant_code_exists: '⚠️ Ya existe una planta con el código "{code}".',
+    toast_session_err: 'Error al verificar sesión: {err}',
+    toast_reset_link_sent: '📧 Enlace de restablecimiento enviado a {email}',
+    toast_reset_link_ok: '✅ Si el correo está registrado, recibirá un enlace en breve.',
+    toast_code_dup: '⚠ El código "{code}" ya existe. Use un código diferente.',
+    toast_cells_filled: '✅ {n} celda(s) rellenada(s) — haga clic en 🔄 para actualizar filtros',
+    toast_instr_not_found: '⚠️ Instrumento no encontrado',
+  
+    toast_inline_edited: '✏️ Editado — haga clic en 💾 Guardar cambios para confirmar',
+  
+    btn_new_lbl: 'Nuevo',
+    sb_overview: 'Resumen',
   },
 
   // ── [v48] DEUTSCH ──────────────────────────────────────────────────
@@ -4739,6 +5138,130 @@ const T = {
     sync_fail:      '⚠️ Fehler — neuer Versuch in 30s',
     sb_overview:    'Übersicht',   sb_manage:'Verwaltung', sb_analysis:'Analyse',
     btn_new_lbl:'Neu', btn_import_lbl:'Importieren', btn_export_lbl:'Exportieren',
+  
+    s_calib_other: 'Sonstige',
+    s_due_soon: 'Bald fällig',
+    lbl_expired_d: 'Vor {d} Tagen abgelaufen',
+    lbl_expires_d: 'Läuft in {d} Tagen ab',
+    ch_lbl_active: 'Aktiv',
+    ch_lbl_inactive: 'Inaktiv',
+    ch_lbl_expired: 'Abgelaufen',
+    ch_lbl_due30: 'In 30 Tagen fällig',
+    ch_lbl_due90: 'In 90 Tagen fällig',
+    ch_lbl_ontime: 'Aktuell (>90T)',
+    ch_lbl_nodate: 'Kein Kalib.-Datum',
+    ch_lbl_avg: 'Durchschnitt',
+    ch_lbl_done: '✅ Kalibrierungen diesen Monat',
+    ch_lbl_sched: '📋 Geplante Kalibrierungen',
+    ch_lbl_missed: '🚨 Geplant, nicht durchgeführt',
+    ch_lbl_freq: '⏱ Kalibrierfrequenz',
+    ch_lbl_exp_type: '🔴 Typen mit abgelaufener Kalibrierung',
+    ch_lbl_calib_ok: '🎯 Kalibrierung OK',
+    ch_lbl_exp_calib: '🚨 Kalibrierung abgelaufen',
+    ch_lbl_location: '📍 Standort',
+    ch_lbl_resp: '👤 Verantwortlicher',
+    lbl_click_edit: 'Zum Bearbeiten klicken',
+    lbl_edit: 'Bearbeiten',
+    lbl_duplicate: 'Zeile duplizieren',
+    lbl_delete: 'Löschen',
+    lbl_add_blank: 'Neue leere Zeile hinzufügen',
+    lbl_add_row: 'Zeile hinzufügen',
+    lbl_fill_details: 'Details ausfüllen',
+    toast_saved_inline: '✅ Gespeichert — Filter werden beim Klick auf Anwenden aktualisiert',
+    toast_deleted: '🗑 Gelöscht: {name}',
+    toast_duplicated: '⧉ Zeile dupliziert — neue ID eingeben',
+    toast_row_added: '＋ Neue Zeile hinzugefügt — Felder ausfüllen',
+    toast_filters_ok: '🔄 Filter und Diagramme aktualisiert',
+    toast_no_match: 'Keine Einträge stimmen mit den Filtern überein',
+    toast_clear_f: 'Filter löschen',
+    toast_blocked: '🔒 Zugriff gesperrt: kein Werk konfiguriert.',
+    toast_code_req: '⚠ Steuercode ist erforderlich.',
+    toast_type_req: '⚠ Gerätetyp ist erforderlich.',
+    toast_freq_req: '⚠ Häufigkeit (Tage) ist erforderlich.',
+    toast_sb_ok: '☁ Supabase verbunden',
+    toast_backup_warn: 'Achtung: Letztes Backup war vor {d} Tagen.',
+    toast_backup_now: 'Achtung: Noch kein Backup. Jetzt exportieren.',
+    empty_equip_title: 'Kein Gerät registriert',
+    empty_equip_sub: 'Dieses Werk hat noch keine Messgeräte registriert.',
+    empty_equip_btn: '+ Erstes Gerät hinzufügen',
+    empty_no_match: 'Keine Einträge stimmen mit den aktiven Filtern überein.',
+    rep_title_equip: 'Messgerätekontrolle',
+    rep_title_alerts: 'Kalibrierungsbenachrichtigungen',
+    rep_period_lbl: 'Zeitraumbericht',
+    btn_backup: '⬇ Backup jetzt herunterladen',
+    btn_dismiss: 'Schließen',
+    lbl_storage_used: '% genutzt',
+    bulk_calibrated: 'Als kalibriert markieren',
+    bulk_delete_confirm: '{n} Eintrag/Einträge löschen? Diese Aktion kann nicht rückgängig gemacht werden.',
+    lbl_health_idx: 'Gesundheitsindex',
+    lbl_total_equip: 'Geräte gesamt',
+    lbl_active_equip: 'Aktiv',
+    lbl_inactive_equip: 'Inaktiv',
+    lbl_no_date: 'Kein Kalib.-Datum',
+    lbl_top_urgent: '⏱️ Top 15 Dringlichste',
+    lbl_general_summary: '🔢 Allgemeine Zusammenfassung',
+  
+    s_calib_approved: 'Kalibriert & Genehmigt',
+    s_calib_required: 'Kalibrierung erforderlich',
+    s_calib_discarded: 'Entsorgt',
+    s_not_found: 'Nicht gefunden',
+  
+    btn_backup_short: 'Backup Herunterladen',
+  
+    ph_search: '🔍 Code, Beschreibung suchen...',
+    ph_search_short: 'Code, Beschreibung...',
+    ph_filter_log: 'Protokoll filtern...',
+    ph_filter_resp: 'Verantwortlichen filtern...',
+  
+    confirm_delete: '"{name}" löschen?\nDiese Aktion kann nicht rückgängig gemacht werden.',
+  
+    toast_undo_empty: '⚠️ Nichts zum Rückgängigmachen',
+    toast_redo_empty: '⚠️ Nichts zum Wiederherstellen',
+    toast_directors_only: '⚠️ Nur Direktoren können auf diesen Bereich zugreifen.',
+    toast_email_invalid: '⚠️ Ungültige E-Mail.',
+    toast_fill_email_plant: '⚠️ Bitte E-Mail und Werk ausfüllen.',
+    toast_pwd_required: '⚠️ Bitte ein Passwort für den Benutzer eingeben.',
+    toast_pwd_short: '⚠️ Das Passwort muss mindestens 6 Zeichen lang sein.',
+    toast_creating_user: '⏳ Benutzer wird erstellt...',
+    toast_edge_unavail: 'ℹ️ Edge Function nicht verfügbar — direkte Registrierung...',
+    toast_user_existed: 'ℹ️ Benutzer existierte bereits in Auth — mit Werk verknüpfen...',
+    toast_invite_fill: '⚠️ Bitte E-Mail und Werk vor der Einladung ausfüllen.',
+    toast_sql_copied: '📋 SQL in Zwischenablage kopiert!',
+    toast_dir_only_plant: '⚠️ Nur Direktoren können Werke erstellen.',
+    toast_plant_code_req: '⚠️ Bitte den Werkscode eingeben (z.B.: SP, MX).',
+    toast_plant_code_inv: '⚠️ Ungültiger Code. Verwende 2–12 Buchstaben, Zahlen, _ oder -.',
+    toast_private_mode: '⚠️ Privater/Inkognito-Modus — Daten nur in der Sitzung gespeichert',
+    toast_sb_not_config: '⚠️ Supabase nicht konfiguriert. Bitte zuerst Anmeldedaten einrichten.',
+    toast_desc_required: '⚠ Beschreibung ist erforderlich.',
+    toast_loc_required: '⚠ Standort ist erforderlich.',
+    toast_date_order: '⚠ Nächste Kalibrierung kann nicht vor der letzten liegen.',
+    toast_file_too_big: 'Datei zu groß (max. 10 MB).',
+    toast_none_selected: '⚠️ Kein Gerät ausgewählt.',
+    toast_updated_ok: '✅ Erfolgreich aktualisiert',
+    toast_none_visible: 'Keine sichtbaren Einträge zum Drucken.',
+    toast_not_found: 'Gerät nicht gefunden',
+    toast_changes_discarded: '↩️ Änderungen verworfen',
+    toast_json_only: 'Nur .json-Dateien werden akzeptiert.',
+    toast_import_invalid: 'Import abgebrochen — ungültige Daten',
+    toast_import_cancel: 'Import abgebrochen.',
+    toast_backup_ok: '✅ Backup erfolgreich exportiert.',
+    toast_fill_required: 'Bitte Pflichtfelder (*) ausfüllen',
+    toast_cam_unsupported: '📵 Kamera wird in diesem Browser nicht unterstützt.',
+    toast_scan_unavail: 'Scanner nicht verfügbar',
+  
+    toast_creating_user_name: '⏳ Benutzer {name} wird erstellt...',
+    toast_user_created: '✅ Benutzer erstellt: {name}',
+    toast_user_create_fail: '❌ Fehler beim Erstellen des Benutzers: {err}',
+    toast_profile_saved: '💾 Profil gespeichert. Zum Einladen den Benutzer manuell im Supabase Dashboard → Auth → Users anlegen.',
+    toast_plant_code_exists: '⚠️ Ein Werk mit dem Code „{code}" existiert bereits.',
+    toast_session_err: 'Fehler bei der Sitzungsüberprüfung: {err}',
+    toast_reset_link_sent: '📧 Passwort-Zurücksetzen-Link an {email} gesendet',
+    toast_reset_link_ok: '✅ Falls die E-Mail registriert ist, erhalten Sie in Kürze einen Link.',
+    toast_code_dup: '⚠ Code „{code}" existiert bereits. Verwenden Sie einen anderen Code.',
+    toast_cells_filled: '✅ {n} Zelle(n) ausgefüllt — klicken Sie auf 🔄 zum Aktualisieren',
+    toast_instr_not_found: '⚠️ Gerät nicht gefunden',
+  
+    toast_inline_edited: '✏️ Bearbeitet — klicken Sie auf 💾 Änderungen speichern',
   },
 
   // ── [v48] FRANÇAIS ─────────────────────────────────────────────────
@@ -4893,6 +5416,130 @@ const T = {
     sync_fail:      '⚠️ Erreur — nouvelle tentative dans 30s',
     sb_overview:    "Vue d'ensemble", sb_manage:'Gestion', sb_analysis:'Analyse',
     btn_new_lbl:'Nouveau', btn_import_lbl:'Importer', btn_export_lbl:'Exporter',
+  
+    s_calib_other: 'Autres',
+    s_due_soon: 'Bientôt dû',
+    lbl_expired_d: 'Expiré il y a {d} jours',
+    lbl_expires_d: 'Expire dans {d} jours',
+    ch_lbl_active: 'Actifs',
+    ch_lbl_inactive: 'Inactifs',
+    ch_lbl_expired: 'Expirés',
+    ch_lbl_due30: 'Dûs dans 30 jours',
+    ch_lbl_due90: 'Dûs dans 90 jours',
+    ch_lbl_ontime: 'À jour (>90j)',
+    ch_lbl_nodate: 'Sans date calib.',
+    ch_lbl_avg: 'Moyenne',
+    ch_lbl_done: '✅ Calibrations effectuées',
+    ch_lbl_sched: '📋 Calibrations prévues',
+    ch_lbl_missed: '🚨 Prévues non réalisées',
+    ch_lbl_freq: '⏱ Fréquence de calibration',
+    ch_lbl_exp_type: '🔴 Types avec calibration expirée',
+    ch_lbl_calib_ok: '🎯 Calibration OK',
+    ch_lbl_exp_calib: '🚨 Calibration expirée',
+    ch_lbl_location: '📍 Localisation',
+    ch_lbl_resp: '👤 Responsable',
+    lbl_click_edit: 'Cliquer pour modifier',
+    lbl_edit: 'Modifier',
+    lbl_duplicate: 'Dupliquer la ligne',
+    lbl_delete: 'Supprimer',
+    lbl_add_blank: 'Ajouter une nouvelle ligne vide',
+    lbl_add_row: 'Ajouter une ligne',
+    lbl_fill_details: 'Remplir les détails',
+    toast_saved_inline: '✅ Enregistré — les filtres seront mis à jour après Appliquer',
+    toast_deleted: '🗑 Supprimé : {name}',
+    toast_duplicated: '⧉ Ligne dupliquée — saisir le nouveau code',
+    toast_row_added: '＋ Nouvelle ligne ajoutée — remplir les champs',
+    toast_filters_ok: '🔄 Filtres et graphiques mis à jour',
+    toast_no_match: 'Aucun enregistrement ne correspond aux filtres',
+    toast_clear_f: 'Effacer les filtres',
+    toast_blocked: '🔒 Accès bloqué : aucun site configuré.',
+    toast_code_req: '⚠ Le code de contrôle est obligatoire.',
+    toast_type_req: '⚠ Le type d\'équipement est obligatoire.',
+    toast_freq_req: '⚠ La fréquence (jours) est obligatoire.',
+    toast_sb_ok: '☁ Supabase connecté',
+    toast_backup_warn: 'Avertissement : Votre dernière sauvegarde date de {d} jours.',
+    toast_backup_now: 'Avertissement : Pas encore de sauvegarde. Exportez maintenant.',
+    empty_equip_title: 'Aucun équipement enregistré',
+    empty_equip_sub: 'Ce site n\'a pas encore d\'instruments de mesure enregistrés.',
+    empty_equip_btn: '+ Ajouter le premier équipement',
+    empty_no_match: 'Aucun enregistrement ne correspond aux filtres actifs.',
+    rep_title_equip: 'Contrôle des Équipements de Mesure',
+    rep_title_alerts: 'Alertes de Calibration',
+    rep_period_lbl: 'Rapport par Période',
+    btn_backup: '⬇ Télécharger la sauvegarde',
+    btn_dismiss: 'Ignorer',
+    lbl_storage_used: '% utilisé',
+    bulk_calibrated: 'Marquer comme calibré',
+    bulk_delete_confirm: 'Supprimer {n} enregistrement(s) ? Cette action est irréversible.',
+    lbl_health_idx: 'Indice de Santé',
+    lbl_total_equip: 'Total Équipements',
+    lbl_active_equip: 'Actifs',
+    lbl_inactive_equip: 'Inactifs',
+    lbl_no_date: 'Sans date calib.',
+    lbl_top_urgent: '⏱️ Top 15 les plus urgents',
+    lbl_general_summary: '🔢 Résumé Général',
+  
+    s_calib_approved: 'Calibré & Approuvé',
+    s_calib_required: 'Calibration Requise',
+    s_calib_discarded: 'Mis au rebut',
+    s_not_found: 'Introuvable',
+  
+    btn_backup_short: 'Télécharger Sauvegarde',
+  
+    ph_search: '🔍 Chercher code, description...',
+    ph_search_short: 'Code, description...',
+    ph_filter_log: 'Filtrer le journal...',
+    ph_filter_resp: 'Filtrer le responsable...',
+  
+    confirm_delete: 'Supprimer "{name}" ?\nCette action est irréversible.',
+  
+    toast_undo_empty: '⚠️ Rien à annuler',
+    toast_redo_empty: '⚠️ Rien à rétablir',
+    toast_directors_only: '⚠️ Seuls les directeurs peuvent accéder à cette zone.',
+    toast_email_invalid: '⚠️ E-mail invalide.',
+    toast_fill_email_plant: '⚠️ Veuillez renseigner e-mail et site.',
+    toast_pwd_required: '⚠️ Veuillez saisir un mot de passe pour l\'utilisateur.',
+    toast_pwd_short: '⚠️ Le mot de passe doit comporter au moins 6 caractères.',
+    toast_creating_user: '⏳ Création de l\'utilisateur...',
+    toast_edge_unavail: 'ℹ️ Edge Function indisponible — inscription directe...',
+    toast_user_existed: 'ℹ️ L\'utilisateur existait déjà dans Auth — lien avec le site...',
+    toast_invite_fill: '⚠️ Veuillez renseigner e-mail et site avant d\'inviter.',
+    toast_sql_copied: '📋 SQL copié dans le presse-papiers !',
+    toast_dir_only_plant: '⚠️ Seuls les directeurs peuvent créer des sites.',
+    toast_plant_code_req: '⚠️ Veuillez saisir le code du site (ex. : SP, MX).',
+    toast_plant_code_inv: '⚠️ Code invalide. Utilisez 2 à 12 lettres, chiffres, _ ou -.',
+    toast_private_mode: '⚠️ Mode privé/incognito — données enregistrées dans la session seulement',
+    toast_sb_not_config: '⚠️ Supabase non configuré. Veuillez d\'abord configurer les identifiants.',
+    toast_desc_required: '⚠ La description est obligatoire.',
+    toast_loc_required: '⚠ La localisation est obligatoire.',
+    toast_date_order: '⚠ La prochaine calibration ne peut pas être antérieure à la dernière.',
+    toast_file_too_big: 'Fichier trop volumineux (max. 10 Mo).',
+    toast_none_selected: '⚠️ Aucun équipement sélectionné.',
+    toast_updated_ok: '✅ Mis à jour avec succès',
+    toast_none_visible: 'Aucun enregistrement visible à imprimer.',
+    toast_not_found: 'Instrument introuvable',
+    toast_changes_discarded: '↩️ Modifications annulées',
+    toast_json_only: 'Seuls les fichiers .json sont acceptés.',
+    toast_import_invalid: 'Import annulé — données invalides',
+    toast_import_cancel: 'Import annulé.',
+    toast_backup_ok: '✅ Sauvegarde exportée avec succès.',
+    toast_fill_required: 'Veuillez remplir les champs obligatoires (*)',
+    toast_cam_unsupported: '📵 Caméra non supportée dans ce navigateur.',
+    toast_scan_unavail: 'Scanner non disponible',
+  
+    toast_creating_user_name: '⏳ Création de l\'utilisateur {name}...',
+    toast_user_created: '✅ Utilisateur créé : {name}',
+    toast_user_create_fail: '❌ Échec de la création de l\'utilisateur : {err}',
+    toast_profile_saved: '💾 Profil enregistré. Pour inviter, créez l\'utilisateur manuellement dans Supabase Dashboard → Auth → Users.',
+    toast_plant_code_exists: '⚠️ Un site avec le code « {code} » existe déjà.',
+    toast_session_err: 'Erreur de vérification de session : {err}',
+    toast_reset_link_sent: '📧 Lien de réinitialisation envoyé à {email}',
+    toast_reset_link_ok: '✅ Si l\'e-mail est enregistré, vous recevrez un lien sous peu.',
+    toast_code_dup: '⚠ Le code « {code} » existe déjà. Utilisez un code différent.',
+    toast_cells_filled: '✅ {n} cellule(s) remplie(s) — cliquez sur 🔄 pour actualiser',
+    toast_instr_not_found: '⚠️ Instrument introuvable',
+  
+    toast_inline_edited: '✏️ Modifié — cliquez sur 💾 Enregistrer les modifications',
   },
 
   // ── [v48] ITALIANO ─────────────────────────────────────────────────
@@ -5047,6 +5694,130 @@ const T = {
     sync_fail:      '⚠️ Errore — nuovo tentativo in 30s',
     sb_overview:    'Panoramica', sb_manage:'Gestione', sb_analysis:'Analisi',
     btn_new_lbl:'Nuovo', btn_import_lbl:'Importa', btn_export_lbl:'Esporta',
+  
+    s_calib_other: 'Altri',
+    s_due_soon: 'In scadenza',
+    lbl_expired_d: 'Scaduto {d} giorni fa',
+    lbl_expires_d: 'Scade tra {d} giorni',
+    ch_lbl_active: 'Attivi',
+    ch_lbl_inactive: 'Inattivi',
+    ch_lbl_expired: 'Scaduti',
+    ch_lbl_due30: 'Scadono in 30 giorni',
+    ch_lbl_due90: 'Scadono in 90 giorni',
+    ch_lbl_ontime: 'In regola (>90g)',
+    ch_lbl_nodate: 'Senza data calib.',
+    ch_lbl_avg: 'Media',
+    ch_lbl_done: '✅ Calibrazioni eseguite',
+    ch_lbl_sched: '📋 Calibrazioni previste',
+    ch_lbl_missed: '🚨 Previste non eseguite',
+    ch_lbl_freq: '⏱ Frequenza di calibrazione',
+    ch_lbl_exp_type: '🔴 Tipi con calibrazione scaduta',
+    ch_lbl_calib_ok: '🎯 Calibrazione OK',
+    ch_lbl_exp_calib: '🚨 Calibrazione scaduta',
+    ch_lbl_location: '📍 Posizione',
+    ch_lbl_resp: '👤 Responsabile',
+    lbl_click_edit: 'Clicca per modificare',
+    lbl_edit: 'Modifica',
+    lbl_duplicate: 'Duplica riga',
+    lbl_delete: 'Elimina',
+    lbl_add_blank: 'Aggiungi nuova riga vuota',
+    lbl_add_row: 'Aggiungi riga',
+    lbl_fill_details: 'Compila i dettagli',
+    toast_saved_inline: '✅ Salvato — i filtri si aggiorneranno al clic su Applica',
+    toast_deleted: '🗑 Eliminato: {name}',
+    toast_duplicated: '⧉ Riga duplicata — inserire il nuovo codice',
+    toast_row_added: '＋ Nuova riga aggiunta — compilare i campi',
+    toast_filters_ok: '🔄 Filtri e grafici aggiornati',
+    toast_no_match: 'Nessun record corrisponde ai filtri',
+    toast_clear_f: 'Cancella filtri',
+    toast_blocked: '🔒 Accesso bloccato: nessun impianto configurato.',
+    toast_code_req: '⚠ Il codice di controllo è obbligatorio.',
+    toast_type_req: '⚠ Il tipo di apparecchiatura è obbligatorio.',
+    toast_freq_req: '⚠ La frequenza (giorni) è obbligatoria.',
+    toast_sb_ok: '☁ Supabase connesso',
+    toast_backup_warn: 'Avviso: L\'ultimo backup risale a {d} giorni fa.',
+    toast_backup_now: 'Avviso: Nessun backup ancora. Esportare ora.',
+    empty_equip_title: 'Nessuna apparecchiatura registrata',
+    empty_equip_sub: 'Questo impianto non ha ancora strumenti di misura registrati.',
+    empty_equip_btn: '+ Aggiungi prima apparecchiatura',
+    empty_no_match: 'Nessun record corrisponde ai filtri attivi.',
+    rep_title_equip: 'Controllo Apparecchiature di Misura',
+    rep_title_alerts: 'Avvisi di Calibrazione',
+    rep_period_lbl: 'Rapporto Periodico',
+    btn_backup: '⬇ Scarica Backup Ora',
+    btn_dismiss: 'Ignora',
+    lbl_storage_used: '% utilizzato',
+    bulk_calibrated: 'Segna come calibrato',
+    bulk_delete_confirm: 'Eliminare {n} record selezionati? Questa azione non può essere annullata.',
+    lbl_health_idx: 'Indice di Salute',
+    lbl_total_equip: 'Apparecchiature totali',
+    lbl_active_equip: 'Attivi',
+    lbl_inactive_equip: 'Inattivi',
+    lbl_no_date: 'Senza data calib.',
+    lbl_top_urgent: '⏱️ Top 15 più urgenti',
+    lbl_general_summary: '🔢 Riepilogo Generale',
+  
+    s_calib_approved: 'Calibrato & Approvato',
+    s_calib_required: 'Calibrazione Richiesta',
+    s_calib_discarded: 'Scartato',
+    s_not_found: 'Non Trovato',
+  
+    btn_backup_short: 'Scarica Backup',
+  
+    ph_search: '🔍 Cerca codice, descrizione...',
+    ph_search_short: 'Codice, descrizione...',
+    ph_filter_log: 'Filtra registro...',
+    ph_filter_resp: 'Filtra responsabile...',
+  
+    confirm_delete: 'Eliminare "{name}"?\nQuesta azione non può essere annullata.',
+  
+    toast_undo_empty: '⚠️ Niente da annullare',
+    toast_redo_empty: '⚠️ Niente da ripristinare',
+    toast_directors_only: '⚠️ Solo i direttori possono accedere a questa area.',
+    toast_email_invalid: '⚠️ E-mail non valida.',
+    toast_fill_email_plant: '⚠️ Compilare e-mail e impianto.',
+    toast_pwd_required: '⚠️ Inserire una password per l\'utente.',
+    toast_pwd_short: '⚠️ La password deve avere almeno 6 caratteri.',
+    toast_creating_user: '⏳ Creazione utente...',
+    toast_edge_unavail: 'ℹ️ Edge Function non disponibile — registrazione diretta...',
+    toast_user_existed: 'ℹ️ L\'utente esisteva già in Auth — collegamento all\'impianto...',
+    toast_invite_fill: '⚠️ Compilare e-mail e impianto prima di inviare l\'invito.',
+    toast_sql_copied: '📋 SQL copiato negli appunti!',
+    toast_dir_only_plant: '⚠️ Solo i direttori possono creare impianti.',
+    toast_plant_code_req: '⚠️ Inserire il codice impianto (es.: SP, MX).',
+    toast_plant_code_inv: '⚠️ Codice non valido. Usare 2–12 lettere, numeri, _ o -.',
+    toast_private_mode: '⚠️ Modalità privata/in incognito — dati salvati solo nella sessione',
+    toast_sb_not_config: '⚠️ Supabase non configurato. Configurare prima le credenziali.',
+    toast_desc_required: '⚠ La descrizione è obbligatoria.',
+    toast_loc_required: '⚠ La posizione è obbligatoria.',
+    toast_date_order: '⚠ La prossima calibrazione non può essere precedente all\'ultima.',
+    toast_file_too_big: 'File troppo grande (max 10 MB).',
+    toast_none_selected: '⚠️ Nessuna apparecchiatura selezionata.',
+    toast_updated_ok: '✅ Aggiornato con successo',
+    toast_none_visible: 'Nessun record visibile da stampare.',
+    toast_not_found: 'Strumento non trovato',
+    toast_changes_discarded: '↩️ Modifiche scartate',
+    toast_json_only: 'Sono accettati solo file .json.',
+    toast_import_invalid: 'Importazione annullata — dati non validi',
+    toast_import_cancel: 'Importazione annullata.',
+    toast_backup_ok: '✅ Backup esportato con successo.',
+    toast_fill_required: 'Compilare i campi obbligatori (*)',
+    toast_cam_unsupported: '📵 Fotocamera non supportata in questo browser.',
+    toast_scan_unavail: 'Scanner non disponibile',
+  
+    toast_creating_user_name: '⏳ Creazione utente {name}...',
+    toast_user_created: '✅ Utente creato: {name}',
+    toast_user_create_fail: '❌ Impossibile creare l\'utente: {err}',
+    toast_profile_saved: '💾 Profilo salvato. Per invitare, creare l\'utente manualmente su Supabase Dashboard → Auth → Users.',
+    toast_plant_code_exists: '⚠️ Esiste già un impianto con il codice "{code}".',
+    toast_session_err: 'Errore durante la verifica della sessione: {err}',
+    toast_reset_link_sent: '📧 Link di reimpostazione inviato a {email}',
+    toast_reset_link_ok: '✅ Se l\'e-mail è registrata, riceverai un link a breve.',
+    toast_code_dup: '⚠ Il codice "{code}" esiste già. Usa un codice diverso.',
+    toast_cells_filled: '✅ {n} cella/e compilata/e — clicca su 🔄 per aggiornare i filtri',
+    toast_instr_not_found: '⚠️ Strumento non trovato',
+  
+    toast_inline_edited: '✏️ Modificato — fare clic su 💾 Salva modifiche per confermare',
   },
 
   // ── [v48] POLSKI ───────────────────────────────────────────────────
@@ -5201,20 +5972,144 @@ const T = {
     sync_fail:      '⚠️ Błąd — ponowna próba za 30s',
     sb_overview:    'Przegląd', sb_manage:'Zarządzanie', sb_analysis:'Analiza',
     btn_new_lbl:'Nowy', btn_import_lbl:'Importuj', btn_export_lbl:'Eksportuj',
+  
+    s_calib_other: 'Inne',
+    s_due_soon: 'Wkrótce wygasa',
+    lbl_expired_d: 'Wygasło {d} dni temu',
+    lbl_expires_d: 'Wygasa za {d} dni',
+    ch_lbl_active: 'Aktywne',
+    ch_lbl_inactive: 'Nieaktywne',
+    ch_lbl_expired: 'Przeterminowane',
+    ch_lbl_due30: 'Do 30 dni',
+    ch_lbl_due90: 'Do 90 dni',
+    ch_lbl_ontime: 'Aktualne (>90d)',
+    ch_lbl_nodate: 'Brak daty kalib.',
+    ch_lbl_avg: 'Średnia',
+    ch_lbl_done: '✅ Kalibracje wykonane',
+    ch_lbl_sched: '📋 Kalibracje zaplanowane',
+    ch_lbl_missed: '🚨 Zaplanowane, nie wykonane',
+    ch_lbl_freq: '⏱ Częstotliwość kalibracji',
+    ch_lbl_exp_type: '🔴 Typy z przeterminowaną kalibracją',
+    ch_lbl_calib_ok: '🎯 Kalibracja OK',
+    ch_lbl_exp_calib: '🚨 Kalibracja przeterminowana',
+    ch_lbl_location: '📍 Lokalizacja',
+    ch_lbl_resp: '👤 Odpowiedzialny',
+    lbl_click_edit: 'Kliknij, aby edytować',
+    lbl_edit: 'Edytuj',
+    lbl_duplicate: 'Duplikuj wiersz',
+    lbl_delete: 'Usuń',
+    lbl_add_blank: 'Dodaj nowy pusty wiersz',
+    lbl_add_row: 'Dodaj wiersz',
+    lbl_fill_details: 'Wypełnij szczegóły',
+    toast_saved_inline: '✅ Zapisano — filtry zaktualizują się po kliknięciu Zastosuj',
+    toast_deleted: '🗑 Usunięto: {name}',
+    toast_duplicated: '⧉ Wiersz zduplikowany — wpisz nowe ID',
+    toast_row_added: '＋ Nowy wiersz dodany — wypełnij pola',
+    toast_filters_ok: '🔄 Filtry i wykresy zaktualizowane',
+    toast_no_match: 'Żadne rekordy nie pasują do filtrów',
+    toast_clear_f: 'Wyczyść filtry',
+    toast_blocked: '🔒 Dostęp zablokowany: brak skonfigurowanego zakładu.',
+    toast_code_req: '⚠ Kod kontrolny jest wymagany.',
+    toast_type_req: '⚠ Typ urządzenia jest wymagany.',
+    toast_freq_req: '⚠ Częstotliwość (dni) jest wymagana.',
+    toast_sb_ok: '☁ Supabase połączony',
+    toast_backup_warn: 'Ostrzeżenie: Ostatnia kopia zapasowa była {d} dni temu.',
+    toast_backup_now: 'Ostrzeżenie: Brak kopii zapasowej. Eksportuj teraz.',
+    empty_equip_title: 'Brak zarejestrowanych urządzeń',
+    empty_equip_sub: 'Ten zakład nie ma jeszcze zarejestrowanych przyrządów pomiarowych.',
+    empty_equip_btn: '+ Dodaj pierwsze urządzenie',
+    empty_no_match: 'Żadne rekordy nie pasują do aktywnych filtrów.',
+    rep_title_equip: 'Kontrola Przyrządów Pomiarowych',
+    rep_title_alerts: 'Alerty Kalibracji',
+    rep_period_lbl: 'Raport Okresowy',
+    btn_backup: '⬇ Pobierz kopię zapasową',
+    btn_dismiss: 'Odrzuć',
+    lbl_storage_used: '% używane',
+    bulk_calibrated: 'Oznacz jako skalibrowane',
+    bulk_delete_confirm: 'Usunąć {n} wybrany(e) rekord(y)? Tej akcji nie można cofnąć.',
+    lbl_health_idx: 'Wskaźnik Zdrowia',
+    lbl_total_equip: 'Łączna liczba urządzeń',
+    lbl_active_equip: 'Aktywne',
+    lbl_inactive_equip: 'Nieaktywne',
+    lbl_no_date: 'Brak daty kalib.',
+    lbl_top_urgent: '⏱️ Top 15 najpilniejszych',
+    lbl_general_summary: '🔢 Podsumowanie Ogólne',
+  
+    s_calib_approved: 'Skalibrowany i zatwierdzony',
+    s_calib_required: 'Wymagana kalibracja',
+    s_calib_discarded: 'Odrzucony',
+    s_not_found: 'Nie znaleziono',
+  
+    btn_backup_short: 'Pobierz kopię',
+  
+    ph_search: '🔍 Szukaj kodu, opisu...',
+    ph_search_short: 'Kod, opis...',
+    ph_filter_log: 'Filtruj dziennik...',
+    ph_filter_resp: 'Filtruj osobę...',
+  
+    confirm_delete: 'Usunąć "{name}"?\nTej akcji nie można cofnąć.',
+  
+    toast_undo_empty: '⚠️ Nic do cofnięcia',
+    toast_redo_empty: '⚠️ Nic do ponowienia',
+    toast_directors_only: '⚠️ Tylko dyrektorzy mogą uzyskać dostęp do tego obszaru.',
+    toast_email_invalid: '⚠️ Nieprawidłowy e-mail.',
+    toast_fill_email_plant: '⚠️ Proszę podać e-mail i zakład.',
+    toast_pwd_required: '⚠️ Proszę podać hasło dla użytkownika.',
+    toast_pwd_short: '⚠️ Hasło musi mieć co najmniej 6 znaków.',
+    toast_creating_user: '⏳ Tworzenie użytkownika...',
+    toast_edge_unavail: 'ℹ️ Edge Function niedostępna — bezpośrednia rejestracja...',
+    toast_user_existed: 'ℹ️ Użytkownik już istniał w Auth — łączenie z zakładem...',
+    toast_invite_fill: '⚠️ Proszę podać e-mail i zakład przed zaproszeniem.',
+    toast_sql_copied: '📋 SQL skopiowany do schowka!',
+    toast_dir_only_plant: '⚠️ Tylko dyrektorzy mogą tworzyć zakłady.',
+    toast_plant_code_req: '⚠️ Proszę podać kod zakładu (np.: SP, MX).',
+    toast_plant_code_inv: '⚠️ Nieprawidłowy kod. Użyj 2–12 liter, cyfr, _ lub -.',
+    toast_private_mode: '⚠️ Tryb prywatny/incognito — dane zapisane tylko w sesji',
+    toast_sb_not_config: '⚠️ Supabase nie skonfigurowany. Najpierw skonfiguruj dane logowania.',
+    toast_desc_required: '⚠ Opis jest wymagany.',
+    toast_loc_required: '⚠ Lokalizacja jest wymagana.',
+    toast_date_order: '⚠ Następna kalibracja nie może poprzedzać ostatniej.',
+    toast_file_too_big: 'Plik zbyt duży (maks. 10 MB).',
+    toast_none_selected: '⚠️ Nie wybrano urządzenia.',
+    toast_updated_ok: '✅ Zaktualizowano pomyślnie',
+    toast_none_visible: 'Brak widocznych rekordów do drukowania.',
+    toast_not_found: 'Nie znaleziono przyrządu',
+    toast_changes_discarded: '↩️ Zmiany odrzucone',
+    toast_json_only: 'Akceptowane są tylko pliki .json.',
+    toast_import_invalid: 'Import anulowany — nieprawidłowe dane',
+    toast_import_cancel: 'Import anulowany.',
+    toast_backup_ok: '✅ Kopia zapasowa wyeksportowana pomyślnie.',
+    toast_fill_required: 'Proszę wypełnić wymagane pola (*)',
+    toast_cam_unsupported: '📵 Kamera nieobsługiwana w tej przeglądarce.',
+    toast_scan_unavail: 'Skaner niedostępny',
+  
+    toast_creating_user_name: '⏳ Tworzenie użytkownika {name}...',
+    toast_user_created: '✅ Użytkownik utworzony: {name}',
+    toast_user_create_fail: '❌ Nie udało się utworzyć użytkownika: {err}',
+    toast_profile_saved: '💾 Profil zapisany. Aby zaprosić, utwórz użytkownika ręcznie w Supabase Dashboard → Auth → Users.',
+    toast_plant_code_exists: '⚠️ Zakład z kodem „{code}" już istnieje.',
+    toast_session_err: 'Błąd weryfikacji sesji: {err}',
+    toast_reset_link_sent: '📧 Link do resetowania hasła wysłany na {email}',
+    toast_reset_link_ok: '✅ Jeśli e-mail jest zarejestrowany, otrzymasz link wkrótce.',
+    toast_code_dup: '⚠ Kod „{code}" już istnieje. Użyj innego kodu.',
+    toast_cells_filled: '✅ Wypełniono {n} komórek — kliknij 🔄 aby zaktualizować filtry',
+    toast_instr_not_found: '⚠️ Nie znaleziono przyrządu',
+  
+    toast_inline_edited: '✏️ Edytowano — kliknij 💾 Zapisz zmiany aby potwierdzić',
   }
 };
 
 function t(key) { return (T[LANG] || T.pt)[key] || (T.pt)[key] || key; }
 // Sidebar i18n + extras (added in v5)
 (function(){
-  const extras_pt = {sb_overview:'Visão Geral', sb_manage:'Gestão',  sb_analysis:'Análise',  btn_new_lbl:'Novo',   btn_import_lbl:'Import',  btn_export_lbl:'Export'};
-  const extras_en = {sb_overview:'Overview',    sb_manage:'Manage',  sb_analysis:'Analysis', btn_new_lbl:'New',    btn_import_lbl:'Import',  btn_export_lbl:'Export'};
-  const extras_es = {sb_overview:'Resumen',     sb_manage:'Gestión', sb_analysis:'Análisis', btn_new_lbl:'Nuevo',  btn_import_lbl:'Importar',btn_export_lbl:'Exportar'};
+  var extras_pt = {sb_overview:'Visão Geral', sb_manage:'Gestão',  sb_analysis:'Análise',  btn_new_lbl:'Novo',   btn_import_lbl:'Import',  btn_export_lbl:'Export'};
+  var extras_en = {sb_overview:'Overview',    sb_manage:'Manage',  sb_analysis:'Analysis', btn_new_lbl:'New',    btn_import_lbl:'Import',  btn_export_lbl:'Export'};
+  var extras_es = {sb_overview:'Resumen',     sb_manage:'Gestión', sb_analysis:'Análisis', btn_new_lbl:'Nuevo',  btn_import_lbl:'Importar',btn_export_lbl:'Exportar'};
   if(T.pt) Object.assign(T.pt, extras_pt);
   if(T.en) Object.assign(T.en, extras_en);
   if(T.es) Object.assign(T.es, extras_es);
   // [v48] extras for new languages (already inlined in their objects above)
-  const _newLangs = ['de','fr','it','pl'];
+  var _newLangs = ['de','fr','it','pl'];
   _newLangs.forEach(function(l){ if(!T[l]) T[l] = {}; if(!T[l].sb_overview) Object.assign(T[l], {sb_overview:T[l].sb_overview||T.en.sb_overview, sb_manage:T[l].sb_manage||T.en.sb_manage, sb_analysis:T[l].sb_analysis||T.en.sb_analysis, btn_new_lbl:T[l].btn_new_lbl||T.en.btn_new_lbl, btn_import_lbl:T[l].btn_import_lbl||T.en.btn_import_lbl, btn_export_lbl:T[l].btn_export_lbl||T.en.btn_export_lbl}); });
 })();
 
@@ -5247,7 +6142,7 @@ function t(key) { return (T[LANG] || T.pt)[key] || (T.pt)[key] || key; }
 })();
 
 // [v48] ISO-3166-1 alpha-2 country code → language code
-const _COUNTRY_LANG = {
+var _COUNTRY_LANG = {
   BR:'pt', PT:'pt', AO:'pt', MZ:'pt', CV:'pt',
   MX:'es', AR:'es', CL:'es', CO:'es', PE:'es', VE:'es', EC:'es', BO:'es',
   GT:'es', HN:'es', SV:'es', CR:'es', PA:'es', DO:'es', CU:'es', PY:'es', UY:'es',
@@ -5266,7 +6161,7 @@ const _COUNTRY_LANG = {
 // [v48] Runtime map: plant code → { label, country }  (populated from user_profiles + legacy)
 var _DYNAMIC_PLANTS = {};
 // [v47 compat] Legacy hardcoded plant → language (used as fallback when no country set)
-const _PLANT_LANG = { SP:'pt', MX:'es', USA:'en', DUNCAN:'en', AKRON:'en' };
+var _PLANT_LANG = { SP:'pt', MX:'es', USA:'en', DUNCAN:'en', AKRON:'en' };
 // [v48] Get language for a given plant code + country (country takes priority over legacy map)
 function _langForPlant(unidade, country) {
   if (country) {
@@ -5393,10 +6288,10 @@ function applyLang() {
     ['📈 Evolução Acumulada (7 meses)','📈 Cumulative Trend (7 months)','rep_evolucao'],
     ['👤 Por Responsável','👤 By Responsible','rep_resp'],
     ['🏭 Vencidos por Empresa','🏭 Expired by Company','rep_emp_venc'],
-    ['⏱ Frequência de Calibração','⏱ Calibration Frequency','rep_freq'],
+    [t('ch_lbl_freq'),'⏱ Calibration Frequency','rep_freq'],
     ['🌡️ Status por Localização','🌡️ Status by Location','rep_heatmap'],
-    ['🔢 Resumo Geral','🔢 General Summary','rep_resumo'],
-    ['⏱️ Top 15 Mais Urgentes','⏱️ Top 15 Most Urgent','rep_urgentes'],
+    [t('lbl_general_summary'),'🔢 General Summary','rep_resumo'],
+    [t('lbl_top_urgent'),'⏱️ Top 15 Most Urgent','rep_urgentes'],
     ['📋 Relatório por Período','📋 Period Report','rep_period_title'],
   ];
   document.querySelectorAll('.chart-title, .tbl-title').forEach(el => {
@@ -5619,12 +6514,85 @@ function applyLang() {
   // Gauge "em dia" / "on time" label
   const gaugeLabel = document.getElementById('gauge-label');
   if(gaugeLabel) gaugeLabel.textContent = t('ch_in_day');
+
+  // ── [v49.9 FIX] COMPREHENSIVE i18n SWEEP ─────────────────────────────────
+  // 1. Update ALL elements carrying data-i18n attribute (covers static HTML)
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    const val = t(key);
+    if (val && val !== key) el.textContent = val;
+  });
+
+  // 2. Update ALL placeholder attributes with data-i18n-ph
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    const key = el.dataset.i18nPh;
+    const val = t(key);
+    if (val && val !== key) el.placeholder = val;
+  });
+
+  // 3. KPI card labels (dynamic spans with known IDs / text)
+  const kpiMap = {
+    'kpi-lbl-total':    'tab_total',
+    'kpi-lbl-active':   'tab_active',
+    'kpi-lbl-inactive': 'tab_inactive',
+    'kpi-lbl-expired':  'tab_expired',
+    'kpi-lbl-due30':    'tab_due30',
+    'kpi-lbl-due90':    'tab_due90',
+    'kpi-lbl-calib-ok': 'tab_calib_ok',
+    'kpi-lbl-health':   'lbl_health_idx',
+  };
+  Object.entries(kpiMap).forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  });
+
+  // 4. Backup / dismiss banner buttons
+  const bkBtn = document.querySelector('#backup-banner-btn, .btn-backup-banner, [onclick*="downloadBackup"]');
+  if (bkBtn) {
+    const span = bkBtn.querySelector('[data-i18n="btn_backup_short"]') || bkBtn;
+    if (span.dataset.i18n === 'btn_backup_short') span.textContent = t('btn_backup_short');
+  }
+  document.querySelectorAll('[data-i18n="btn_dismiss"]').forEach(el => {
+    el.textContent = t('btn_dismiss');
+  });
+
+  // 5. Empty-state text inside the equipment list
+  const emptyTitle = document.querySelector('[data-i18n="empty_equip_title"]');
+  if (emptyTitle) emptyTitle.textContent = t('empty_equip_title');
+  const emptySub = document.querySelector('[data-i18n="empty_equip_sub"]');
+  if (emptySub) emptySub.textContent = t('empty_equip_sub');
+  const emptyBtn = document.querySelector('[data-i18n="empty_equip_btn"]');
+  if (emptyBtn) emptyBtn.textContent = t('empty_equip_btn');
+
+  // 6. Report / Summary section titles
+  const repMap = {
+    'rep-general-summary': 'lbl_general_summary',
+    'rep-top-urgent':      'lbl_top_urgent',
+    'rep-health-idx':      'lbl_health_idx',
+    'rep-total-equip':     'lbl_total_equip',
+  };
+  Object.entries(repMap).forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  });
+
+  // 7. Rebuild charts so series labels re-render in new language
+  if (typeof buildAllCharts === 'function') {
+    try { buildAllCharts(); } catch(e) { console.warn('[applyLang] buildAllCharts failed:', e); }
+  }
+
+  // 8. Rebuild reports KPIs if visible
+  if (typeof updateKPIs === 'function') {
+    try { updateKPIs(); } catch(e) { console.warn('[applyLang] updateKPIs failed:', e); }
+  }
+  // ── END i18n SWEEP ────────────────────────────────────────────────────────
+
   // [BUG14 FIX] Removido bloco inútil: `const isEdit = ...` era declarada mas nunca lida.
   // O if estava vazio e não executava nenhuma ação.
 }
 
 
-const COL_DEFS = {
+var COL_DEFS = {
   geral: [
     {k:'_chk',        l:'',               def:true, noSort:true, w:30},
     {k:'_act',        l:'Ações',          def:true, noSort:true, w:170},
@@ -5684,7 +6652,7 @@ const COL_DEFS = {
 };
 
 // Per-table column widths (px) — mutable
-let colWidths = {};
+var colWidths = {};
 
 // [BUG12 FIX] Parâmetro renomeado de `t` para `tbl` em ambos os forEach — `t` é a função global de i18n
 function initColWidths() {
@@ -5694,7 +6662,7 @@ function initColWidths() {
   });
 }
 
-let colVis = {};
+var colVis = {};
 function initColVis() {
   Object.entries(COL_DEFS).forEach(([tbl, cols]) => {
     colVis[tbl] = {};
@@ -5704,12 +6672,12 @@ function initColVis() {
 function buildColPanel(tbl) { /* rebuilt by showColMenu */ }
 function buildAllColPanels() { /* portal rebuilt on open */ }
 // ── Column selector — single global dropdown portal ──────────────
-const _colMenu = document.createElement('div');
+var _colMenu = document.createElement('div');
 _colMenu.id = 'col-menu-portal';
 _colMenu.style.cssText = 'display:none;position:fixed;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:6px 2px;z-index:99999;min-width:210px;max-height:340px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)';
 document.addEventListener('DOMContentLoaded', () => document.body.appendChild(_colMenu));
 
-let _colMenuTbl = null;
+var _colMenuTbl = null;
 
 function showColMenu(tbl, btn, evt) {
   // Stop click from bubbling to document (which would immediately close the menu)
@@ -5755,7 +6723,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════════
 // COLUMN RESIZE
 // ═══════════════════════════════════════════════════════
-let _resizing = null;
+var _resizing = null;
 
 function attachResizers(tbl) {
   const tblEl = document.getElementById(tbl==='geral'?'eq-tbl':tbl==='rep'?'rep-tbl':'alert-tbl');
@@ -5786,10 +6754,10 @@ function attachResizers(tbl) {
 document.addEventListener('mousemove', e => {
   if(!_resizing) return;
   const { tbl, colKey, startX, startW } = _resizing;
-  const newW = Math.max(40, startW + (e.clientX - startX));
+  var newW = Math.max(40, startW + (e.clientX - startX));
   colWidths[tbl][colKey] = newW;
   // Apply width directly to th and corresponding tds
-  const tblEl = document.getElementById(tbl==='geral'?'eq-tbl':'alert-tbl');
+  var tblEl = document.getElementById(tbl==='geral'?'eq-tbl':'alert-tbl');
   if(tblEl) {
     tblEl.querySelectorAll(`[data-col="${colKey}"]`).forEach(el => {
       el.style.width = newW+'px';
@@ -5832,9 +6800,9 @@ document.addEventListener('touchend', function() {
 // ═══════════════════════════════════════════════════════
 // THEME
 // ═══════════════════════════════════════════════════════
-const CC = ['#0064b3','#f59e0b','#16a34a','#1a1a1a','#7c3aed','#ea580c','#0d9488','#db2777','#1a7fcc','#fbbf24','#4ade80','#f87171'];
-const CC_LIGHT = ['rgba(0,100,179,.15)','rgba(245,158,11,.15)','rgba(22,163,74,.15)','rgba(26,26,26,.15)'];
-let charts = {};
+var CC = ['#0064b3','#f59e0b','#16a34a','#1a1a1a','#7c3aed','#ea580c','#0d9488','#db2777','#1a7fcc','#fbbf24','#4ade80','#f87171'];
+var CC_LIGHT = ['rgba(0,100,179,.15)','rgba(245,158,11,.15)','rgba(22,163,74,.15)','rgba(26,26,26,.15)'];
+var charts = {};
 
 // [BUG11 FIX] Parâmetro renomeado de `t` para `themeMode` — `t` é o nome da função global de i18n
 function setTheme(themeMode) {
@@ -5846,12 +6814,12 @@ function setTheme(themeMode) {
 }
 // Restore saved theme on load (default: light)
 (function() {
-  const saved = StorageService.get('rochling_theme', 'light');
+  var saved = StorageService.get('rochling_theme', 'light');
   document.documentElement.setAttribute('data-theme', saved);
 })();
-const isDark = () => document.documentElement.getAttribute('data-theme')==='dark';
-const tc = () => isDark() ? '#8b949e' : '#57606a';
-const gc = () => isDark() ? 'rgba(33,38,45,.8)' : 'rgba(208,215,222,.6)';
+var isDark = () => document.documentElement.getAttribute('data-theme')==='dark';
+var tc = () => isDark() ? '#8b949e' : '#57606a';
+var gc = () => isDark() ? 'rgba(33,38,45,.8)' : 'rgba(208,215,222,.6)';
 
 // ═══════════════════════════════════════════════════════
 // TABS
@@ -5867,12 +6835,12 @@ function showTab(id, el) {
 // ═══════════════════════════════════════════════════════
 // DB
 // ═══════════════════════════════════════════════════════
-let DB = [];
-let alertFilter = 'vencido', alertSearch = '';
-let sortState = {};
-let PER_PAGE = parseInt(StorageService.get('rochling_pp','50'),10) || 50;
+var DB = [];
+var alertFilter = 'vencido', alertSearch = '';
+var sortState = {};
+var PER_PAGE = parseInt(StorageService.get('rochling_pp','50'),10) || 50;
 function setPageSize(n){ PER_PAGE = parseInt(n)||50; StorageService.set('rochling_pp', String(PER_PAGE)); ['eq','alert','rep'].forEach(k=>{ if(pag[k]) pag[k].p=1; }); renderTable('geral'); renderAlerts && renderAlerts(); }
-let pag = { eq:{p:1,rows:[]}, alert:{p:1,rows:[]}, rep:{p:1,rows:[]} };
+var pag = { eq:{p:1,rows:[]}, alert:{p:1,rows:[]}, rep:{p:1,rows:[]} };
 // Centralized lookup for tbl-keyed state
 function _PAG(tbl){return tbl==='geral'?pag.eq:tbl==='alert'?pag.alert:pag.rep;}
 function _IDS(tbl){
@@ -5919,7 +6887,7 @@ function fmtDateSafe(iso){
 // ── computeStats: single-pass aggregation, cached until DB changes ──
 // v11 CORREÇÃO 1: Saúde calculada apenas sobre equipamentos ATIVOS
 // (INATIVO e DESCARTADO são excluídos do numerador e denominador do gauge)
-let _statsCache = null;
+var _statsCache = null;
 function _isAtivo(r) {
   var st = (r.status || '').toUpperCase().trim();
   return st === 'ATIVO' || st === 'ACTIVE';
@@ -6048,20 +7016,20 @@ function recalcDias(records) {
     }
   } catch(e) { console.warn('[v27] Erro ao pré-configurar Supabase:', e); }
 })();
-let _supabaseUrl = ''; // Preenchido via modal de configuração — nunca hardcode aqui
-let _supabaseKey = ''; // Preenchido via modal de configuração — nunca hardcode aqui
-let _sb          = null;   // Supabase client instance
-let _sbActive    = false;
-let _pending     = false;
-let _pushTimer   = null;
-let _sbInitialized = false; // [v15 FIX] evita double-init pelo onAuthStateChange que dispara SIGNED_IN imediatamente
+var _supabaseUrl = ''; // Preenchido via modal de configuração — nunca hardcode aqui
+var _supabaseKey = ''; // Preenchido via modal de configuração — nunca hardcode aqui
+var _sb          = null;   // Supabase client instance
+var _sbActive    = false;
+var _pending     = false;
+var _pushTimer   = null;
+var _sbInitialized = false; // [v15 FIX] evita double-init pelo onAuthStateChange que dispara SIGNED_IN imediatamente
 
 // ── [v47 MULTI-PLANTA] ─────────────────────────────────────────────
 // _currentUnidade: planta ativa do usuário logado ('SP', 'MX', 'USA', …)
 // _isDirector: true → vê todas as plantas (sem filtro)
-let _currentUnidade = null;
-let _isDirector     = false;
-let _UNIDADE_LABELS = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DUNCAN: '🇺🇸 Duncan, SC', AKRON: '🇺🇸 Akron, OH', DIRECTOR: '🌎 Global' };
+var _currentUnidade = null;
+var _isDirector     = false;
+var _UNIDADE_LABELS = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DUNCAN: '🇺🇸 Duncan, SC', AKRON: '🇺🇸 Akron, OH', DIRECTOR: '🌎 Global' };
 
 function _setUnidade(unidade) {
   if (!unidade || unidade === 'DIRECTOR') {
@@ -6130,7 +7098,7 @@ window.switchPlanta = function(unidade) {
   if (!unidade) {
     _currentUnidade = null;
     StorageService.set('rochling_director_plant', ''); // [v49.5 FIX] limpa persistência
-    const badge = document.getElementById('planta-badge');
+    var badge = document.getElementById('planta-badge');
     if (badge) badge.textContent = '🌎 Global';
     // Volta ao português ao deselecionar planta
     StorageService.set('rochling_lang_manual', '');
@@ -6142,11 +7110,11 @@ window.switchPlanta = function(unidade) {
   } else {
     _currentUnidade = String(unidade).toUpperCase();
     StorageService.set('rochling_director_plant', _currentUnidade); // [v49.5 FIX] persiste planta
-    const badge = document.getElementById('planta-badge');
+    var badge = document.getElementById('planta-badge');
     if (badge) badge.textContent = _getPlantLabel(_currentUnidade);
     // [v48] Idioma troca SEMPRE ao Director selecionar planta — usa country do perfil dinâmico.
-    const _smeta = _DYNAMIC_PLANTS[_currentUnidade] || {};
-    const autoLang = _langForPlant(_currentUnidade, _smeta.country) || 'pt';
+    var _smeta = _DYNAMIC_PLANTS[_currentUnidade] || {};
+    var autoLang = _langForPlant(_currentUnidade, _smeta.country) || 'pt';
     StorageService.set('rochling_lang_manual', '');
     setLang(autoLang);
   }
@@ -6466,7 +7434,7 @@ function _ocultarSelecaoPlanta() {
 
 // [v49.2] Plantas legadas movidas para _DYNAMIC_PLANTS (editáveis/excluíveis).
 // _PLANTAS_FIXAS mantido vazio só para compatibilidade com referências antigas.
-const _PLANTAS_FIXAS = ['SP','MX','USA','DUNCAN','AKRON'];
+var _PLANTAS_FIXAS = ['SP','MX','USA','DUNCAN','AKRON'];
 
 // [v49.6] Gerenciamento de plantas fixas excluídas — persiste no localStorage
 // para que o seed não as reinsira após reload.
@@ -6526,11 +7494,11 @@ window._removeDeletedFixed = function(code) {
 })();
 window._loadPlantasDisponiveis = async function() {
   if (!_isDirector) return;
-  const sel = document.getElementById('planta-selector');
+  var sel = document.getElementById('planta-selector');
   if (!sel) return;
-  const current = sel.value;
-  let seen = {};
-  let plantas = [];
+  var current = sel.value;
+  var seen = {};
+  var plantas = [];
   // Seed with legacy fixed plants
   _PLANTAS_FIXAS.forEach(function(p){ if(!seen[p]){seen[p]=true;plantas.push(p);} });
   // [v48] Load from user_profiles (includes dynamically added plants)
@@ -6564,8 +7532,8 @@ window._loadPlantasDisponiveis = async function() {
   plantas = plantas.sort();
   sel.innerHTML = '<option value="">🌎 Todas as plantas</option>';
   plantas.forEach(function(p) {
-    const label = _getPlantLabel(p);
-    const opt = document.createElement('option');
+    var label = _getPlantLabel(p);
+    var opt = document.createElement('option');
     opt.value = p;
     opt.textContent = label;
     if (p === current) opt.selected = true;
@@ -6579,12 +7547,12 @@ window._loadPlantasDisponiveis = async function() {
 // [v48] ADMIN PLANTAS — Gerenciar usuários e plantas sem acessar Supabase
 // ═══════════════════════════════════════════════════════════════════
 window.adminLoadUsers = async function() {
-  const sb = window._globalSupabaseClient || window._sb;
+  var sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) {
-    showToast('⚠️ Apenas diretores podem acessar esta área.', 'error');
+    showToast(t('toast_directors_only'), 'error');
     return;
   }
-  const tbody = document.getElementById('admin-users-tbody');
+  var tbody = document.getElementById('admin-users-tbody');
   if (!tbody) return;
   tbody.innerHTML = '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--tx3)">⏳ Carregando...</td></tr>';
 
@@ -6592,21 +7560,21 @@ window.adminLoadUsers = async function() {
     const { data: rawData, error } = await sb.from('user_profiles').select('*').order('email');
     if (error) throw error;
     // [FIX] Filter out plant-sentinel rows (created by "Nova Planta" modal)
-    const data = (rawData || []).filter(function(u){ return !(u && u.email && u.email.indexOf('__plant__') === 0); });
+    var data = (rawData || []).filter(function(u){ return !(u && u.email && u.email.indexOf('__plant__') === 0); });
 
     if (!data || data.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--tx3);font-size:12px">Nenhum perfil cadastrado ainda. Use o formulário acima para adicionar.</td></tr>';
       return;
     }
 
-    const thStyle = 'padding:9px 12px;border-bottom:1px solid var(--bdr2);';
-    const allPlants = Array.from(new Set([..._PLANTAS_FIXAS, ...Object.keys(_DYNAMIC_PLANTS), 'DIRECTOR'])).sort();
+    var thStyle = 'padding:9px 12px;border-bottom:1px solid var(--bdr2);';
+    var allPlants = Array.from(new Set([..._PLANTAS_FIXAS, ...Object.keys(_DYNAMIC_PLANTS), 'DIRECTOR'])).sort();
     tbody.innerHTML = data.map(function(u) {
-      const opts = allPlants.map(function(v) {
+      var opts = allPlants.map(function(v) {
         return '<option value="' + v + '"' + (u.unidade === v ? ' selected' : '') + '>' + _getPlantLabel(v) + '</option>';
       }).join('');
-      const countryFlag = u.country ? _countryFlagEmoji(u.country) : '';
-      const countryDisp = u.country ? (countryFlag + ' ' + u.country) : '<span style="color:var(--tx3)">—</span>';
+      var countryFlag = u.country ? _countryFlagEmoji(u.country) : '';
+      var countryDisp = u.country ? (countryFlag + ' ' + u.country) : '<span style="color:var(--tx3)">—</span>';
       return '<tr style="border-bottom:1px solid var(--bdr2)">'
         + '<td style="' + thStyle + '">' + (u.email || '—') + '</td>'
         + '<td style="' + thStyle + '">' + (u.display_name || '<span style="color:var(--tx3)">—</span>') + '</td>'
@@ -6619,7 +7587,7 @@ window.adminLoadUsers = async function() {
         + '</tr>';
     }).join('');
   } catch(e) {
-    const isNotFound = e.message && (e.message.includes('does not exist') || e.message.includes('42P01'));
+    var isNotFound = e.message && (e.message.includes('does not exist') || e.message.includes('42P01'));
     tbody.innerHTML = '<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--red,#dc2626);font-size:12px">'
       + (isNotFound
         ? '❌ Tabela <code>user_profiles</code> não existe ainda.<br><span style="color:var(--tx2)">Expanda "Configuração inicial" acima e execute o SQL no Supabase.</span>'
@@ -6690,15 +7658,15 @@ function _handleProfilesError(e, contexto) {
 }
 
 window.adminSaveUser = async function() {
-  const sb = window._globalSupabaseClient || window._sb;
+  var sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
-  const email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
-  const unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
-  const country     = (document.getElementById('admin-country').value || '').trim().toUpperCase() || null;
-  const displayName = (document.getElementById('admin-display-name').value || '').trim();
+  var email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
+  var unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
+  var country     = (document.getElementById('admin-country').value || '').trim().toUpperCase() || null;
+  var displayName = (document.getElementById('admin-display-name').value || '').trim();
 
-  if (!email || !unidade) { showToast('⚠️ Preencha e-mail e planta.', 'warning'); return; }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('⚠️ E-mail inválido.', 'warning'); return; }
+  if (!email || !unidade) { showToast(t('toast_fill_email_plant'), 'warning'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast(t('toast_email_invalid'), 'warning'); return; }
 
   // [v48] Register plant in dynamic map if new
   if (country && unidade !== 'DIRECTOR' && !_DYNAMIC_PLANTS[unidade]) {
@@ -6728,32 +7696,32 @@ window.adminSaveUser = async function() {
 // Usa sb.auth.admin.createUser — requer service_role key no Supabase client.
 // Se não disponível, orienta o usuário a usar o Dashboard.
 window.adminCreateWithPassword = async function() {
-  const sb = window._globalSupabaseClient || window._sb;
+  var sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
-  const email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
-  const unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
-  const country     = (document.getElementById('admin-country') ? document.getElementById('admin-country').value : '').trim().toUpperCase() || null;
-  const displayName = (document.getElementById('admin-display-name').value || '').trim();
-  const password    = (document.getElementById('admin-password').value || '').trim();
+  var email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
+  var unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
+  var country     = (document.getElementById('admin-country') ? document.getElementById('admin-country').value : '').trim().toUpperCase() || null;
+  var displayName = (document.getElementById('admin-display-name').value || '').trim();
+  var password    = (document.getElementById('admin-password').value || '').trim();
 
-  if (!email || !unidade)  { showToast('⚠️ Preencha e-mail e planta.', 'warning'); return; }
-  if (!password)           { showToast('⚠️ Digite uma senha para o usuário.', 'warning'); return; }
-  if (password.length < 6) { showToast('⚠️ A senha deve ter no mínimo 6 caracteres.', 'warning'); return; }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('⚠️ E-mail inválido.', 'warning'); return; }
+  if (!email || !unidade)  { showToast(t('toast_fill_email_plant'), 'warning'); return; }
+  if (!password)           { showToast(t('toast_pwd_required'), 'warning'); return; }
+  if (password.length < 6) { showToast(t('toast_pwd_short'), 'warning'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast(t('toast_email_invalid'), 'warning'); return; }
 
-  showToast('⏳ Criando usuário ' + email + '…', 'info');
+  showToast(t('toast_creating_user_name').replace('{name}', email) + '…', 'info');
 
   // [v49.3] Coerção defensiva — garante que tudo é string e sem caracteres invisíveis
-  const _emailStr = String(email);
-  const _passStr  = String(password);
-  const _uniStr   = String(unidade);
-  const _ctryStr  = country ? String(country) : null;
-  const _nameStr  = displayName ? String(displayName) : null;
+  var _emailStr = String(email);
+  var _passStr  = String(password);
+  var _uniStr   = String(unidade);
+  var _ctryStr  = country ? String(country) : null;
+  var _nameStr  = displayName ? String(displayName) : null;
 
   // Preserva sessão atual do diretor (signUp pode trocar a sessão ativa)
-  let _savedSession = null;
+  var _savedSession = null;
   try {
-    const _s = await sb.auth.getSession();
+    var _s = await sb.auth.getSession();
     _savedSession = (_s && _s.data && _s.data.session) ? _s.data.session : null;
   } catch(_) { /* ignore */ }
 
@@ -6775,8 +7743,8 @@ window.adminCreateWithPassword = async function() {
       return;
     }
 
-    showToast('✅ Usuário criado: ' + _emailStr + ' → ' + _getPlantLabel(_uniStr) +
-      (viaFallback ? ' (via signUp — pode exigir confirmação de e-mail se ativada no projeto).' : '. Pode fazer login imediatamente.'),
+    showToast(t('toast_user_created').replace('{name}', _emailStr + ' → ' + _getPlantLabel(_uniStr) +
+      (viaFallback ? ' (via signUp).' : '.')),
       'success');
 
     // Limpa formulário
@@ -6826,10 +7794,10 @@ window.adminCreateWithPassword = async function() {
 
     // ── Fallback: cria via sb.auth.signUp (sem service_role) ──
     // Funciona sem Edge Function. Limitação: respeita configuração de confirmação de e-mail do projeto.
-    showToast('ℹ️ Edge Function indisponível — usando criação direta (signUp)…', 'info');
-    let signUpData = null, signUpErr = null;
+    showToast(t('toast_edge_unavail'), 'info');
+    var signUpData = null, signUpErr = null;
     try {
-      const r = await sb.auth.signUp({
+      var r = await sb.auth.signUp({
         email: _emailStr,
         password: _passStr,
         options: { data: { display_name: _nameStr, unidade: _uniStr, country: _ctryStr } }
@@ -6846,15 +7814,15 @@ window.adminCreateWithPassword = async function() {
       var emsg = (signUpErr && signUpErr.message) ? String(signUpErr.message) : String(signUpErr);
       // Se o usuário já existe no Auth, ainda vinculamos perfil
       if (/already.*registered|already.*exists|user.*exists/i.test(emsg)) {
-        showToast('ℹ️ Usuário já existia no Auth — vinculando à planta…', 'info');
+        showToast(t('toast_user_existed'), 'info');
         await _persistProfileAndFinish(true);
         return;
       }
       // Se a Edge Function respondeu erro estruturado, mostra esse erro original
       if (!fetchFailed && resp && !resp.ok) {
-        showToast('❌ Falha ao criar usuário: ' + ((payload && payload.error) || ('HTTP ' + resp.status)) + ' — ' + emsg, 'error');
+        showToast(t('toast_user_create_fail').replace('{err}', ((payload && payload.error) || ('HTTP ' + resp.status)) + ' — ' + emsg), 'error');
       } else {
-        showToast('❌ Falha ao criar usuário: ' + emsg, 'error');
+        showToast(t('toast_user_create_fail').replace('{err}', emsg), 'error');
       }
       return;
     }
@@ -6871,15 +7839,15 @@ window.adminCreateWithPassword = async function() {
 // ✉ CONVIDAR — cria usuário no Supabase Auth (envia e-mail convite) + salva em user_profiles
 // Não precisa de SQL manual nem do Dashboard do Supabase.
 window.adminInviteUser = async function() {
-  const sb = window._globalSupabaseClient || window._sb;
+  var sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
-  const email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
-  const unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
-  const country     = (document.getElementById('admin-country') ? document.getElementById('admin-country').value : '').trim().toUpperCase() || null;
-  const displayName = (document.getElementById('admin-display-name').value || '').trim();
+  var email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
+  var unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
+  var country     = (document.getElementById('admin-country') ? document.getElementById('admin-country').value : '').trim().toUpperCase() || null;
+  var displayName = (document.getElementById('admin-display-name').value || '').trim();
 
-  if (!email || !unidade) { showToast('⚠️ Preencha e-mail e planta antes de convidar.', 'warning'); return; }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('⚠️ E-mail inválido.', 'warning'); return; }
+  if (!email || !unidade) { showToast(t('toast_invite_fill'), 'warning'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast(t('toast_email_invalid'), 'warning'); return; }
 
   showToast('⏳ Enviando convite para ' + email + '…', 'info');
 
@@ -6900,7 +7868,7 @@ window.adminInviteUser = async function() {
         { onConflict: 'email' }
       );
       if (upErr) throw upErr;
-      showToast('💾 Perfil salvo. Para convidar, crie o usuário manualmente no Supabase Dashboard → Auth → Users → Invite.', 'warning');
+      showToast(t('toast_profile_saved'), 'warning');
     } else {
       // Passo 2: Salvar perfil em user_profiles com a planta
       const { error: upErr } = await sb.from('user_profiles').upsert(
@@ -6924,7 +7892,7 @@ window.adminInviteUser = async function() {
 };
 
 window.adminUpdateUnidade = async function(email, unidade, country) {
-  const sb = window._globalSupabaseClient || window._sb;
+  var sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
   try {
     var upd = { unidade: unidade, updated_at: new Date().toISOString() };
@@ -6940,7 +7908,7 @@ window.adminUpdateUnidade = async function(email, unidade, country) {
 };
 
 window.adminDeleteUser = async function(email) {
-  const sb = window._globalSupabaseClient || window._sb;
+  var sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
   if (!confirm('Remover perfil de ' + email + '?\n\nO usuário perderá o acesso à planta configurada.')) return;
   try {
@@ -6954,11 +7922,11 @@ window.adminDeleteUser = async function(email) {
 };
 
 window.adminCopySql = function() {
-  const pre = document.getElementById('admin-sql-pre');
-  const text = pre ? pre.textContent : '';
+  var pre = document.getElementById('admin-sql-pre');
+  var text = pre ? pre.textContent : '';
   if (navigator.clipboard && text) {
     navigator.clipboard.writeText(text).then(function() {
-      showToast('📋 SQL copiado para a área de transferência!', 'success');
+      showToast(t('toast_sql_copied'), 'success');
     }).catch(function() {
       showToast('Selecione e copie o SQL manualmente.', 'info');
     });
@@ -7010,7 +7978,7 @@ window._repopulatePlantSelects = function _repopulatePlantSelects() {
 
 window.adminOpenNewPlantModal = function() {
   if (typeof _isDirector !== 'undefined' && !_isDirector) {
-    showToast('⚠️ Apenas o Diretor pode criar plantas.', 'warning');
+    showToast(t('toast_dir_only_plant'), 'warning');
     return;
   }
   var m = document.getElementById('np-modal');
@@ -7033,20 +8001,20 @@ window.adminCloseNewPlantModal = function() {
 
 window.adminCreatePlant = async function() {
   if (typeof _isDirector !== 'undefined' && !_isDirector) {
-    showToast('⚠️ Apenas o Diretor pode criar plantas.', 'warning');
+    showToast(t('toast_dir_only_plant'), 'warning');
     return;
   }
   var code    = (document.getElementById('np-code').value    || '').trim().toUpperCase();
   var name    = (document.getElementById('np-name').value    || '').trim();
   var country = (document.getElementById('np-country').value || '').trim().toUpperCase() || null;
 
-  if (!code)                              { showToast('⚠️ Informe o código da planta (ex.: SP, MX).', 'warning'); return; }
-  if (!/^[A-Z0-9_-]{2,12}$/.test(code))   { showToast('⚠️ Código inválido. Use 2 a 12 letras, números, _ ou -.', 'warning'); return; }
+  if (!code)                              { showToast(t('toast_plant_code_req'), 'warning'); return; }
+  if (!/^[A-Z0-9_-]{2,12}$/.test(code))   { showToast(t('toast_plant_code_inv'), 'warning'); return; }
   if (code === 'DIRECTOR')                { showToast('⚠️ "DIRECTOR" é um código reservado.', 'warning'); return; }
 
   var jaExiste = (typeof _PLANTAS_FIXAS !== 'undefined' && _PLANTAS_FIXAS.indexOf(code) >= 0) ||
                  (typeof _DYNAMIC_PLANTS !== 'undefined' && _DYNAMIC_PLANTS[code]);
-  if (jaExiste) { showToast('⚠️ Já existe uma planta com o código "' + code + '".', 'warning'); return; }
+  if (jaExiste) { showToast(t('toast_plant_code_exists').replace('{code}', code), 'warning'); return; }
 
   // 1) Registra in-memory (efeito imediato em toda a UI)
   if (typeof _DYNAMIC_PLANTS === 'undefined') { window._DYNAMIC_PLANTS = {}; }
@@ -7144,8 +8112,13 @@ function setSyncInd(text, color, spin) {
 
 // ── localStorage (cache offline) ─────────────────────────────────
 function saveLS(skipUnsaved) {
+  // [v49.9 FIX] Valida DB antes de serializar para não salvar lixo no localStorage
+  if (typeof DB === 'undefined' || !Array.isArray(DB)) {
+    console.warn('[saveLS] DB inválido — salvamento cancelado');
+    return;
+  }
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(DB.map(r=>{const{dias_vencer,...rest}=r;return rest;})));
+    localStorage.setItem(LS_KEY, JSON.stringify(DB.map(r=>{if(!r)return null;const{dias_vencer,...rest}=r;return rest;}).filter(Boolean)));
     // v12: track last change time for backup alert
     // skipUnsaved=true quando é só cache de dados vindos do cloud (pull/realtime) — não conta como mudança local
     if (!skipUnsaved) {
@@ -7157,12 +8130,12 @@ function saveLS(skipUnsaved) {
     try {
       if (e.name === 'QuotaExceededError' || e.code === 22) {
         console.warn('[saveLS] localStorage cheio ou indisponível - usando sessionStorage');
-        sessionStorage.setItem(LS_KEY, JSON.stringify(DB.map(r=>{const{dias_vencer,...rest}=r;return rest;})));
+        sessionStorage.setItem(LS_KEY, JSON.stringify(DB.map(r=>{if(!r)return null;const{dias_vencer,...rest}=r;return rest;}).filter(Boolean)));
         if (!skipUnsaved) {
           sessionStorage.setItem('r_v12_last_change', Date.now().toString());
         }
         if (typeof showToast === 'function') {
-          showToast('⚠️ Modo privado/incógnito - dados salvos apenas na sessão', 'warning');
+          showToast(t('toast_private_mode'), 'warning');
         }
       }
     } catch(fallback) {
@@ -7172,24 +8145,33 @@ function saveLS(skipUnsaved) {
 }
 
 function loadLS() {
-  try { 
-    var s = localStorage.getItem(LS_KEY); 
-    if (s) {
-      DB = recalcDias(JSON.parse(s));
+  // [v49.9 FIX] try/catch separado para leitura e parse, com limpeza automática de dados corrompidos
+  var s = null;
+  try { s = localStorage.getItem(LS_KEY); } catch(e) { console.warn('[loadLS] localStorage inacessível:', e); }
+  if (s) {
+    try {
+      var parsed = JSON.parse(s);
+      if (!Array.isArray(parsed)) throw new Error('Dados não são array');
+      DB = recalcDias(parsed);
+      return true;
+    } catch(e) {
+      console.error('[loadLS] Dados corrompidos no localStorage — limpando cache:', e);
+      try { localStorage.removeItem(LS_KEY); } catch(_) {}
+      // Não retorna false ainda — tenta sessionStorage antes
+    }
+  }
+  // [v35 FIX] Tentar sessionStorage como fallback
+  try {
+    var s2 = sessionStorage.getItem(LS_KEY);
+    if (s2) {
+      var parsed2 = JSON.parse(s2);
+      if (!Array.isArray(parsed2)) throw new Error('sessionStorage: dados não são array');
+      DB = recalcDias(parsed2);
+      console.warn('[loadLS] Dados carregados de sessionStorage (modo privado)');
       return true;
     }
-  } catch(e) {
-    // [v35 FIX] Tentar sessionStorage como fallback
-    try {
-      var s2 = sessionStorage.getItem(LS_KEY);
-      if (s2) {
-        DB = recalcDias(JSON.parse(s2));
-        console.warn('[loadLS] Dados carregados de sessionStorage (modo privado)');
-        return true;
-      }
-    } catch(e2) {
-      console.warn('[loadLS]', e2);
-    }
+  } catch(e2) {
+    console.warn('[loadLS] sessionStorage também falhou:', e2);
   }
   return false;
 }
@@ -7284,8 +8266,8 @@ function sbSchedulePush() {
 }
 
 // Tenta enviar; se Supabase não está pronto, reagenda (máx. 30 tentativas ≈ 60s)
-let _pushRetryCount = 0;
-const _PUSH_MAX_RETRIES = 30;
+var _pushRetryCount = 0;
+var _PUSH_MAX_RETRIES = 30;
 async function sbPushOrRetry() {
   if(!sbActive()) {
     _pushRetryCount++;
@@ -7326,9 +8308,9 @@ DB.forEach(r => {
 
   // [v47 MULTI-PLANTA] Garante que unidade é salva em cada registro
   const recUnidade = rest.unidade || (_isDirector ? (rest.unidade || null) : _currentUnidade) || null;
-  uniqueMap.set(String(r.id).trim(), {
+  uniqueMap.set(String(r.id).trim().replace(/\s+/g,' '), {
     ...rest,
-    id: String(r.id).trim(),
+    id: String(r.id).trim().replace(/\s+/g,' '), // [v49.9 FIX] normaliza espaços internos no id
     unidade: recUnidade,
     _updated: _pushTs,
   });
@@ -7371,8 +8353,8 @@ const payload = Array.from(uniqueMap.values());
 async function sbDeleteRecord(codigoEquipamento) {
   if(!sbActive()) return;
   // [v49.9 FIX] trim() garante que espaços invisíveis não causem falha no match do Supabase
-  const _safeId = String(codigoEquipamento || '').trim();
-  if (!_safeId) return;
+  const _safeId = String(codigoEquipamento || '').trim().replace(/\s+/g,' ');
+  if (!_safeId) return; // [v49.9 FIX] normaliza espaços internos
   try {
     const { error } = await _sb
       .from('equipamentos')
@@ -7421,7 +8403,15 @@ function fbStartListen() {
         _rtMore = _rtPage && _rtPage.length === _RT_PAGE;
         _rtFrom += _RT_PAGE;
       }
-      if (!_rtAll || _rtAll.length === 0) return;
+      // [v49.9 FIX] Se poll retorna 0 registros MAS havia dados locais e há planta ativa,
+      // pode ser falha temporária de rede — não sobrescreve DB para evitar apagar dados locais.
+      // (A atualização real quando planta fica vazia é feita pelo sbPull no switchPlanta.)
+      if (!_rtAll || _rtAll.length === 0) {
+        if (DB && DB.length > 0 && _currentUnidade) {
+          console.warn('[v45 polling] Retorno vazio com dados locais presentes — ignorando para segurança');
+        }
+        return;
+      }
       // [v49.9 FIX] _uid determinístico no polling — mesma lógica do sbPull para evitar colisão
       let _pollUidCtr = 0;
       const newDB = recalcDias(_rtAll.map(r => {
@@ -7644,8 +8634,8 @@ async function initSupabase() {
 // MODO PÚBLICO — Ficha de equipamento via QR (?view=ID)
 // ══════════════════════════════════════════════════════
 (function() {
-  const params = new URLSearchParams(window.location.search);
-  const viewId = params.get('view');
+  var params = new URLSearchParams(window.location.search);
+  var viewId = params.get('view');
   if (!viewId) return;
 
   // Injeta overlay de ficha pública antes do login aparecer
@@ -7740,14 +8730,14 @@ async function initSupabase() {
   }
 
   // Espera o DB estar pronto, depois renderiza
-  const _pubStart = Date.now();
+  var _pubStart = Date.now();
   // [v41 iOS FIX] Timeout dinâmico: 45s para iOS, 20s para outros — carregamento de dados via QR
-  const _QR_TIMEOUT = window._isIOS ? 45000 : 20000;
-  let _timeoutWarningShown = false;
-  let _loadingOverlay = null;
-  let _publicLoadDone = false;
-  let _publicLoadError = null;
-  let _publicLoadNoHit = false;
+  var _QR_TIMEOUT = window._isIOS ? 45000 : 20000;
+  var _timeoutWarningShown = false;
+  var _loadingOverlay = null;
+  var _publicLoadDone = false;
+  var _publicLoadError = null;
+  var _publicLoadNoHit = false;
   
   function showLoadingScreen() {
     if (_loadingOverlay) return;
@@ -7850,8 +8840,8 @@ async function initSupabase() {
 // ══════════════════════════════════════════════════════════════
   // [BUG19 AVISO DE SEGURANÇA] Segunda ocorrência de credenciais Supabase no código de leitura pública QR.
   // Para produção: use um backend proxy ou variáveis de ambiente — nunca exponha chaves em HTML.
-  const _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co';
-  const _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw';
+  var _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co';
+  var _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw';
 
   // Oculta o login, lê a tabela 'equipamentos' no Supabase e renderiza a ficha.
   // [v45] Padrão seguro: verifica readyState ANTES de registrar o listener.
@@ -8050,7 +9040,7 @@ async function initSupabase() {
         if (fastHit) {
           const _fastMs = (performance.now() - _qrT0).toFixed(0);
           console.log('[v45] equipamento carregado em ' + _fastMs + 'ms');
-          const r = { ...fastHit, _uid: fastHit._uid || fastHit.id_interno || (Date.now() * 1000 + Math.floor(Math.random() * 1000)) };
+          const r = { ...fastHit, _uid: fastHit._uid || fastHit.id_interno || (() => { const s = String(fastHit.id||'').trim(); let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h)^s.charCodeAt(i); return Math.abs(h)*1000+1; })() }; // [v49.9 FIX] hash determinístico
           _qrSaveCached(r);
           DB = typeof recalcDias === 'function' ? recalcDias([r]) : [r];
         } else {
@@ -8081,7 +9071,7 @@ async function initSupabase() {
 // ══════════════════════════════════════════════════════
 // AUTENTICAÇÃO — Supabase Auth
 // ══════════════════════════════════════════════════════
-let _auth = null; // alias mantido; não usado diretamente com Supabase (usa _sb.auth)
+var _auth = null; // alias mantido; não usado diretamente com Supabase (usa _sb.auth)
 
 async function initSupabaseAndAuth() {
   // ── GUARD: SDK Supabase deve ter carregado ──
@@ -8127,12 +9117,12 @@ async function initSupabaseAndAuth() {
     });
   } catch(e) {
     console.error('[initSupabaseAndAuth] Falha ao verificar sessão Supabase:', e);
-    showToast('Erro ao verificar sessão: ' + (e.message || e), 'err');
+    showToast(t('toast_session_err').replace('{err}', e.message || e), 'err');
     showLoginScreen();
   }
 }
 
-let _appInitialized = false; // [v15b FIX] evita double-init do updateAll/buildAllCharts pelo onAuthStateChange
+var _appInitialized = false; // [v15b FIX] evita double-init do updateAll/buildAllCharts pelo onAuthStateChange
 
 function showApp(user) {
   // Atualiza UI de auth (sempre permitido: nome do utilizador, overlay de login)
@@ -8258,8 +9248,8 @@ function showLoginScreen() {
 async function doForgotPassword(ev) {
   if (ev && ev.preventDefault) ev.preventDefault();
   if (!_sb) {
-    if(typeof showToast==='function') showToast('Supabase não configurado. Configure as credenciais primeiro.','err');
-    else showToast('⚠️ Supabase não configurado. Configure as credenciais primeiro.');
+    if(typeof showToast==='function') showToast(t('toast_sb_not_config'),'err');
+    else showToast(t('toast_sb_not_config'));
     return;
   }
   const emailField = document.getElementById('login-email');
@@ -8276,12 +9266,12 @@ async function doForgotPassword(ev) {
     });
     if (error) throw error;
     // [v18 FIX] usar showToast em vez de alert() bloqueante
-    if(typeof showToast === 'function') showToast('📧 Link de redefinição enviado para ' + email + '. Verifique sua caixa de entrada.');
-    else showToast('✅ Enviamos um link de redefinição de senha para ' + email + '.');
+    if(typeof showToast === 'function') showToast(t('toast_reset_link_sent').replace('{email}', email) + '. Verifique sua caixa de entrada.');
+    else showToast(t('toast_reset_link_sent').replace('{email}', email) + '.');
   } catch (e) {
     console.warn('[forgotPassword]', e);
-    if(typeof showToast === 'function') showToast('Se o e-mail estiver cadastrado, você receberá um link em instantes.');
-    else showToast('✅ Se o e-mail estiver cadastrado, você receberá um link em instantes.');
+    if(typeof showToast === 'function') showToast(t('toast_reset_link_ok'));
+    else showToast(t('toast_reset_link_ok'));
   }
 }
 document.addEventListener('DOMContentLoaded', function(){
@@ -8431,9 +9421,9 @@ function dc(id){
     delete charts[id]; 
   }
 }
-const FONT = "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
-const MONO_F = "ui-monospace, 'SF Mono', Consolas, monospace";
-const donutOpts = () => ({
+var FONT = "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
+var MONO_F = "ui-monospace, 'SF Mono', Consolas, monospace";
+var donutOpts = () => ({
   responsive:true, maintainAspectRatio:false, cutout:'62%',
   animation: false, // [v15b FIX] sem animação → charts aparecem instantâneos, sem loop visual ao ser recriados
   plugins:{
@@ -8441,7 +9431,7 @@ const donutOpts = () => ({
     tooltip:{callbacks:{label:ctx=>' '+ctx.label+': '+ctx.parsed}}
   }
 });
-const barY = (extra) => ({
+var barY = (extra) => ({
   responsive:true, maintainAspectRatio:false, indexAxis:'y',
   animation: false, // [v15b FIX]
   plugins:{legend:{display:false}},
@@ -8450,7 +9440,7 @@ const barY = (extra) => ({
     y:{ticks:{color:tc(),font:{size:10,family:FONT}},grid:{display:false},border:{display:false}}
   },...(extra||{})
 });
-const barX = (extra) => ({
+var barX = (extra) => ({
   responsive:true, maintainAspectRatio:false,
   animation: false, // [v15b FIX]
   plugins:{legend:{display:false}},
@@ -8578,7 +9568,7 @@ function buildAllCharts() {
   dc('calib');
   const cOk=DB.filter(r=>(r.status_calib||'').includes('aprovado')).length;
   const cNec=DB.filter(r=>(r.status_calib||'').includes('Necessária')).length;
-  charts.calib=new Chart(document.getElementById('ch-calib'),{type:'doughnut',data:{labels:[t('f_calib_ok'),t('f_calib_need'),LANG==='en'?'Other':LANG==='es'?'Otro':'Outros'],datasets:[{data:[cOk,cNec,Math.max(0,tot-cOk-cNec)],backgroundColor:['#16a34a','#ea580c','rgba(100,100,120,.3)'],borderWidth:0,hoverOffset:5}]},options:donutOpts()});
+  charts.calib=new Chart(document.getElementById('ch-calib'),{type:'doughnut',data:{labels:[t('f_calib_ok'),t('f_calib_need'),t('s_calib_other')],datasets:[{data:[cOk,cNec,Math.max(0,tot-cOk-cNec)],backgroundColor:['#16a34a','#ea580c','rgba(100,100,120,.3)'],borderWidth:0,hoverOffset:5}]},options:donutOpts()});
 
   dc('status');
   const at=DB.filter(r=>(r.status||'').toUpperCase()==='ATIVO').length;
@@ -8621,12 +9611,12 @@ function buildAllCharts() {
 // ═══════════════════════════════════════════════════════
 // GRÁFICO MÊS A MÊS — Previstas vs Realizadas
 // ═══════════════════════════════════════════════════════
-let _mensalRange = 12;
+var _mensalRange = 12;
 
 window.setMensalRange = function(n) {
   _mensalRange = n;
   ['3','6','12'].forEach(m => {
-    const b = document.getElementById('ch-mensal-btn-'+m);
+    var b = document.getElementById('ch-mensal-btn-'+m);
     if(!b) return;
     b.style.background = (String(n)===m) ? 'var(--brand)' : 'transparent';
     b.style.color      = (String(n)===m) ? '#fff'         : 'var(--tx2)';
@@ -8814,7 +9804,7 @@ function diasBadge(d){
 }
 // Translate data field values
 // ── Data translation dictionary PT → EN ──────────────────────────
-const DATA_EN = {
+var DATA_EN = {
   // Tipos de equipamento
   'Aferidor de Torque':                    'Torque Calibrator',
   'Balança Digital':                       'Digital Scale',
@@ -8977,13 +9967,13 @@ function statusText(v) {
 function calibText(v) {
   if(!v) return v;
   if(v.includes('aprovado')||v.includes('Approved')||v.includes('Calibrated'))
-    return LANG==='en' ? 'Calibrated & Approved' : 'Calibrado e Aprovado';
+    return t('s_calib_approved');
   if(v.includes('Necessária')||v.includes('Required'))
-    return LANG==='en' ? 'Calibration Required' : 'Calibração Necessária';
+    return t('s_calib_required');
   if(v.includes('DESCARTADO')||v.includes('Discarded'))
-    return LANG==='en' ? 'Discarded' : 'Descartado';
+    return t('s_calib_discarded');
   if(v.includes('encontrado')||v.includes('Found'))
-    return LANG==='en' ? 'Not Found' : 'Não Encontrado';
+    return t('s_not_found');
   return v;
 }
 function calibBadge(v, diasVencer){
@@ -8995,7 +9985,7 @@ function calibBadge(v, diasVencer){
   // Use dias_vencer as source of truth when available
   if(diasVencer !== undefined && diasVencer !== null) {
     if(diasVencer < 0)  return `<span class="badge b-err">⚠ ${t('d_expired')}</span>`;
-    if(diasVencer <= 30) return `<span class="badge b-warn">⏰ ${LANG==='en'?'Due soon':LANG==='es'?'Por vencer':'Vence em breve'}</span>`;
+    if(diasVencer <= 30) return `<span class="badge b-warn">⏰ ${t('s_due_soon')}</span>`;
     return `<span class="badge b-ok">✓ ${t('f_calib_ok')}</span>`;
   }
 
@@ -9016,7 +10006,7 @@ function fileIcon(n){const e=((n||'').split('.').pop()||'').toLowerCase();return
 
 
 // Inline-editable fields config
-const INLINE_EDITABLE = {
+var INLINE_EDITABLE = {
   id:          { type: 'text' },   // [DUPLICATE-ROW] permite editar código na linha duplicada/em branco
   tipo:        { type: 'text' },
   cliente:     { type: 'text' },
@@ -9039,7 +10029,7 @@ const INLINE_EDITABLE = {
   ]},
 };
 
-let _inlineActive = null; // { uid, k, td }
+var _inlineActive = null; // { uid, k, td }
 
 function startInlineEdit(uid, k, td) {
   // [v20 FIX] Cancel any active inline edit first to prevent listener accumulation
@@ -9100,7 +10090,7 @@ function startInlineEdit(uid, k, td) {
     // Estratégia:
     //   • Digitação manual → confirma com Enter ou Tab
     //   • Calendário picker → ao selecionar a data, o input perde foco → blur commita
-    let _dateCommitted = false;
+    var _dateCommitted = false;
     const commitDate = () => {
       if(_dateCommitted) return;
       _dateCommitted = true;
@@ -9141,13 +10131,15 @@ function startInlineEdit(uid, k, td) {
 // Recalcula próxima calib, dias_vencer e status_calib de um registro
 function recalcRecord(r) {
     _statsCache = null;
-    const today = new Date(); today.setHours(0,0,0,0);
+    // [v49.9 FIX] Usa todayUTC() em vez de setHours(0,0,0,0) local para evitar erro de 1 dia
+    // em timezones negativos (ex: Brasil UTC-3 fazia calibrações vencerem 1 dia antes do correto)
+    const todayMs = (typeof todayUTC === 'function') ? todayUTC() : (() => { const d = new Date(); d.setUTCHours(0,0,0,0); return d; })();
     
     if(r.ult_calib && r.freq_dias) {
         try {
             const ult = new Date(r.ult_calib + 'T00:00:00Z');
             const prox = new Date(ult);
-            prox.setDate(prox.getDate() + parseInt(r.freq_dias));
+            prox.setUTCDate(prox.getUTCDate() + parseInt(r.freq_dias));
             r.prox_calib = prox.toISOString().slice(0, 10);
         } catch(e) {}
     }
@@ -9155,7 +10147,7 @@ function recalcRecord(r) {
     if(r.prox_calib) {
         try {
             r.dias_vencer = Math.round(
-                (new Date(r.prox_calib + 'T00:00:00Z') - today) / 86400000
+                (new Date(r.prox_calib + 'T00:00:00Z') - todayMs) / 86400000
             );
         } catch(e) { r.dias_vencer = null; }
     } else {
@@ -9206,7 +10198,7 @@ function commitInlineEdit(silent) {
     saveLS();
     if(!silent) {
       sbSchedulePush();
-      showToast(LANG==='en' ? '✅ Saved — filters will update when you click Apply' : '✅ Salvo — tabela mantida. Clique em 🔄 para atualizar filtros');
+      showToast(t('toast_saved_inline'));
     }
     // ── Only re-render the ONE affected row — do NOT re-apply filters ──
     rerenderRow(uid, 'geral');
@@ -9214,10 +10206,10 @@ function commitInlineEdit(silent) {
     _pendingFilterRefresh = true;
     updateApplyFilterBtn();
   } else {
-    _inlineActive = null;
+    // [v49.9 FIX] Removido _inlineActive = null duplicado (era definido 2x causando estado inconsistente)
     rerenderRow(uid, 'geral');
+    _inlineActive = null;
   }
-  _inlineActive = null;
 }
 
 function cancelInlineEdit() {
@@ -9244,7 +10236,7 @@ function rerenderRow(uid, tbl) {
 }
 
 // ── Deferred filter refresh — user controls when filters re-apply ──────────
-let _pendingFilterRefresh = false;
+var _pendingFilterRefresh = false;
 
 function updateApplyFilterBtn() {
   const btn = document.getElementById('btn-apply-filters');
@@ -9264,7 +10256,7 @@ window.applyFiltersNow = function() {
   refreshInPlace();
   updateKPIs();
   buildAllCharts();
-  showToast('🔄 Filtros e gráficos atualizados');
+  showToast(t('toast_filters_ok'));
 };
 
 function moveInlineFocus(uid, currentKey, dir) {
@@ -9293,7 +10285,7 @@ function renderCell(r, k, tbl) {
   const attr = `data-col="${k}" ${ws}`;
   const editable = (tbl === 'geral' || tbl === 'alert' || tbl === 'rep') && INLINE_EDITABLE[k];
   const editAttr = editable
-    ? `class="editable-cell" onclick="startInlineEdit(${r._uid},'${k}',this)" title="${LANG==='en'?'Click to edit':LANG==='es'?'Clic para editar':'Clique para editar'}"`
+    ? `class="editable-cell" onclick="startInlineEdit(${r._uid},'${k}',this)" title="${t('lbl_click_edit')}"`
     : '';
 
   // ── Checkbox column ──────────────────────────────────────────────
@@ -9307,10 +10299,10 @@ function renderCell(r, k, tbl) {
 
   if(k==='_act') return `<td ${attr} style="white-space:nowrap">
     <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--brand)" onclick="openEquipView(${r._uid})" title="Visualizar">👁</button>
-    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--tx3)" onclick="openEdit(${r._uid})" title="${LANG==='en'?'Edit':LANG==='es'?'Editar':'Editar'}">✏</button>
-    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--green)" onclick="duplicateRow(${r._uid})" title="${LANG==='en'?'Duplicate row (like Excel copy)':LANG==='es'?'Duplicar fila':'Duplicar linha — copiar para novo cadastro'}">⧉</button>
+    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--tx3)" onclick="openEdit(${r._uid})" title="${t('lbl_edit')}">✏</button>
+    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--green)" onclick="duplicateRow(${r._uid})" title="${t('lbl_duplicate')}">⧉</button>
     <button onclick="openQrModal(${r._uid})" title="QR Code / Etiqueta" style="padding:2px 6px;font-size:10px;font-weight:700;border:1px solid var(--brand);background:rgba(0,100,179,.12);color:var(--brand);border-radius:4px;cursor:pointer;font-family:var(--font);line-height:1.4">▦ QR</button>
-    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--red);opacity:.5" onclick="deleteInline(${r._uid})" title="${LANG==='en'?'Delete':LANG==='es'?'Eliminar':'Excluir'}">🗑</button>
+    <button class="btn-g" style="padding:1px 5px;font-size:11px;border:none;background:transparent;color:var(--red);opacity:.5" onclick="deleteInline(${r._uid})" title="${t('lbl_delete')}">🗑</button>
   </td>`;
   if(k==='dias_vencer')  return `<td ${attr}>${diasBadge(r.dias_vencer)}</td>`;
 
@@ -9335,13 +10327,15 @@ function renderCell(r, k, tbl) {
   return `<td ${attr} ${editAttr} title="${esc(vt||'')}">${esc(vt||'—')}${fillH}</td>`;
 }
 
-let _renderTableDebounceTimer = {};
+var _renderTableDebounceTimer = {};
 function renderTableDebounced(tbl, delay) {
   delay = delay || 60;
   clearTimeout(_renderTableDebounceTimer[tbl]);
   _renderTableDebounceTimer[tbl] = setTimeout(() => renderTable(tbl), delay);
 }
 function renderTable(tbl) {
+  // [v49.9 FIX] Proteção defensiva: pag pode não estar inicializado ainda
+  if (typeof pag === 'undefined' || !pag || !pag.eq) return;
   const p = _PAG(tbl);
   // _act and _chk are always visible — never filtered by colVis
   const cols = COL_DEFS[tbl].filter(c => c.k==='_act' || c.k==='_chk' || colVis[tbl][c.k]);
@@ -9387,8 +10381,8 @@ function renderTable(tbl) {
     const cs = cols.length;
     tbody.innerHTML = `<tr><td colspan="${cs}" style="text-align:center;padding:36px 14px;color:var(--tx3);font-size:12px">
       <div style="font-size:28px;margin-bottom:6px;opacity:.4">📭</div>
-      <div style="font-weight:600;color:var(--tx2);margin-bottom:3px">${LANG==='en'?'No records match the filters':LANG==='es'?'Ningún registro coincide con los filtros':'Nenhum registro corresponde aos filtros'}</div>
-      <button class="btn-g" style="margin-top:8px;font-size:10px" onclick="clearF&&clearF()">${LANG==='en'?'Clear filters':LANG==='es'?'Limpiar filtros':'Limpar filtros'}</button>
+      <div style="font-weight:600;color:var(--tx2);margin-bottom:3px">${t('toast_no_match')}</div>
+      <button class="btn-g" style="margin-top:8px;font-size:10px" onclick="clearF&&clearF()">${t('toast_clear_f')}</button>
     </td></tr>`;
   } else {
     tbody.innerHTML = slice.map(r => {
@@ -9400,13 +10394,13 @@ function renderTable(tbl) {
   if (tbl === 'geral') {
     const addRow = document.createElement('tr');
     addRow.id = '_add-blank-row-btn';
-    addRow.title = LANG==='en' ? 'Add new blank row' : LANG==='es' ? 'Agregar nueva fila' : 'Adicionar nova linha em branco';
+    addRow.title = t('lbl_add_blank');
     addRow.style.cssText = 'cursor:pointer;opacity:.55;transition:opacity .15s';
     addRow.onmouseenter = function(){ this.style.opacity='1'; };
     addRow.onmouseleave = function(){ this.style.opacity='.55'; };
     addRow.onclick = function(){ if(typeof addBlankRow==='function') addBlankRow(); };
     addRow.innerHTML = `<td colspan="${cols.length}" style="text-align:center;padding:5px 0;font-size:12px;color:var(--tx3);border-top:1px dashed var(--border);letter-spacing:.5px">
-      ＋ ${LANG==='en'?'Add row':LANG==='es'?'Agregar fila':'Adicionar linha'}
+      ＋ ${t('lbl_add_row')}
     </td>`;
     tbody.appendChild(addRow);
   }
@@ -9837,7 +10831,7 @@ function _syncFiltersFromTableView() {
   });
 }
 
-const FILTER_IDS = ['f-de','f-ate','f-ult-calib-de','f-ult-calib-ate','f-prox-calib-de','f-prox-calib-ate','f-search'];
+var FILTER_IDS = ['f-de','f-ate','f-ult-calib-de','f-ult-calib-ate','f-prox-calib-de','f-prox-calib-ate','f-search'];
 function _saveFilters(){ try{
   var o={};
   FILTER_IDS.forEach(function(id){var e=document.getElementById(id); if(e&&e.value) o[id]=e.value;});
@@ -9888,8 +10882,11 @@ function applyF() {
   if(mStat.size>0)  rows=rows.filter(function(r){return mStat.has((r.status||'').toUpperCase());});
   if(mCalib.size>0){
     rows=rows.filter(function(r){
-      if(mCalib.has('ok') && (r.dias_vencer===null||(r.dias_vencer!==null&&r.dias_vencer>=0))) return true;
+      // [v49.9 FIX] 'ok' não deve incluir dias_vencer===null (sem data de calib configurada)
+      // Antes: null era tratado como "OK", agora só dias_vencer >= 0 (data futura) é OK
+      if(mCalib.has('ok') && r.dias_vencer!==null && r.dias_vencer>=0) return true;
       if((mCalib.has('vencido')||mCalib.has('necessaria')) && r.dias_vencer!==null&&r.dias_vencer<0) return true;
+      if(mCalib.has('sem-data') && r.dias_vencer===null) return true;
       return false;
     });
   }
@@ -9925,8 +10922,10 @@ function refreshInPlace() {
   if(mStat.size>0)  rows=rows.filter(function(r){return mStat.has((r.status||'').toUpperCase());});
   if(mCalib.size>0){
     rows=rows.filter(function(r){
-      if(mCalib.has('ok') && (r.dias_vencer===null||(r.dias_vencer!==null&&r.dias_vencer>=0))) return true;
+      // [v49.9 FIX] 'ok' não deve incluir dias_vencer===null (sem data de calib)
+      if(mCalib.has('ok') && r.dias_vencer!==null && r.dias_vencer>=0) return true;
       if((mCalib.has('vencido')||mCalib.has('necessaria')) && r.dias_vencer!==null&&r.dias_vencer<0) return true;
+      if(mCalib.has('sem-data') && r.dias_vencer===null) return true;
       return false;
     });
   }
@@ -10229,15 +11228,15 @@ function buildResumo() {
   const x = computeStats();
   el.innerHTML='';
   const rows = [
-    ['Total de Equipamentos', x.tot, ''],
+    [t('lbl_total_equip'), x.tot, ''],
     ['Ativos',    `${x.ativos} (${x.tot?Math.round(x.ativos/x.tot*100):0}%)`, 'var(--green)'],
     ['Inativos',  x.inativos, ''],
     ['Vencidos',  `${x.vencidos} (${x.tot?Math.round(x.vencidos/x.tot*100):0}%)`, 'var(--red)'],
     ['Vencem em 30 dias', x.d30, 'var(--orange)'],
     ['Vencem em 90 dias', x.d90, 'var(--accent)'],
     ['Em dia (>90d)',     x.okFuturo, 'var(--green)'],
-    ['Sem data calib.',   x.semData, 'var(--tx3)'],
-    ['Índice de Saúde',   x.saude+'%', x.saude>=80?'var(--green)':x.saude>=50?'var(--orange)':'var(--red)'],
+    [t('lbl_no_date'),   x.semData, 'var(--tx3)'],
+    [t('lbl_health_idx'),   x.saude+'%', x.saude>=80?'var(--green)':x.saude>=50?'var(--orange)':'var(--red)'],
   ];
   rows.forEach(([l,v,c])=>
     el.innerHTML+=`<div class="stat-row"><span style="color:var(--tx2);font-size:12px">${l}</span><span style="font-weight:700;font-family:var(--mono);${c?'color:'+c:''}">${v}</span></div>`);
@@ -10258,7 +11257,7 @@ function buildUrgentes() {
   }).join('');
 }
 
-let _repRows=[];
+var _repRows=[];
 function _populateRepFilters(){
   const fill=(id,vals)=>{const s=document.getElementById(id);if(!s)return;const cur=s.value;s.innerHTML='<option value="">Todos</option>'+[...new Set(vals.filter(v=>v))].sort().map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');s.value=cur;};
   fill('rep-f-tipo',  DB.map(r=>r.tipo));
@@ -10332,9 +11331,12 @@ function exportRepCSV() {
 // ═══════════════════════════════════════════════════════
 // EDIT MODAL
 // ═══════════════════════════════════════════════════════
-let editUID=null;
+var editUID=null;
 function openEdit(uid){
-  const r=DB.find(x=>x._uid===uid); if(!r)return;
+  // [v49.9 FIX] Fallback por String(_uid) quando _uid numérico não casa (após sync que regera _uid)
+  let r = DB.find(x => x._uid === uid);
+  if (!r && uid !== null && uid !== undefined) r = DB.find(x => String(x._uid) === String(uid));
+  if(!r)return;
   editUID=uid;
   const mTitleE=document.getElementById('m-title');
   if(mTitleE) mTitleE.textContent=t('m_edit_title');
@@ -10359,7 +11361,7 @@ function openAdd(){
   if(mTitle) mTitle.textContent=t('m_new_title');
   const delBtn=document.getElementById('m-btn-del');
   if(delBtn) delBtn.style.display='none';
-  if(mSub) mSub.textContent=LANG==='en'?'Fill in the details':LANG==='es'?'Complete los datos':'Preencha os dados';
+  if(mSub) mSub.textContent=t('lbl_fill_details');
   ['m-id','m-tipo','m-cliente','m-fab','m-desc','m-local','m-resp','m-emp','m-codlab','m-ult','m-prox','m-freq','m-notes','m-link','m-link-data'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('m-status').value='ATIVO';
   document.getElementById('m-calib-status').value='Instrumento Calibrado e aprovado';
@@ -10378,24 +11380,24 @@ function saveRecord(){
   const localVal=(document.getElementById('m-local').value||'').trim();
 
   // [v18 FIX] Validação de campos obrigatórios antes de salvar
-  if(!idVal){showToast('⚠ Código de Controle é obrigatório.','err');document.getElementById('m-id').focus();return;}
-  if(!tipoVal){showToast('⚠ Tipo de Equipamento é obrigatório.','err');document.getElementById('m-tipo').focus();return;}
-  if(!descVal){showToast('⚠ Descrição é obrigatória.','err');document.getElementById('m-desc').focus();return;}
-  if(!localVal){showToast('⚠ Localização é obrigatória.','err');document.getElementById('m-local').focus();return;}
+  if(!idVal){showToast(t('toast_code_req'),'err');document.getElementById('m-id').focus();return;}
+  if(!tipoVal){showToast(t('toast_type_req'),'err');document.getElementById('m-tipo').focus();return;}
+  if(!descVal){showToast(t('toast_desc_required'),'err');document.getElementById('m-desc').focus();return;}
+  if(!localVal){showToast(t('toast_loc_required'),'err');document.getElementById('m-local').focus();return;}
   // [v19 MELHORIA 1] Validação de coerência de datas (prox >= ult)
   const ultVal = document.getElementById('m-ult').value;
   if(ultVal && prox && new Date(prox+'T00:00:00') < new Date(ultVal+'T00:00:00')) {
-    showToast('⚠ Próxima Calibração não pode ser anterior à Última Calibração.','err');
+    showToast(t('toast_date_order'),'err');
     document.getElementById('m-prox').focus(); return;
   }
   // [v18 FIX] Evita duplicar ID ao criar novo registro
   if(editUID===null){
     const dup=DB.find(x=>x.id===idVal);
-    if(dup){showToast(`⚠ Código "${idVal}" já existe. Use outro código.`,'err');document.getElementById('m-id').focus();return;}
+    if(dup){showToast(t('toast_code_dup').replace('{code}',idVal),'err');document.getElementById('m-id').focus();return;}
   } else {
     // [v49.9 FIX] Ao editar, valida se novo código já existe em OUTRO registro
     const dup=DB.find(x=>x.id===idVal && x._uid!==editUID);
-    if(dup){showToast(`⚠ Código "${idVal}" já existe em outro equipamento.`,'err');document.getElementById('m-id').focus();return;}
+    if(dup){showToast(t('toast_code_dup').replace('{code}',idVal),'err');document.getElementById('m-id').focus();return;}
   }
 
   const dv=prox?Math.round((new Date(prox+'T00:00:00Z')-today)/86400000):null;
@@ -10422,7 +11424,9 @@ function saveRecord(){
     dias_vencer:dv,
   };
   if(editUID!==null){
-    const idx=DB.findIndex(x=>x._uid===editUID);
+    // [v49.9 FIX] Fallback: se _uid exato não casar (após sync), tenta por String
+    let idx = DB.findIndex(x => x._uid === editUID);
+    if (idx < 0) idx = DB.findIndex(x => String(x._uid) === String(editUID));
     if(idx>=0){
       const before = {...DB[idx]};
       pushUndo(); DB[idx]={...DB[idx],...upd}; recalcRecord(DB[idx]);
@@ -10436,7 +11440,7 @@ function saveRecord(){
     showToast(t('t_updated'));
   } else {
     pushUndo();
-    const newRec={...upd,_uid:Date.now(),sheet:'geral'};
+    const newRec={...upd,_uid:Date.now()*1000+Math.floor(Math.random()*1000),sheet:'geral'}; // [v49.9 FIX] _uid com maior resolução para evitar colisão
     recalcRecord(newRec);
     DB.push(newRec);
     // v12 AUDIT
@@ -10468,17 +11472,17 @@ function _safeConfirm(msg, onYes, onNo) {
 function deleteRecord(){
   // [v49.9 FIX] Guarda _bloqueioSemPlanta: exibe toast em vez de falhar silenciosamente
   if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
-    showToast('🔒 Acesso bloqueado: nenhuma planta configurada para este usuário.', 'err');
+    showToast(t('toast_blocked'), 'err');
     return;
   }
   if(editUID === null) return;
-  const r = DB.find(x => x._uid === editUID);
+  // [v49.9 FIX] Fallback por String(_uid) quando _uid numérico não casa após sync
+  let r = DB.find(x => x._uid === editUID);
+  if (!r) r = DB.find(x => String(x._uid) === String(editUID));
   if(!r) return;
   const name = r.id || r.descricao || 'este registro';
   // [v19 MELHORIA 4] Confirmação com opção de desfazer via undo stack
-  const msg = LANG==='en'
-    ? `Delete "${name}"?\nThis action cannot be undone.`
-    : `Excluir "${name}"?\nEsta ação não pode ser desfeita.`;
+  const msg = t('confirm_delete').replace('{name}', name);
   // [v34 FIX] usa _safeConfirm para garantir que _confirmModal já foi definida
   _safeConfirm(msg, function() {
     pushUndo();
@@ -10492,9 +11496,14 @@ function deleteRecord(){
     closeModal();
     updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
     refreshInPlace();
-    if(deletedId) sbDeleteRecord(deletedId);
-    sbSchedulePush();
-    _showUndoToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
+    // [v49.9 FIX] Aguarda sbDeleteRecord antes do sbSchedulePush para evitar race condition:
+    // sem await, o upsert poderia re-inserir o registro no Supabase antes da exclusão completar.
+    if(deletedId) {
+      sbDeleteRecord(deletedId).then(function() { sbSchedulePush(); }).catch(function() { sbSchedulePush(); });
+    } else {
+      sbSchedulePush();
+    }
+    _showUndoToast(`${t('toast_deleted').replace('{name}',name)}`);
   });
 }
 
@@ -10502,14 +11511,14 @@ function deleteRecord(){
 function deleteInline(uid){
   // [v49.9 FIX] Guarda _bloqueioSemPlanta: exibe toast em vez de falhar silenciosamente
   if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
-    showToast('🔒 Acesso bloqueado: nenhuma planta configurada para este usuário.', 'err');
+    showToast(t('toast_blocked'), 'err');
     return;
   }
   const r = DB.find(x => x._uid === uid);
   if(!r) return;
   const name = r.id || r.descricao || 'registro';
   // [v34 FIX] usa _safeConfirm para garantir que _confirmModal já foi definida
-  _safeConfirm(LANG==='en' ? `Delete "${name}"? This action cannot be undone.` : `Excluir "${name}"? Esta ação não pode ser desfeita.`, function() {
+  _safeConfirm(t('confirm_delete').replace('{name}', name), function() {
     pushUndo();
     const deletedId = r.id;
     // [v49.9 FIX] Filtra por _uid E id.trim() — evita exclusão acidental de registros com prefixo igual
@@ -10517,9 +11526,13 @@ function deleteInline(uid){
     DB = DB.filter(x => x._uid !== uid && String(x.id || '').trim() !== _deletedIdTrimmed);
     updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
     refreshInPlace();
-    if(deletedId) sbDeleteRecord(deletedId);
-    sbSchedulePush();
-    showToast(LANG==='en' ? `🗑 Deleted: ${name}` : `🗑 Excluído: ${name}`);
+    // [v49.9 FIX] Aguarda sbDeleteRecord antes do sbSchedulePush (anti race condition)
+    if(deletedId) {
+      sbDeleteRecord(deletedId).then(function() { sbSchedulePush(); }).catch(function() { sbSchedulePush(); });
+    } else {
+      sbSchedulePush();
+    }
+    showToast(`${t('toast_deleted').replace('{name}',name)}`);
   });
 }
 
@@ -10529,7 +11542,7 @@ function duplicateRow(uid) {
   if (!src) return;
   pushUndo();
   // Cria cópia profunda, apaga id (usuário deve preencher) e gera novo _uid
-  const newUid = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  const newUid = Date.now() * 1000 + Math.floor(Math.random() * 999) + 1; // [v49.9 FIX] garante _uid único e não-zero
   const copy = Object.assign({}, src, {
     _uid: newUid,
     id: '',           // ID em branco — usuário preenche
@@ -10558,13 +11571,13 @@ function duplicateRow(uid) {
       if (idTd && typeof startInlineEdit === 'function') startInlineEdit(newUid, 'id', idTd);
     }
   }, 80);
-  showToast(LANG==='en' ? '⧉ Row duplicated — fill in the new ID' : '⧉ Linha duplicada — preencha o novo Código');
+  showToast(t('toast_duplicated'));
 }
 
 // Adiciona linha em branco ao final (como clicar na linha vazia do Excel)
 function addBlankRow() {
   pushUndo();
-  const newUid = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  const newUid = Date.now() * 1000 + Math.floor(Math.random() * 999) + 1; // [v49.9 FIX] garante _uid único e não-zero
   const blank = {
     _uid: newUid,
     id: '',
@@ -10607,11 +11620,11 @@ function addBlankRow() {
       if (idTd && typeof startInlineEdit === 'function') startInlineEdit(newUid, 'id', idTd);
     }
   }, 80);
-  showToast(LANG==='en' ? '＋ New row added — fill in the fields' : '＋ Nova linha adicionada — preencha os campos');
+  showToast(t('toast_row_added'));
 }
 
 // deleteRecord_real é alias de deleteRecord (mantido para compatibilidade de hooks)
-const deleteRecord_real = deleteRecord;
+var deleteRecord_real = deleteRecord;
 
 
 function autoCalc(){
@@ -10633,7 +11646,7 @@ function updateValidityBar(){
   const vText=document.getElementById('v-text'); if(vText) vText.textContent=remaining<0?`${t('d_expired')} ${Math.abs(remaining)}${t('d_days')}`:remaining===0?`${t('d_today')}`:`${remaining}${t('d_days')} ${t('d_remaining')}`;
   if(vText) vText.style.color=color;
   const vBar=document.getElementById('v-bar'); if(vBar) vBar.style.cssText=`width:${pct}%;background:${pct>=100?'var(--red)':pct>=80?'var(--orange)':'var(--green)'}`;
-  const vPct=document.getElementById('v-pct'); if(vPct) vPct.textContent=pct+(LANG==='en'?'% used':LANG==='es'?'% usado':'% usado');
+  const vPct=document.getElementById('v-pct'); if(vPct) vPct.textContent=pct+(t('lbl_storage_used'));
   wrap.style.display='block';
 }
 
@@ -10670,7 +11683,7 @@ function openFileForRow(uid){
 // ═══════════════════════════════════════════════════════
 // NOTIFICATIONS
 // ═══════════════════════════════════════════════════════
-let _notifRead=new Set(),_notifOpen=false,_lastCrit=0;
+var _notifRead=new Set(),_notifOpen=false,_lastCrit=0;
 function buildNotifs(){
   const urgent=DB.filter(r=>r.prox_calib&&r.dias_vencer!==null&&r.dias_vencer<=90).sort((a,b)=>a.dias_vencer-b.dias_vencer);
   const crit=urgent.filter(r=>r.dias_vencer<=30);_lastCrit=crit.length;
@@ -10693,7 +11706,7 @@ function buildNotifs(){
 function toggleNotif(){/* sino removido — função mantida para não quebrar chamadas residuais */}
 function markAllRead(){DB.forEach(r=>{if(r.dias_vencer!==null&&r.dias_vencer<=30)_notifRead.add(r._uid);});}
 function notifClick(uid){_notifRead.add(uid);showTab('alertas',document.querySelectorAll('.tab')[1]);}
-let _autoNotifInterval = null;
+var _autoNotifInterval = null;
 function startAutoNotif(){buildNotifs();if(_autoNotifInterval) clearInterval(_autoNotifInterval); _autoNotifInterval = setInterval(()=>{const prev=_lastCrit;buildNotifs();if(_lastCrit>prev){showToast('🔔 Novos alertas de vencimento!','err');}},30*60*1000);}
 
 // ═══════════════════════════════════════════════════════
@@ -10701,11 +11714,14 @@ function startAutoNotif(){buildNotifs();if(_autoNotifInterval) clearInterval(_au
 // ═══════════════════════════════════════════════════════
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='equipamentos_'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href);}
 // ── CAMPOS PERMITIDOS EM IMPORTAÇÃO — whitelist defensiva ─────────────────────
-const _IMPORT_STR_FIELDS = ['id','tipo','cliente','fabricante','descricao','localizacao',
+var _IMPORT_STR_FIELDS = ['id','tipo','cliente','fabricante','descricao','localizacao',
   'responsavel','empresa','cod_lab','ult_calib','prox_calib','status','status_calib',
   'notes','observacoes','link','link_data','sheet'];
 
 function _sanitizeImportedRecord(raw) {
+  // [v49.9 FIX] Normaliza o campo id: trim + colapsa espaços internos duplos
+  if (raw && raw.id) raw.id = String(raw.id).trim().replace(/\s+/g, ' ');
+  if (raw && !raw.id) return null; // descarta registros sem id
   if(!raw || typeof raw !== 'object') return null;
   const out = {};
   // Copia apenas campos conhecidos, descartando chaves arbitrárias
@@ -10726,7 +11742,7 @@ function importData(e) {
   const f = e.target.files[0];
   if(!f) return;
   // Validação básica de tipo MIME e tamanho (máx. 10 MB)
-  if(f.size > 10 * 1024 * 1024) { showToast('Arquivo muito grande (máx. 10 MB).', 'err'); e.target.value = ''; return; }
+  if(f.size > 10 * 1024 * 1024) { showToast(t('toast_file_too_big'), 'err'); e.target.value = ''; return; }
   const rd = new FileReader();
   rd.onload = ev => {
     try {
@@ -10751,7 +11767,7 @@ function importData(e) {
 
 // ── Cache de seletores DOM frequentes — evita getElementById em hot paths ──────
 // Inicializado no DOMContentLoaded; safe porque estes elementos são estáticos.
-let _$toast = null, _$toastMsg = null, _$syncInd = null;
+var _$toast = null, _$toastMsg = null, _$syncInd = null;
 document.addEventListener('DOMContentLoaded', function() {
   _$toast    = document.getElementById('toast');
   _$toastMsg = document.getElementById('toast-msg');
@@ -10761,14 +11777,24 @@ document.addEventListener('DOMContentLoaded', function() {
 // ═══════════════════════════════════════════════════════
 // TOAST
 // ═══════════════════════════════════════════════════════
-let _toastT = null;
+var _toastT = null;
 function showToast(msg, type = 'success') {
-  // Lazy init caso DOMContentLoaded já tenha disparado antes do cache acima
+  // [v49.9 FIX] Normaliza aliases e propaga para o window.showToast centralizado quando #toast não existe
+  // Isso garante que mensagens não sejam perdidas silenciosamente
   const t   = _$toast    || (_$toast    = document.getElementById('toast'));
   const tmEl= _$toastMsg || (_$toastMsg = document.getElementById('toast-msg'));
-  if(!t) return;
+  if(!t) {
+    // Fallback: usa window.showToast (toast flutuante) quando o elemento DOM não existe
+    if (typeof window.showToast === 'function' && window.showToast !== showToast) {
+      window.showToast(msg, type);
+    }
+    return;
+  }
   if(tmEl) tmEl.textContent = msg;
-  t.className = 'toast ' + (type === 'err' ? 'err' : '');
+  // [v49.9 FIX] Mapeia todos os tipos de erro para a classe 'err' (vermelho)
+  const _isErr = type === 'err' || type === 'error';
+  const _isWarn = type === 'warn' || type === 'warning';
+  t.className = 'toast' + (_isErr ? ' err' : _isWarn ? ' warn' : '');
   t.classList.add('on');
   if(_toastT) clearTimeout(_toastT);
   _toastT = setTimeout(() => t.classList.remove('on'), 3500);
@@ -10792,11 +11818,13 @@ function resetDB(){
 }
 // UNDO / REDO SYSTEM
 // ═══════════════════════════════════════════════════════
-let _undoStack = [];
-let _redoStack = [];
-const MAX_UNDO = 50;
+var _undoStack = [];
+var _redoStack = [];
+var MAX_UNDO = 50;
 
 function pushUndo() {
+  // [v49.9 FIX] Respeita MAX_UNDO antes de empurrar para não crescer indefinidamente
+  if (_undoStack.length >= MAX_UNDO) _undoStack.shift();
   // Snapshot current DB (without dias_vencer — will be recalculated)
   _undoStack.push(JSON.stringify(DB.map(r => { const {dias_vencer,...rest}=r; return rest; })));
   if (_undoStack.length > MAX_UNDO) _undoStack.shift();
@@ -10852,7 +11880,7 @@ function updateUndoRedoBtns() {
 // Keyboard shortcuts: Ctrl+Z = undo, Ctrl+Y or Ctrl+Shift+Z = redo
 document.addEventListener('keydown', e => {
   // Skip if user is typing inside an input/textarea/select
-  const tag = (e.target.tagName||'').toLowerCase();
+  var tag = (e.target.tagName||'').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
   if ((e.ctrlKey || e.metaKey) && !e.altKey) {
     if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undoAction(); return; }
@@ -10863,9 +11891,9 @@ document.addEventListener('keydown', e => {
 // ═══════════════════════════════════════════════════════
 // CARD LIST VIEW — Aba Equipamentos
 // ═══════════════════════════════════════════════════════
-let _eqViewMode = localStorage.getItem('rochling_eq_view') || 'cards'; // 'cards' | 'table'
-const CARDS_PER_PAGE = 24;
-let _cardPage = 1;
+var _eqViewMode = localStorage.getItem('rochling_eq_view') || 'cards'; // 'cards' | 'table'
+var CARDS_PER_PAGE = 24;
+var _cardPage = 1;
 
 function toggleEqView() {
   _eqViewMode = _eqViewMode === 'cards' ? 'table' : 'cards';
@@ -11021,11 +12049,11 @@ function renderCardList() {
 
 // Sobrescreve applyF para também atualizar os cards
 (function() {
-  const _origApplyF = window.applyF;
+  var _origApplyF = window.applyF;
   if (typeof _origApplyF === 'function') {
     window.applyF = function() {
       _cardPage = 1;
-      const r = _origApplyF.apply(this, arguments);
+      var r = _origApplyF.apply(this, arguments);
       if (_eqViewMode === 'cards') renderCardList();
       return r;
     };
@@ -11034,10 +12062,10 @@ function renderCardList() {
 
 // Atualiza cards quando os dados mudam
 (function() {
-  const _origRefreshInPlace = window.refreshInPlace;
+  var _origRefreshInPlace = window.refreshInPlace;
   if (typeof _origRefreshInPlace === 'function') {
     window.refreshInPlace = function() {
-      const r = _origRefreshInPlace.apply(this, arguments);
+      var r = _origRefreshInPlace.apply(this, arguments);
       if (_eqViewMode === 'cards') renderCardList();
       return r;
     };
@@ -11053,6 +12081,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // BOOT
 // ═══════════════════════════════════════════════════════
 function updateAll(){
+  // [v49.9 FIX] Proteção contra DB undefined ou inválido
+  if (typeof DB === 'undefined' || !Array.isArray(DB)) return;
   // Clear stale bulk selections
   if(typeof _selectedUIDs !== 'undefined') {
     ['geral','alert'].forEach(tbl => {
@@ -11159,8 +12189,8 @@ function _handleQrDeepLink() {
    DRILL_DOWN_INSTALLED — clique nos gráficos abre tabela editável
    ═══════════════════════════════════════════════════════ */
 (function(){
-  const norm = s => (s==null?'':String(s)).trim();
-  const lc   = s => norm(s).toLowerCase();
+  var norm = s => (s==null?'':String(s)).trim();
+  var lc   = s => norm(s).toLowerCase();
 
   // ── Helper: converte label do gráfico mensal → {year, month}
   // Suporta formatos: "mai./25", "mai/25", "mai. 2025", "May 25", "5/25" etc.
@@ -11205,50 +12235,50 @@ function _handleQrDeepLink() {
   }
 
   // Mapa: chartKey → { title, filter(label, idx) → array de registros DB }
-  const DRILL = {
+  var DRILL = {
     'todos':    { title:'📦 Todos os Equipamentos', filter:()=>DB },
     'ativos':   { title:'✅ Equipamentos Ativos',   filter:()=>DB.filter(r=>lc(r.status)==='ativo') },
     'inativos': { title:'⏸ Equipamentos Inativos', filter:()=>DB.filter(r=>lc(r.status)==='inativo') },
-    'calib-ok': { title:'🎯 Calibração OK (em dia)', filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>90) },
-    'vencidos': { title:'🚨 Calibração Vencida',   filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0) },
+    'calib-ok': { title:t('ch_lbl_calib_ok'), filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>90) },
+    'vencidos': { title:t('ch_lbl_exp_calib'),   filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0) },
     'vence30':  { title:'⚠️ Vencem em 30 dias',    filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0&&r.dias_vencer<=30) },
     'vence90':  { title:'📅 Vencem em 90 dias',    filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>30&&r.dias_vencer<=90) },
     'saude':    { title:'💚 Equipamentos em Dia',  filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0) },
     'mensal-prev': {
-      title: '📋 Calibrações Previstas no Mês',
+      title: t('ch_lbl_sched'),
       filter: (label) => {
-        const md = mensalLabelToDate(label);
+        var md = mensalLabelToDate(label);
         if(!md) return [];
         return DB.filter(r => {
           if(!r.prox_calib) return false;
-          const pc = new Date(r.prox_calib+'T00:00:00');
+          var pc = new Date(r.prox_calib+'T00:00:00');
           return pc.getFullYear()===md.year && pc.getMonth()===md.month;
         });
       }
     },
     'mensal-real': {
-      title: '✅ Calibrações Realizadas no Mês',
+      title: t('ch_lbl_done'),
       filter: (label) => {
-        const md = mensalLabelToDate(label);
+        var md = mensalLabelToDate(label);
         if(!md) return [];
         return DB.filter(r => {
           if(!r.ult_calib) return false;
-          const uc = new Date(r.ult_calib+'T00:00:00');
+          var uc = new Date(r.ult_calib+'T00:00:00');
           return uc.getFullYear()===md.year && uc.getMonth()===md.month;
         });
       }
     },
     'mensal-venc': {
-      title: '🚨 Previstas Sem Realização no Mês',
+      title: t('ch_lbl_missed'),
       filter: (label) => {
-        const md = mensalLabelToDate(label);
+        var md = mensalLabelToDate(label);
         if(!md) return [];
         return DB.filter(r => {
           if(!r.prox_calib) return false;
-          const pc = new Date(r.prox_calib+'T00:00:00');
+          var pc = new Date(r.prox_calib+'T00:00:00');
           if(pc.getFullYear()!==md.year || pc.getMonth()!==md.month) return false;
           if(!r.ult_calib) return true;
-          const uc = new Date(r.ult_calib+'T00:00:00');
+          var uc = new Date(r.ult_calib+'T00:00:00');
           return !(uc.getFullYear()===md.year && uc.getMonth()===md.month);
         });
       }
@@ -11256,7 +12286,7 @@ function _handleQrDeepLink() {
     'calib': {
       title: '📊 Status de Calibração',
       filter: (label) => {
-        const l = lc(label);
+        var l = lc(label);
         if(l.includes('aprov'))   return DB.filter(r=>(r.status_calib||'').includes('aprovado'));
         if(l.includes('necess'))  return DB.filter(r=>(r.status_calib||'').includes('Necessária'));
         return DB.filter(r=>!((r.status_calib||'').includes('aprovado')||(r.status_calib||'').includes('Necessária')));
@@ -11265,24 +12295,24 @@ function _handleQrDeepLink() {
     'status': {
       title: '⚡ Status Operacional',
       filter: (label) => {
-        const l = lc(label);
+        var l = lc(label);
         if(l.includes('ativ') && !l.includes('inativ')) return DB.filter(r=>(r.status||'').toUpperCase()==='ATIVO');
         return DB.filter(r=>(r.status||'').toUpperCase()!=='ATIVO');
       }
     },
     'tipos':      { title:'🔧 Tipo de Equipamento',    filter:(label)=>DB.filter(r=>lc(r.tipo).startsWith(lc(label).replace(/…$/,'')))},
-    'tipos-venc': { title:'🔴 Tipo c/ Calibração Vencida', filter:(label)=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0&&lc(r.tipo).startsWith(lc(label).replace(/…$/,'')))},
+    'tipos-venc': { title:t('ch_lbl_exp_type'), filter:(label)=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0&&lc(r.tipo).startsWith(lc(label).replace(/…$/,'')))},
     'venc6': {
       title: '📅 Vencimentos — Próx. 6 Meses',
       filter: (label) => {
         // label vem como "MMM/YY" no padrão do app — match por mês/ano
-        const now = new Date();
-        for(let i=0;i<6;i++){
-          const d = new Date(now.getFullYear(), now.getMonth()+i, 1);
-          const lab = d.toLocaleDateString(_locale(),{month:'short'}).replace('.','') + '/' + String(d.getFullYear()).slice(-2);
+        var now = new Date();
+        for(var i=0;i<6;i++){
+          var d = new Date(now.getFullYear(), now.getMonth()+i, 1);
+          var lab = d.toLocaleDateString(_locale(),{month:'short'}).replace('.','') + '/' + String(d.getFullYear()).slice(-2);
           if(lc(lab) === lc(label) || lc(label).startsWith(lc(lab).slice(0,3))){
             return DB.filter(r=>{ if(!r.prox_calib) return false;
-              const pc=new Date(r.prox_calib+'T00:00:00');
+              var pc=new Date(r.prox_calib+'T00:00:00');
               return pc.getMonth()===d.getMonth() && pc.getFullYear()===d.getFullYear();
             });
           }
@@ -11290,17 +12320,17 @@ function _handleQrDeepLink() {
         return [];
       }
     },
-    'locais':  { title:'📍 Localização', filter:(label)=>DB.filter(r=>lc(r.localizacao).startsWith(lc(label).replace(/…$/,'')))},
+    'locais':  { title:t('ch_lbl_location'), filter:(label)=>DB.filter(r=>lc(r.localizacao).startsWith(lc(label).replace(/…$/,'')))},
     'emp':     { title:'🏢 Empresa Executante', filter:(label)=>DB.filter(r=>lc(r.empresa)===lc(label))},
     'venc-mes':{ title:'📅 Vencimentos por Mês',
       filter:(label)=>{
-        const now=new Date();
-        for(let i=-6;i<=6;i++){
-          const d=new Date(now.getFullYear(),now.getMonth()+i,1);
-          const lab=d.toLocaleDateString(_locale(),{month:'short'}).replace('.','')+'/'+String(d.getFullYear()).slice(-2);
+        var now=new Date();
+        for(var i=-6;i<=6;i++){
+          var d=new Date(now.getFullYear(),now.getMonth()+i,1);
+          var lab=d.toLocaleDateString(_locale(),{month:'short'}).replace('.','')+'/'+String(d.getFullYear()).slice(-2);
           if(lc(lab)===lc(label) || lc(label).startsWith(lc(lab).slice(0,3))){
             return DB.filter(r=>{if(!r.prox_calib)return false;
-              const pc=new Date(r.prox_calib+'T00:00:00');
+              var pc=new Date(r.prox_calib+'T00:00:00');
               return pc.getMonth()===d.getMonth()&&pc.getFullYear()===d.getFullYear();
             });
           }
@@ -11308,15 +12338,15 @@ function _handleQrDeepLink() {
         return [];
       }
     },
-    'resp':     { title:'👤 Responsável',     filter:(label)=>DB.filter(r=>lc(r.responsavel).startsWith(lc(label).replace(/…$/,'')))},
+    'resp':     { title:t('ch_lbl_resp'),     filter:(label)=>DB.filter(r=>lc(r.responsavel).startsWith(lc(label).replace(/…$/,'')))},
     'emp-venc': { title:'🏭 Vencidos por Empresa', filter:(label)=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0 && lc(r.empresa).startsWith(lc(label).replace(/…$/,'')))},
     'freq': {
-      title: '⏱ Frequência de Calibração',
+      title: t('ch_lbl_freq'),
       filter: (label) => {
         // labels do gráfico = chaves de fb (ex: "Anual", "Semestral", etc)
         return DB.filter(r=>{
-          const days=Number(r.freq_dias)||0;
-          let bucket;
+          var days=Number(r.freq_dias)||0;
+          var bucket;
           if(days<=0) bucket='—';
           else if(days<=30) bucket='Mensal';
           else if(days<=90) bucket='Trimestral';
@@ -11330,7 +12360,7 @@ function _handleQrDeepLink() {
   };
 
   // Estado do drill atual (para refresh)
-  let drillState = null;
+  var drillState = null;
   window.__getDrillState = () => drillState;
 
   // fmtDate local removido — usa o global fmtDateSafe (timezone-safe, sem new Date(str))
@@ -11420,16 +12450,16 @@ function _handleQrDeepLink() {
   }
 
   // Estado de filtros inline do drill-down
-  let _drillFilters = {};
+  var _drillFilters = {};
 
   window.__drillApplyFilter = function(el) {
     // [v34 FIX] Salva qual campo estava ativo e sua posição de cursor antes de re-renderizar
-    const activeKey = el.dataset.key;
-    const activeCursor = el.selectionStart;
+    var activeKey = el.dataset.key;
+    var activeCursor = el.selectionStart;
     _drillFilters[el.dataset.key] = el.value;
     _doRefreshDrill();
     // Restaura foco no mesmo campo após re-render
-    const restored = document.querySelector(`.drill-col-filter[data-key="${activeKey}"][type="text"]`);
+    var restored = document.querySelector(`.drill-col-filter[data-key="${activeKey}"][type="text"]`);
     if (restored) {
       restored.focus();
       try { restored.setSelectionRange(activeCursor, activeCursor); } catch(e){}
@@ -11467,7 +12497,7 @@ function _handleQrDeepLink() {
   };
 
   window.openDrill = function(chartKey, label){
-    const cfg = DRILL[chartKey]; if(!cfg) return;
+    var cfg = DRILL[chartKey]; if(!cfg) return;
     _drillFilters = {};
     drillState = { key:chartKey, label, filter:()=>cfg.filter(label) };
     document.getElementById('drill-title').textContent = cfg.title;
@@ -11500,16 +12530,16 @@ function _handleQrDeepLink() {
     Object.keys(DRILL).forEach(attachClick);
   }
   // tenta repetidamente até os charts existirem (renderCharts pode rodar depois)
-  let tries=0;
-  const wireInterval = setInterval(()=>{
+  var tries=0;
+  var wireInterval = setInterval(()=>{
     wireAll(); tries++;
     if(tries>40) clearInterval(wireInterval);
   },250);
   // também re-wire quando atualiza
-  const _origUpdateAll = window.updateAll;
+  var _origUpdateAll = window.updateAll;
   if(typeof _origUpdateAll==='function'){
     window.updateAll = function(){
-      const r = _origUpdateAll.apply(this,arguments);
+      var r = _origUpdateAll.apply(this,arguments);
       setTimeout(wireAll, 50);
       setTimeout(wireAll, 300);
       setTimeout(updateTabBadges, 100);
@@ -11528,8 +12558,8 @@ function _handleQrDeepLink() {
     }catch(e){ console.warn('[updateTabBadges]', e); }
   }
   // dispara na carga inicial
-  let badgeTries=0;
-  const badgeInterval=setInterval(()=>{
+  var badgeTries=0;
+  var badgeInterval=setInterval(()=>{
     if(typeof DB!=='undefined'&&DB.length>0){ updateTabBadges(); clearInterval(badgeInterval); }
     if(++badgeTries>40) clearInterval(badgeInterval);
   },300);
@@ -11554,23 +12584,23 @@ function _handleQrDeepLink() {
   ['saveRecord','deleteRecord_real','deleteRecord','deleteInline'].forEach(installHook);
 
   // ── Z-index: edit-modal acima do drill-modal quando ambos abertos
-  const _origOpenEdit = window.openEdit;
+  var _origOpenEdit = window.openEdit;
   if(typeof _origOpenEdit==='function'){
     window.openEdit = function(){
-      const drillOpen = document.getElementById('drill-modal').classList.contains('on');
-      const r = _origOpenEdit.apply(this, arguments);
+      var drillOpen = document.getElementById('drill-modal').classList.contains('on');
+      var r = _origOpenEdit.apply(this, arguments);
       if(drillOpen){
-        const em = document.getElementById('edit-modal');
+        var em = document.getElementById('edit-modal');
         if(em) em.style.zIndex = '600';
       }
       return r;
     };
   }
-  const _origCloseModal = window.closeModal;
+  var _origCloseModal = window.closeModal;
   if(typeof _origCloseModal==='function'){
     window.closeModal = function(){
-      const r = _origCloseModal.apply(this, arguments);
-      const em = document.getElementById('edit-modal');
+      var r = _origCloseModal.apply(this, arguments);
+      var em = document.getElementById('edit-modal');
       if(em) em.style.zIndex = '';
       return r;
     };
@@ -11579,9 +12609,9 @@ function _handleQrDeepLink() {
   // ESC fecha o drill (se edit-modal não estiver aberto)
   document.addEventListener('keydown', e=>{
     if(e.key!=='Escape') return;
-    const editOpen = document.getElementById('edit-modal').classList.contains('on');
-    const drillOpen = document.getElementById('drill-modal').classList.contains('on');
-    const pdfOpen = document.getElementById('pdf-print-frame').classList.contains('on');
+    var editOpen = document.getElementById('edit-modal').classList.contains('on');
+    var drillOpen = document.getElementById('drill-modal').classList.contains('on');
+    var pdfOpen = document.getElementById('pdf-print-frame').classList.contains('on');
     if(pdfOpen) { closePdfModal(); return; }
     if(drillOpen && !editOpen) closeDrill();
   });
@@ -11591,10 +12621,10 @@ function _handleQrDeepLink() {
 // FILL HANDLE — arrastar para preencher várias células
 // ═══════════════════════════════════════════════════════
 (function(){
-  let _fd = null; // fill drag state
+  var _fd = null; // fill drag state
 
   // Ghost tooltip element
-  const ghost = document.createElement('div');
+  var ghost = document.createElement('div');
   ghost.className = 'fill-ghost';
   ghost.id = 'fill-ghost';
   document.body.appendChild(ghost);
@@ -11606,16 +12636,16 @@ function _handleQrDeepLink() {
     e.stopPropagation();
     if(_inlineActive) cancelInlineEdit();
 
-    const r = DB.find(x => x._uid === uid);
+    var r = DB.find(x => x._uid === uid);
     if(!r) return;
 
     // Build ordered row list from current filtered table (geral only)
-    const allRows = pag.eq.rows;
-    const srcIdx  = allRows.findIndex(x => x._uid === uid);
+    var allRows = pag.eq.rows;
+    var srcIdx  = allRows.findIndex(x => x._uid === uid);
     if(srcIdx < 0) return;
 
-    const srcVal   = r[k];
-    const displayV = srcVal !== null && srcVal !== undefined && srcVal !== '' ? String(srcVal) : '—';
+    var srcVal   = r[k];
+    var displayV = srcVal !== null && srcVal !== undefined && srcVal !== '' ? String(srcVal) : '—';
 
     _fd = { uid, k, srcVal, srcIdx, allRows, previewIdxs: new Set() };
 
@@ -11626,7 +12656,7 @@ function _handleQrDeepLink() {
     ghost.style.top  = (e.clientY - 14) + 'px';
 
     // Highlight source cell
-    const srcRow = document.querySelector(`tr[data-uid="${uid}"]`);
+    var srcRow = document.querySelector(`tr[data-uid="${uid}"]`);
     if(srcRow) srcRow.querySelector(`[data-col="${k}"]`)?.classList.add('fill-active');
 
     document.addEventListener('mousemove', onFillMove);
@@ -11719,7 +12749,7 @@ function _handleQrDeepLink() {
     if(changed > 0) {
       saveLS();
       sbSchedulePush(); // [FIX] Agenda sync Supabase sem guarda sbActive() — sbPushOrRetry() já gerencia retry em caso de instabilidade
-      showToast(`✅ ${changed} célula(s) preenchida(s) — clique em 🔄 para atualizar filtros`);
+      showToast(t('toast_cells_filled').replace('{n}', changed));
       // Re-render only the affected rows — stay in place
       previewIdxs.forEach(idx => {
         const r2 = allRows[idx];
@@ -11733,8 +12763,8 @@ function _handleQrDeepLink() {
 // ═══════════════════════════════════════════════════════
 // CARD VIEW — SELEÇÃO MÚLTIPLA PARA QR EM LOTE
 // ═══════════════════════════════════════════════════════
-const _cardSelectedUIDs = new Set();
-let _cardSelectMode = false;
+var _cardSelectedUIDs = new Set();
+var _cardSelectMode = false;
 
 function toggleCardSelectMode() {
   _cardSelectMode = !_cardSelectMode;
@@ -11809,7 +12839,7 @@ function openQrBulkModal(source) {
   }
   if (!uids || uids.size === 0) {
     if(typeof showToast === 'function') showToast('⚠ Nenhum equipamento selecionado.', 'err');
-    else showToast('⚠️ Nenhum equipamento selecionado.');
+    else showToast(t('toast_none_selected'));
     return;
   }
   const rows = DB.filter(r => uids.has(r._uid));
@@ -11883,7 +12913,7 @@ function openQrBulkModal(source) {
   updateQrBulkLayoutInfo(rows.length);
 }
 
-let _qrBulkSize = 'mini';
+var _qrBulkSize = 'mini';
 function selectQrBulkSize(size) {
   _qrBulkSize = size;
   document.querySelectorAll('[id^="qrb-lbl-"]').forEach(el => {
@@ -11920,7 +12950,7 @@ async function printQrBulk(uids) {
   // [v38 FIX] Aceita tanto Set quanto Array para robustez
   if (Array.isArray(uids)) uids = new Set(uids);
   if (!(uids instanceof Set) || uids.size === 0) {
-    if (typeof showToast === 'function') showToast('⚠️ Nenhum equipamento selecionado.', 'err');
+    if (typeof showToast === 'function') showToast(t('toast_none_selected'), 'err');
     return;
   }
   // ⚠️ Lê TODOS os valores ANTES de remover o modal do DOM
@@ -12098,9 +13128,9 @@ ${Array.from({length: pages}, (_,pi) => {
   setTimeout(() => win.print(), 1200);
 }
 
-const _selectedUIDs = { geral: new Set(), alert: new Set(), rep: new Set() };
+var _selectedUIDs = { geral: new Set(), alert: new Set(), rep: new Set() };
 
-const BULK_FIELDS = {
+var BULK_FIELDS = {
   status:       { type:'select', options:['ATIVO','INATIVO'] },
   status_calib: { type:'select', options:['Instrumento Calibrado e aprovado','Calibração Necessária','DESCARTADO','Não encontrado'] },
   empresa:      { type:'text' },
@@ -12187,7 +13217,7 @@ function onBulkFieldChange(tbl) {
 function applyBulkEdit(tbl) {
   // [v49.9 FIX] Guarda _bloqueioSemPlanta: impede ação sem planta configurada
   if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
-    showToast('🔒 Acesso bloqueado: nenhuma planta configurada para este usuário.', 'err');
+    showToast(t('toast_blocked'), 'err');
     return;
   }
 
@@ -12213,8 +13243,12 @@ function applyBulkEdit(tbl) {
     if(!uids.has(String(r._uid))) return r;
     const updated = { ...r, [field]: field==='freq_dias' ? parseInt(newVal)||r.freq_dias : newVal };
     changed++;
-    return recalcRecord(updated);
-  }).filter(r => r !== undefined && r !== null); // [v49.8 FIX] Remove any undefined/null entries
+    // [v49.9 FIX] recalcRecord modifica o objeto in-place e retorna undefined.
+    // O map precisa do objeto, não do retorno. Chamamos recalcRecord para efeito colateral
+    // e retornamos 'updated' explicitamente.
+    recalcRecord(updated);
+    return updated;
+  }).filter(r => r !== undefined && r !== null);
 
   // Confirm toast
   showToast(`✔ ${changed} registro(s) atualizado(s) — clique em 🔄 para atualizar filtros`);
@@ -12243,7 +13277,7 @@ function quickRefresh() {
   try { _statsCache = null; } catch(_) {}
   try { if (typeof updateKPIs === 'function') updateKPIs(); } catch(_) {}
   try { if (typeof refreshInPlace === 'function') refreshInPlace(); } catch(_) {}
-  try { showToast('✅ Atualizado com sucesso'); } catch(_) {}
+  try { showToast(t('toast_updated_ok')); } catch(_) {}
 }
 window.quickRefresh = quickRefresh;
 
@@ -12252,16 +13286,16 @@ function bulkDelete(tbl) {
   if(uids.size === 0) return;
   // [v49.9 FIX] Guarda _bloqueioSemPlanta antes de abrir o modal
   if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
-    showToast('🔒 Acesso bloqueado: nenhuma planta configurada para este usuário.', 'err');
+    showToast(t('toast_blocked'), 'err');
     return;
   }
   // [v25 FIX] replaced blocking confirm()
-  _confirmModal(`Excluir ${uids.size} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`, function() { _v25BulkDeleteBody(uids, tbl); }); return;
+  _confirmModal(t('bulk_delete_confirm').replace('{n}', uids.size), function() { _v25BulkDeleteBody(uids, tbl); }); return;
 }
 function _v25BulkDeleteBody(uids, tbl) {
   // [v49.9 FIX] Guarda _bloqueioSemPlanta: impede ação sem planta configurada
   if (typeof _currentUnidade !== 'undefined' && _currentUnidade === '__BLOQUEADO__') {
-    showToast('🔒 Acesso bloqueado: nenhuma planta configurada para este usuário.', 'err');
+    showToast(t('toast_blocked'), 'err');
     return;
   }
 
@@ -12304,7 +13338,7 @@ function clearSelection(tbl) {
 
 (function(){
   // Colunas disponíveis para impressão
-  const PDF_COLS = [
+  var PDF_COLS = [
     { k:'id',          l:'Código' },
     { k:'tipo',        l:'Tipo' },
     { k:'descricao',   l:'Descrição' },
@@ -12322,18 +13356,18 @@ function clearSelection(tbl) {
   ];
 
   // Colunas selecionadas por padrão
-  const DEFAULT_COLS = ['id','tipo','descricao','localizacao','empresa','ult_calib','prox_calib','dias_vencer','status_calib'];
+  var DEFAULT_COLS = ['id','tipo','descricao','localizacao','empresa','ult_calib','prox_calib','dias_vencer','status_calib'];
 
-  let _pdfOri = 'landscape';
-  let _pdfSz  = 10;
-  let _pdfCols = [...DEFAULT_COLS];
-  let _pdfRows = [];
-  let _pdfTitle = '';
-  let _pdfSub   = '';
+  var _pdfOri = 'landscape';
+  var _pdfSz  = 10;
+  var _pdfCols = [...DEFAULT_COLS];
+  var _pdfRows = [];
+  var _pdfTitle = '';
+  var _pdfSub   = '';
 
   window.openPdfModal = function() {
     // Captura os dados e título do drill modal aberto
-    const ds = (typeof window.__getDrillState === 'function') ? window.__getDrillState() : null;
+    var ds = (typeof window.__getDrillState === 'function') ? window.__getDrillState() : null;
     if(ds) {
       _pdfRows  = ds.filter();
       _pdfTitle = document.getElementById('drill-title')?.textContent || 'Relatório';
@@ -12374,7 +13408,7 @@ function clearSelection(tbl) {
   }
 
   window.togglePdfCol = function(k, el) {
-    const idx = _pdfCols.indexOf(k);
+    var idx = _pdfCols.indexOf(k);
     if(idx >= 0) { if(_pdfCols.length > 1) _pdfCols.splice(idx,1); }
     else _pdfCols.push(k);
     el.classList.toggle('on', _pdfCols.includes(k));
@@ -12409,23 +13443,23 @@ function clearSelection(tbl) {
 
   window.executePrint = function() {
     closePdfModal();
-    const cols = PDF_COLS.filter(c => _pdfCols.includes(c.k));
-    const rows = _pdfRows;
-    const now  = new Date().toLocaleString(_locale());
-    const colW = _pdfOri === 'landscape' ? Math.floor(260/cols.length) : Math.floor(180/cols.length);
+    var cols = PDF_COLS.filter(c => _pdfCols.includes(c.k));
+    var rows = _pdfRows;
+    var now  = new Date().toLocaleString(_locale());
+    var colW = _pdfOri === 'landscape' ? Math.floor(260/cols.length) : Math.floor(180/cols.length);
 
-    const thead = cols.map(c =>
+    var thead = cols.map(c =>
       `<th style="background:#1a1a1a !important;color:#f5f5f5;padding:7px ${_pdfSz<=8?'4px':'6px'};font-size:${_pdfSz-1}pt;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-right:1px solid #333;min-width:${colW}mm">${c.l}</th>`
     ).join('');
 
-    const tbody = rows.map((r, i) => {
-      const bg = i % 2 === 0 ? '#ffffff' : '#f8f9fc';
-      const cells = cols.map(c => {
-        const raw = r[c.k];
-        const txt = fmtVal(c.k, raw);
-        const color = c.k === 'dias_vencer' ? diasColor(raw) : 'inherit';
-        const fw = c.k === 'dias_vencer' && raw !== null && Number(raw) < 0 ? 'bold' : 'normal';
-        const ff = (c.k === 'id' || c.k === 'ult_calib' || c.k === 'prox_calib' || c.k === 'freq_dias' || c.k === 'dias_vencer')
+    var tbody = rows.map((r, i) => {
+      var bg = i % 2 === 0 ? '#ffffff' : '#f8f9fc';
+      var cells = cols.map(c => {
+        var raw = r[c.k];
+        var txt = fmtVal(c.k, raw);
+        var color = c.k === 'dias_vencer' ? diasColor(raw) : 'inherit';
+        var fw = c.k === 'dias_vencer' && raw !== null && Number(raw) < 0 ? 'bold' : 'normal';
+        var ff = (c.k === 'id' || c.k === 'ult_calib' || c.k === 'prox_calib' || c.k === 'freq_dias' || c.k === 'dias_vencer')
           ? 'font-family:monospace;font-size:' + (_pdfSz-1) + 'pt'
           : 'font-size:' + _pdfSz + 'pt';
         return `<td style="${ff};padding:5px ${_pdfSz<=8?'3px':'5px'};border-right:1px solid #e8eaf0;color:${color};font-weight:${fw};max-width:${colW+5}mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${txt}</td>`;
@@ -12433,12 +13467,12 @@ function clearSelection(tbl) {
       return `<tr style="background:${bg};border-bottom:1px solid #e8eaf0">${cells}</tr>`;
     }).join('');
 
-    const logoB64 = document.querySelector('.hdr img')?.src || '';
-    const totalRows = rows.length;
-    const vencidos  = rows.filter(r => r.dias_vencer !== null && r.dias_vencer < 0).length;
-    const ok        = rows.filter(r => r.dias_vencer !== null && r.dias_vencer > 90).length;
+    var logoB64 = document.querySelector('.hdr img')?.src || '';
+    var totalRows = rows.length;
+    var vencidos  = rows.filter(r => r.dias_vencer !== null && r.dias_vencer < 0).length;
+    var ok        = rows.filter(r => r.dias_vencer !== null && r.dias_vencer > 90).length;
 
-    const html = `<!DOCTYPE html>
+    var html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -12535,7 +13569,7 @@ function clearSelection(tbl) {
 </body>
 </html>`;
 
-    const win = window.open('', '_blank', 'width=1200,height=850');
+    var win = window.open('', '_blank', 'width=1200,height=850');
     if(!win) { alert('Permita popups para gerar o PDF.'); return; }
     win.document.write(html);
     win.document.close();
@@ -12682,9 +13716,9 @@ function clearSelection(tbl) {
 // ═══════════════════════════════════════════════════════
 // EQUIPMENT DETAIL VIEW
 // ═══════════════════════════════════════════════════════
-let _viewUID  = null;
-let _viewList = [];  // list of UIDs for navigation (current table rows)
-let _viewIdx  = 0;
+var _viewUID  = null;
+var _viewList = [];  // list of UIDs for navigation (current table rows)
+var _viewIdx  = 0;
 
 function openEquipView(uid) {
   // Build nav list from current active table rows
@@ -12965,7 +13999,7 @@ ${(r.observacoes||r.notes)?`<div class="sec"><div class="sec-title">Observaçõe
 // [v30] PDF da aba Equipamentos — imprime os registros atualmente filtrados/visíveis
 window.openPdfEquipamentos = function() {
   var rows = (typeof pag !== 'undefined' && pag.eq && pag.eq.rows) ? pag.eq.rows : (window.DB || []);
-  if (!rows.length) { showToast && showToast('Nenhum registro visível para imprimir.', 'err'); return; }
+  if (!rows.length) { showToast && showToast(t('toast_none_visible'), 'err'); return; }
   // Injeta no estado do drilldown para o openPdfModal reutilizar
   window.__getDrillState = function() { return { filter: function() { return rows; } }; };
   var titleEl = document.getElementById('drill-title');
@@ -12976,16 +14010,16 @@ window.openPdfEquipamentos = function() {
 };
 
 window.openPdfModalBulk = function(tbl) {
-  const uids = _selectedUIDs[tbl];
+  var uids = _selectedUIDs[tbl];
   if(!uids || uids.size === 0) return;
   // Store selected rows in drill state and open PDF modal
-  const rows = DB.filter(r => uids.has(r._uid));
+  var rows = DB.filter(r => uids.has(r._uid));
   window.__getDrillState = () => ({
     filter: () => rows
   });
   // Update desc in pdf modal
-  const titleEl = document.getElementById('drill-title');
-  const subEl   = document.getElementById('drill-sub');
+  var titleEl = document.getElementById('drill-title');
+  var subEl   = document.getElementById('drill-sub');
   if(titleEl) titleEl.textContent = `🖨️ Seleção — ${rows.length} equipamento(s)`;
   if(subEl)   subEl.textContent   = rows.map(r=>r.id||r.descricao).join(', ').slice(0,80) + (rows.length>5?'…':'');
   openPdfModal();
@@ -13017,8 +14051,8 @@ function _buildQrPayload(r) {
     return BASE_URL + '?view=' + id + '&v=' + v;
 }
 
-let _qrUID = null;
-let _qrInstance = null;
+var _qrUID = null;
+var _qrInstance = null;
 
 function openQrModal(uid) {
   _qrUID = uid;
@@ -13029,8 +14063,8 @@ function openQrModal(uid) {
   // Busca dados FRESCOS do DB antes de qualquer operação
   const r = DB.find(x => x._uid === uid);
   if (!r) { 
-    if(typeof showToast === 'function') showToast('Instrumento não encontrado', 'err');
-    else showToast('⚠️ Instrumento não encontrado');
+    if(typeof showToast === 'function') showToast(t('toast_not_found'), 'err');
+    else showToast(t('toast_instr_not_found'));
     return; 
   }
 
@@ -13183,7 +14217,7 @@ function _qrModalHTML() {
 </div>`;
 }
 
-let _qrSelectedSize = 'mini';
+var _qrSelectedSize = 'mini';
 
 function selectQrSize(size, btn) {
   _qrSelectedSize = size;
@@ -13197,7 +14231,7 @@ function printQrLabel() {
   // ✅ CRÍTICO: Busca dados FRESCOS do DB ANTES de imprimir
   const r = DB.find(x => x._uid === _qrUID);
   if (!r) { 
-    if(typeof showToast === 'function') showToast('Equipamento não encontrado', 'err');
+    if(typeof showToast === 'function') showToast(t('toast_not_found'), 'err');
     closeQrModal();
     return; 
   }
@@ -13406,7 +14440,7 @@ function printQrLabel() {
 // Keyboard nav for equip-view modal + fechar QR modal com Escape
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    const qrOv = document.getElementById('qr-modal-ov');
+    var qrOv = document.getElementById('qr-modal-ov');
     if (qrOv && qrOv.classList.contains('on')) { closeQrModal(); return; }
   }
   if(!document.getElementById('equip-view-ov')?.classList.contains('on')) return;
@@ -13426,7 +14460,7 @@ document.addEventListener('keydown', e => {
 'use strict';
 
 // ── STATE ──────────────────────────────────────────────────────
-const BB = {
+var BB = {
   density:   { geral: 'default', alert: 'default', rep: 'default' },
   rowNums:   { geral: false, alert: false, rep: false },
   heatBars:  { geral: true,  alert: true,  rep: false },
@@ -13439,12 +14473,12 @@ const BB = {
 // ── DENSITY ────────────────────────────────────────────────────
 window.setDensity = function(tbl, d, btn) {
   BB.density[tbl] = d;
-  const wrap = document.getElementById(tbl === 'geral' ? 'eq-wrap' : tbl === 'alert' ? 'alert-wrap' : 'rep-wrap');
+  var wrap = document.getElementById(tbl === 'geral' ? 'eq-wrap' : tbl === 'alert' ? 'alert-wrap' : 'rep-wrap');
   if (!wrap) return;
   wrap.classList.remove('density-compact','density-default','density-comfortable');
   wrap.classList.add('density-' + d);
   // Update buttons
-  const group = document.getElementById('density-' + tbl);
+  var group = document.getElementById('density-' + tbl);
   if (group) group.querySelectorAll('.density-btn').forEach(b => b.classList.toggle('on', b.dataset.d === d));
 };
 
@@ -13459,7 +14493,7 @@ window.toggleRowNumbers = function(tbl, btn) {
 window.toggleStripe = function(tbl, btn) {
   BB.stripe[tbl] = !BB.stripe[tbl];
   if (btn) btn.classList.toggle('on', BB.stripe[tbl]);
-  const wrap = document.getElementById(tbl === 'geral' ? 'eq-wrap' : 'alert-wrap');
+  var wrap = document.getElementById(tbl === 'geral' ? 'eq-wrap' : 'alert-wrap');
   if (wrap) wrap.classList.toggle('stripe-mode', BB.stripe[tbl]);
 };
 
@@ -13691,7 +14725,7 @@ function _updateStatusBar(tbl) {
 }
 
 // ── COLUMN HEADER CONTEXT MENU ──────────────────────────────────
-let _ctxMenu = null;
+var _ctxMenu = null;
 function _showColContextMenu(e, tbl, colKey, th) {
   _hideColContextMenu();
   const menu = document.createElement('div');
@@ -13842,16 +14876,16 @@ function _rerenderBBTable(tbl) {
 
 // ── COL TOOLTIP for resize ──────────────────────────────────────
 (function() {
-  const tip = document.createElement('div');
+  var tip = document.createElement('div');
   tip.className = 'col-width-tip';
   tip.id = 'col-width-tip';
   document.body.appendChild(tip);
   document.addEventListener('mousemove', e => {
-    const resizer = e.target.closest && e.target.closest('.resizer');
+    var resizer = e.target.closest && e.target.closest('.resizer');
     if (resizer) {
-      const th = resizer.closest('th');
+      var th = resizer.closest('th');
       if (th) {
-        const w = Math.round(th.getBoundingClientRect().width);
+        var w = Math.round(th.getBoundingClientRect().width);
         tip.textContent = w + 'px';
         tip.style.display = 'block';
         tip.style.left = (e.clientX + 12) + 'px';
@@ -13865,20 +14899,20 @@ function _rerenderBBTable(tbl) {
 
 // ── KEYBOARD SHORTCUT: Alt+H = toggle heat bars ─────────────────
 document.addEventListener('keydown', e => {
-  const tag = (e.target.tagName || '').toLowerCase();
+  var tag = (e.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
   if (e.altKey && e.key === 'h') {
-    const btn = document.getElementById('btn-heatbar-geral');
+    var btn = document.getElementById('btn-heatbar-geral');
     toggleHeatBars('geral', btn);
     showToast && showToast('🎨 Heat Bars: ' + (BB.heatBars.geral ? 'ON' : 'OFF'));
   }
   if (e.altKey && e.key === 't') {
-    const btn = document.getElementById('btn-totals-geral');
+    var btn = document.getElementById('btn-totals-geral');
     toggleTotalsRow('geral', btn);
     showToast && showToast('∑ Linha de Totais: ' + (BB.totals.geral ? 'ON' : 'OFF'));
   }
   if (e.altKey && e.key === 'g') {
-    const sel = document.getElementById('group-by-geral');
+    var sel = document.getElementById('group-by-geral');
     if (sel) { sel.focus(); }
   }
   // [v19 MELHORIA 3] Cmd+K / Ctrl+K = spotlight search
@@ -13888,20 +14922,20 @@ document.addEventListener('keydown', e => {
   }
   // [v19] Esc fecha spotlight
   if (e.key === 'Escape') {
-    const sp = document.getElementById('spotlight-ov');
+    var sp = document.getElementById('spotlight-ov');
     if (sp && sp.classList.contains('on')) { sp.classList.remove('on'); }
   }
 });
 
 // ── INIT: run after DB loads ─────────────────────────────────────
-let _bbInitTries = 0;
-const _bbInitInterval = setInterval(() => {
+var _bbInitTries = 0;
+var _bbInitInterval = setInterval(() => {
   _bbInitTries++;
   if (typeof DB !== 'undefined' && DB && DB.length > 0) {
     clearInterval(_bbInitInterval);
     // Apply initial wrap classes
     ['eq-wrap'].forEach(id => {
-      const el = document.getElementById(id);
+      var el = document.getElementById(id);
       if (el) { el.classList.add('density-default', 'stripe-mode'); }
     });
     // First render pass
@@ -14114,7 +15148,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var dy = Math.abs(e.touches[0].clientY - startY);
       // If horizontal scroll detected, prevent page scroll
       if (dx > dy && dx > 5) {
-        // Horizontal table scroll - let it bubble but don't stop
+        // Horizontal table scroll - var it bubble but don't stop
       }
     }, { passive: true });
   });
@@ -14241,8 +15275,8 @@ document.addEventListener('DOMContentLoaded', function() {
 (function() {
 
   // Guarda snapshot do DB antes de qualquer edição na sessão de edição atual
-  let _snapshotDB = null;       // JSON snapshot para descartar
-  let _pendingEdits = [];       // [{ uid, k, oldVal, newVal }]
+  var _snapshotDB = null;       // JSON snapshot para descartar
+  var _pendingEdits = [];       // [{ uid, k, oldVal, newVal }]
 
   function sebShow() {
     const bar = document.getElementById('save-edits-bar');
@@ -14259,18 +15293,18 @@ document.addEventListener('DOMContentLoaded', function() {
   // ── Patch: commitInlineEdit ──
   // Salva localmente e re-renderiza imediatamente,
   // mas só envia ao Supabase quando o usuário confirmar.
-  // NOTA: _inlineActive, DB e _statsCache são declarados com let/const no escopo
+  // NOTA: _inlineActive, DB e _statsCache são declarados com let/var no escopo
   // global e NÃO ficam em window — por isso usamos as variáveis diretamente.
   window.commitInlineEdit = function(silent) {
     if(!_inlineActive) return;
     const { uid, k, td } = _inlineActive;
-    const input = td.querySelector('input,select');
+    var input = td.querySelector('input,select');
     if(!input) { _inlineActive = null; return; }
 
-    const newVal = k === 'freq_dias'
+    var newVal = k === 'freq_dias'
       ? (parseInt(input.value) || null)
       : input.value.trim();
-    const r = DB && DB.find(x => x._uid === uid);
+    var r = DB && DB.find(x => x._uid === uid);
 
     // Normaliza datas para comparação (garante formato YYYY-MM-DD dos dois lados)
     function normDate(v) {
@@ -14294,7 +15328,7 @@ document.addEventListener('DOMContentLoaded', function() {
         _snapshotDB = JSON.stringify(DB);
       }
       // Registra edição pendente (merge se mesmo uid+k)
-      const existing = _pendingEdits.findIndex(e => e.uid === uid && e.k === k);
+      var existing = _pendingEdits.findIndex(e => e.uid === uid && e.k === k);
       if(existing >= 0) {
         _pendingEdits[existing].newVal = finalVal;
       } else {
@@ -14321,7 +15355,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Toast leve informando edição pendente
       if(!silent) {
-        window.showToast && window.showToast('✏️ Editado — clique em 💾 Salvar alterações para confirmar');
+        window.showToast && window.showToast(t('toast_inline_edited'));
       }
 
     } else {
@@ -14334,7 +15368,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // ── Confirmar todas as edições → salva Supabase ──
   window.commitAllPendingEdits = function() {
     if(!_pendingEdits.length) { sebHide(); return; }
-    const n = _pendingEdits.length;
+    var n = _pendingEdits.length;
     _pendingEdits = [];
     _snapshotDB = null;
     // Salva localmente e no Supabase
@@ -14352,7 +15386,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window.discardAllPendingEdits = function() {
     if(!_snapshotDB) { sebHide(); return; }
     try {
-      const restored = JSON.parse(_snapshotDB);
+      var restored = JSON.parse(_snapshotDB);
       // Restaura DB preservando referência do array
       DB.length = 0;
       restored.forEach(r => DB.push(r));
@@ -14363,7 +15397,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.refreshInPlace && window.refreshInPlace();
     window.updateKPIs && window.updateKPIs();
     sebHide();
-    window.showToast && window.showToast('↩️ Alterações descartadas', 'warn');
+    window.showToast && window.showToast(t('toast_changes_discarded'), 'warn');
   };
 
 })();
@@ -15542,11 +16576,11 @@ function toggleColFilterDd(tbl, col, event) {
   function _processFile(file) {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
-      if (typeof showToast === 'function') showToast('Arquivo muito grande (máx. 10 MB).', 'err');
+      if (typeof showToast === 'function') showToast(t('toast_file_too_big'), 'err');
       return;
     }
     if (!file.name.match(/\.json$/i)) {
-      if (typeof showToast === 'function') showToast('Apenas ficheiros .json são aceites.', 'err');
+      if (typeof showToast === 'function') showToast(t('toast_json_only'), 'err');
       return;
     }
     var reader = new FileReader();
@@ -15805,7 +16839,7 @@ window.v12ConfirmImport = function() {
       msg += '\n\n... e ' + (validation.totalErrors - validation.errors.length) + ' erro(s) mais';
     }
     alert(msg);
-    if (typeof showToast === 'function') showToast('Importação cancelada - dados inválidos', 'error');
+    if (typeof showToast === 'function') showToast(t('toast_import_invalid'), 'error');
     return;
   }
 
@@ -15817,7 +16851,7 @@ window.v12ConfirmImport = function() {
     }
     warnMsg += '\n\nDeseja continuar mesmo assim?';
     if (!confirm(warnMsg)) {
-      if (typeof showToast === 'function') showToast('Importação cancelada pelo usuário', 'info');
+      if (typeof showToast === 'function') showToast(t('toast_import_cancel'), 'info');
       return;
     }
   }
@@ -15914,7 +16948,7 @@ window.v12ConfirmImport = function() {
     window._v12Pending = null; // [v30 FIX]
     var modal = document.getElementById('v12-import-preview');
     if (modal) modal.classList.remove('on');
-    if (typeof showToast === 'function') showToast('Importação cancelada.');
+    if (typeof showToast === 'function') showToast(t('toast_import_cancel'));
   };
 
   // Fechar preview ao clicar fora
@@ -15956,7 +16990,7 @@ window.v12ConfirmImport = function() {
     v12DismissBackupBanner();
     // Audit log
     v12AuditLog('export', '—', 'Exportação de backup JSON: ' + DB.length + ' registo(s).');
-    if (typeof showToast === 'function') showToast('✅ Backup exportado com sucesso.');
+    if (typeof showToast === 'function') showToast(t('toast_backup_ok'));
   };
 
   // ── Verifica se é necessário exibir o banner de backup ──────────────
@@ -15977,10 +17011,14 @@ window.v12ConfirmImport = function() {
         var msgEl   = document.getElementById('v12-bb-msg');
         if (msgEl) {
           if (neverBacked) {
-            msgEl.textContent = 'Aviso: Ainda não fez nenhum backup. Os dados dependem do browser — exporte agora para não perder informações.';
+            // [v49.9 FIX] Uses t() for full i18n support
+            msgEl.textContent = (typeof t === 'function') ? t('toast_backup_now') : 'Aviso: Ainda não fez nenhum backup. Os dados dependem do browser — exporte agora para não perder informações.';
           } else {
             var days = Math.floor((now - lastBackupTs) / (24*60*60*1000));
-            msgEl.textContent = 'Aviso: O seu último backup foi há ' + days + ' dia(s). Faça o download de segurança.';
+            // [v49.9 FIX] Uses t() with {d} placeholder replacement
+            msgEl.textContent = (typeof t === 'function')
+              ? t('toast_backup_warn').replace('{d}', days)
+              : 'Aviso: O seu último backup foi há ' + days + ' dia(s). Faça o download de segurança.';
           }
         }
         if (banner) banner.classList.add('on');
@@ -16014,7 +17052,7 @@ window.v12ConfirmImport = function() {
     // 1. Render initial audit table (in case reports tab is open on load)
     setTimeout(v12RenderAuditTable, 800);
 
-    // 2. Check backup banner after a short delay (let DB load first)
+    // 2. Check backup banner after a short delay (var DB load first)
     setTimeout(_checkBackupBanner, 1500);
 
     // 3. Hook exportData (original) para também fazer backup tracking
@@ -16126,11 +17164,11 @@ function cadSubmit(evt){
   var local  =(g('cad-local')&&g('cad-local').value ||'').trim();
 
   if(!idVal||!tipo||!desc||!local){
-    if(typeof showToast==='function') showToast('Preencha os campos obrigatórios (*)','err');
+    if(typeof showToast==='function') showToast(t('toast_fill_required'),'err');
     return;
   }
   if(DB.some(function(r){ return r.id===idVal; })){
-    if(typeof showToast==='function') showToast('⚠️ Código "'+idVal+'" já existe no parque!','err');
+    if(typeof showToast==='function') showToast(t('toast_code_dup').replace('{code}',idVal),'err');
     if(g('cad-id')) g('cad-id').focus();
     return;
   }
@@ -16242,7 +17280,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var uidsArr = JSON.parse(ov.dataset.uids || '[]');
       var uidsSet = new Set(uidsArr);
       if (uidsSet.size === 0) {
-        if (typeof showToast === 'function') showToast('⚠️ Nenhum equipamento selecionado.', 'err');
+        if (typeof showToast === 'function') showToast(t('toast_none_selected'), 'err');
         return;
       }
       if (typeof printQrBulk === 'function') printQrBulk(uidsSet);
@@ -17158,11 +18196,11 @@ document.addEventListener('DOMContentLoaded', function() {
   /* ── Abre o modal e inicia a câmera ─────────────────────────────── */
   window.openQrScannerModal = function () {
     var ov = document.getElementById('qr-scanner-ov');
-    if (!ov) { showToast && showToast('Scanner não disponível', 'error'); return; }
+    if (!ov) { showToast && showToast(t('toast_scan_unavail'), 'error'); return; }
 
     // Checa suporte a getUserMedia
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      showToast && showToast('📵 Câmera não suportada neste navegador.', 'error');
+      showToast && showToast(t('toast_cam_unsupported'), 'error');
       return;
     }
 
