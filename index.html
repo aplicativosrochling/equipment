@@ -3357,7 +3357,7 @@ input[type="checkbox"], input[type="radio"] {
         <!-- Row 2 -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-bottom:12px">
           <div>
-            <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3);margin-bottom:4px">Código Labortec</label>
+            <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3);margin-bottom:4px">Número de Série</label>
             <input id="cad-codlab" type="text" placeholder="Ex: 61714545"
               style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:6px;background:var(--surf);color:var(--tx);font-size:12px">
           </div>
@@ -3402,7 +3402,7 @@ input[type="checkbox"], input[type="radio"] {
           </div>
           <div>
             <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3);margin-bottom:4px">Empresa Executante</label>
-            <input id="cad-emp" type="text" placeholder="Ex: Labortec"
+            <input id="cad-emp" type="text" placeholder="Ex: SN-00123"
               style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:6px;background:var(--surf);color:var(--tx);font-size:12px">
           </div>
         </div>
@@ -3737,7 +3737,7 @@ input[type="checkbox"], input[type="radio"] {
       <div class="fg2"><label>Localização</label><input id="m-local" type="text"></div>
       <div class="fg2"><label>Responsável</label><input id="m-resp" type="text"></div>
       <div class="fg2"><label>Empresa Executante</label><input id="m-emp" type="text"></div>
-      <div class="fg2"><label>Código Labortec</label><input id="m-codlab" type="text"></div>
+      <div class="fg2"><label>Número de Série</label><input id="m-codlab" type="text"></div>
       <div class="fg2"><label>Última Calibração</label><input id="m-ult" type="date" oninput="autoCalc()"></div>
       <div class="fg2"><label>Próxima Calibração <span style="color:var(--accent);font-size:8px">AUTO</span></label><input id="m-prox" type="date" oninput="updateValidityBar()"></div>
       <div class="fg2"><label>Frequência (dias)</label><input id="m-freq" type="number" min="1" oninput="autoCalc()"></div>
@@ -4278,7 +4278,7 @@ const T = {
     // Col headers (COL_DEFS labels)
     col_id:         'Código',
     col_tipo:       'Tipo',
-    col_cod_lab:    'Cód. Labortec',
+    col_cod_lab:    'Nº de Série',
     col_cliente:    'Cliente',
     col_desc:       'Descrição',
     col_fab:        'Fabricante',
@@ -4322,7 +4322,7 @@ const T = {
     m_location:     'Localização',
     m_responsible:  'Responsável',
     m_company:      'Empresa Executante',
-    m_codlab:       'Código Labortec',
+    m_codlab:       'Número de Série',
     m_last_calib:   'Última Calibração',
     m_next_calib:   'Próxima Calibração',
     m_freq:         'Frequência (dias)',
@@ -4710,7 +4710,7 @@ const T = {
     tbl_equip_title:'Measurement Equipment',
     col_id:         'Code',
     col_tipo:       'Type',
-    col_cod_lab:    'Labortec Code',
+    col_cod_lab:    'Serial No.',
     col_cliente:    'Client',
     col_desc:       'Description',
     col_fab:        'Manufacturer',
@@ -4752,7 +4752,7 @@ const T = {
     m_location:     'Location',
     m_responsible:  'Responsible',
     m_company:      'Executing Company',
-    m_codlab:       'Labortec Code',
+    m_codlab:       'Serial Number',
     m_last_calib:   'Last Calibration',
     m_next_calib:   'Next Calibration',
     m_freq:         'Frequency (days)',
@@ -5118,7 +5118,7 @@ const T = {
     tbl_equip_title:'Equipos de Medición',
     col_id:         'Código',
     col_tipo:       'Tipo',
-    col_cod_lab:    'Cód. Labortec',
+    col_cod_lab:    'Nº de Série',
     col_cliente:    'Cliente',
     col_desc:       'Descripción',
     col_fab:        'Fabricante',
@@ -5160,7 +5160,7 @@ const T = {
     m_location:     'Ubicación',
     m_responsible:  'Responsable',
     m_company:      'Empresa Ejecutante',
-    m_codlab:       'Código Labortec',
+    m_codlab:       'Número de Série',
     m_last_calib:   'Última Calibración',
     m_next_calib:   'Próxima Calibración',
     m_freq:         'Frecuencia (días)',
@@ -5458,7 +5458,7 @@ const T = {
     tbl_equip_title:'Messgeräte',
     col_id:         'Code',
     col_tipo:       'Typ',
-    col_cod_lab:    'Labortec-Code',
+    col_cod_lab:    'Seriennummer',
     col_cliente:    'Kunde',
     col_desc:       'Beschreibung',
     col_fab:        'Hersteller',
@@ -5500,7 +5500,7 @@ const T = {
     m_location:     'Standort',
     m_responsible:  'Verantwortlich',
     m_company:      'Ausführendes Unternehmen',
-    m_codlab:       'Labortec-Code',
+    m_codlab:       'Seriennummer',
     m_last_calib:   'Letzte Kalibrierung',
     m_next_calib:   'Nächste Kalibrierung',
     m_freq:         'Frequenz (Tage)',
@@ -5797,7 +5797,7 @@ const T = {
     tbl_equip_title:'Équipements de Mesure',
     col_id:         'Code',
     col_tipo:       'Type',
-    col_cod_lab:    'Code Labortec',
+    col_cod_lab:    'N° de série',
     col_cliente:    'Client',
     col_desc:       'Description',
     col_fab:        'Fabricant',
@@ -5839,7 +5839,7 @@ const T = {
     m_location:     'Emplacement',
     m_responsible:  'Responsable',
     m_company:      'Entreprise Exécutante',
-    m_codlab:       'Code Labortec',
+    m_codlab:       'Numéro de série',
     m_last_calib:   'Dernière Calibration',
     m_next_calib:   'Prochaine Calibration',
     m_freq:         'Fréquence (jours)',
@@ -6136,7 +6136,7 @@ const T = {
     tbl_equip_title:'Strumenti di Misura',
     col_id:         'Codice',
     col_tipo:       'Tipo',
-    col_cod_lab:    'Cod. Labortec',
+    col_cod_lab:    'N° di serie',
     col_cliente:    'Cliente',
     col_desc:       'Descrizione',
     col_fab:        'Produttore',
@@ -6178,7 +6178,7 @@ const T = {
     m_location:     'Posizione',
     m_responsible:  'Responsabile',
     m_company:      'Azienda Esecutrice',
-    m_codlab:       'Codice Labortec',
+    m_codlab:       'Numero di serie',
     m_last_calib:   'Ultima Calibrazione',
     m_next_calib:   'Prossima Calibrazione',
     m_freq:         'Frequenza (giorni)',
@@ -6475,7 +6475,7 @@ const T = {
     tbl_equip_title:'Przyrządy Pomiarowe',
     col_id:         'Kod',
     col_tipo:       'Typ',
-    col_cod_lab:    'Kod Labortec',
+    col_cod_lab:    'Nr seryjny',
     col_cliente:    'Klient',
     col_desc:       'Opis',
     col_fab:        'Producent',
@@ -6517,7 +6517,7 @@ const T = {
     m_location:     'Lokalizacja',
     m_responsible:  'Odpowiedzialny',
     m_company:      'Firma Wykonawcza',
-    m_codlab:       'Kod Labortec',
+    m_codlab:       'Numer seryjny',
     m_last_calib:   'Ostatnia Kalibracja',
     m_next_calib:   'Następna Kalibracja',
     m_freq:         'Częstotliwość (dni)',
@@ -7468,7 +7468,7 @@ const COL_DEFS = {
     {k:'_act',        l:'Ações',          def:true, noSort:true, w:170},
     {k:'id',          l:'Código',         def:true, w:105},
     {k:'tipo',        l:'Tipo',           def:true, w:120},
-    {k:'cod_lab',     l:'Cód. Labortec',  def:true, w:95},
+    {k:'cod_lab',     l:'Nº de Série',  def:true, w:95},
     {k:'cliente',     l:'Cliente',        def:true, w:75},
     {k:'descricao',   l:'Descrição',      def:true, w:190},
     {k:'fabricante',  l:'Fabricante',     def:true, w:90},
@@ -7487,7 +7487,7 @@ const COL_DEFS = {
   alert: [
     {k:'_chk',        l:'',               def:true,  noSort:true, w:36},
     {k:'id',          l:'Código',         def:true,  w:120},
-    {k:'cod_lab',     l:'Cód. Labortec',  def:true,  w:95},
+    {k:'cod_lab',     l:'Nº de Série',  def:true,  w:95},
     {k:'tipo',        l:'Tipo',           def:true,  w:140},
     {k:'cliente',     l:'Cliente',        def:true,  w:90},
     {k:'descricao',   l:'Descrição',      def:true,  w:195},
@@ -7503,7 +7503,7 @@ const COL_DEFS = {
     {k:'_chk',        l:'',               def:true, noSort:true, w:30},
     {k:'_act',        l:'',               def:true, noSort:true, w:80},
     {k:'id',          l:'Código',         def:true, w:110},
-    {k:'cod_lab',     l:'Cód. Labortec',  def:true, w:95},
+    {k:'cod_lab',     l:'Nº de Série',  def:true, w:95},
     {k:'tipo',        l:'Tipo',           def:true, w:130},
     {k:'cliente',     l:'Cliente',        def:true, w:90},
     {k:'descricao',   l:'Descrição',      def:true, w:190},
@@ -9572,7 +9572,7 @@ async function initSupabase() {
             ['Status Operacional', r.status],
             ['Empresa Executante', r.empresa],
             ['Status Calibração', r.status_calib],
-            ['Cód. Labortec', r.cod_lab],
+            ['Nº de Série', r.cod_lab],
           ].map(([lbl,val]) => `
             <div>
               <div style="font-size:9px;font-weight:700;color:#9ca3bc;text-transform:uppercase;letter-spacing:.7px;margin-bottom:2px">${_escPub(lbl)}</div>
@@ -11903,7 +11903,7 @@ function printAlertsPDF() {
 
   const cols = [
     {k:'id',          l:'Código'},
-    {k:'cod_lab',     l:'Cód. Labortec'},
+    {k:'cod_lab',     l:'Nº de Série'},
     {k:'tipo',        l:'Tipo'},
     {k:'descricao',   l:'Descrição'},
     {k:'localizacao', l:'Localização'},
@@ -12182,7 +12182,7 @@ function clearRepF(){
 
 function exportRepCSV() {
   const rows=_repRows.length?_repRows:DB;
-  const hdr=['Codigo','Tipo','Cliente','Descricao','Fabricante','Localizacao','Responsavel','Empresa','Cod_Labortec','Ult_Calib','Prox_Calib','Dias_Vencer','Status','Status_Calib','Observacoes'];
+  const hdr=['Codigo','Tipo','Cliente','Descricao','Fabricante','Localizacao','Responsavel','Empresa','Num_Serie','Ult_Calib','Prox_Calib','Dias_Vencer','Status','Status_Calib','Observacoes'];
   const lines=[hdr.join(';')];
   rows.forEach(r=>lines.push([r.id||'',r.tipo||'',r.cliente||'',r.descricao||'',r.fabricante||'',r.localizacao||'',r.responsavel||'',r.empresa||'',r.cod_lab||'',r.ult_calib||'',r.prox_calib||'',r.dias_vencer!==null?r.dias_vencer:'',r.status||'',r.status_calib||'',r.observacoes||''].map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')));
   const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
@@ -13266,7 +13266,7 @@ function _handleQrDeepLink() {
 
     const head = `<thead>
       <tr>
-        <th>Código</th><th>Cód. Labortec</th><th>Tipo</th><th>Descrição</th>
+        <th>Código</th><th>Nº de Série</th><th>Tipo</th><th>Descrição</th>
         <th>Localização</th><th>Empresa</th><th>Próx. Calib.</th><th>Dias</th><th>Status</th>
         <th style="text-align:right">Ações</th>
       </tr>
@@ -14692,7 +14692,7 @@ function renderEquipView(uid) {
     field('Código de Controle', r.id, true) +
     field('Tipo', r.tipo) +
     field('Fabricante', r.fabricante) +
-    field('Código Labortec', r.cod_lab, true) +
+    field('Número de Série', r.cod_lab, true) +
     field('Cliente', r.cliente) +
     field('Descrição', r.descricao);
 
@@ -14814,7 +14814,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;background:#fff;-webk
   <div><div class="f-lbl">Código de Controle</div><div class="f-val mono">${r.id||'—'}</div></div>
   <div><div class="f-lbl">Tipo</div><div class="f-val">${r.tipo||'—'}</div></div>
   <div><div class="f-lbl">Fabricante</div><div class="f-val">${r.fabricante||'—'}</div></div>
-  <div><div class="f-lbl">Cód. Labortec</div><div class="f-val mono">${r.cod_lab||'—'}</div></div>
+  <div><div class="f-lbl">Nº de Série</div><div class="f-val mono">${r.cod_lab||'—'}</div></div>
   <div><div class="f-lbl">Cliente</div><div class="f-val">${r.cliente||'—'}</div></div>
 </div></div>
 
@@ -19970,7 +19970,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Expõe para uso externo se quiserem ajustar
 
   // [v49.5] Form fields, status options, modal & audit strings.
-  var _EXTRA2 = {"en": {"Código de Controle": "Control Code", "Tipo de Equipamento": "Equipment Type", "Código Labortec": "Labortec Code", "Cliente": "Customer", "Descrição": "Description", "Fabricante": "Manufacturer", "Localização / Máquina": "Location / Machine", "Empresa Executante": "Executing Company", "Última Calibração": "Last Calibration", "Próxima Calibração": "Next Calibration", "Frequência (dias)": "Frequency (days)", "Status Operacional": "Operational Status", "Status Calibração": "Calibration Status", "Observações": "Notes", "Validade estimada": "Estimated validity", "Salvar Equipamento": "Save Equipment", "Limpar": "Clear", "Calibrado e Aprovado": "Calibrated & Approved", "Calibração Necessária": "Calibration Needed", "Descartado": "Discarded", "Não Encontrado": "Not Found", "ATIVO": "ACTIVE", "INATIVO": "INACTIVE", "Logs de Auditoria": "Audit Logs", "Últimos 50 registos": "Last 50 records", "Data / Hora": "Date / Time", "Tipo": "Type", "ID Equip.": "Equip. ID", "Utilizador": "User", "Exportar Logs CSV": "Export Logs CSV", "Importar Dados": "Import Data", "Arraste o ficheiro JSON aqui": "Drop the JSON file here", "ou use o botão abaixo": "or use the button below", "Selecionar arquivo JSON": "Select JSON file", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Drop the file or click \"Select file\"", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "A preview will be shown before any change is applied.", "Ex: BAL-020": "e.g. BAL-020", "Ex: Balança Eletrônica": "e.g. Electronic Scale", "Ex: 61714545": "e.g. 61714545", "Ex: Honda / Todos": "e.g. Honda / All", "Descrição completa do equipamento": "Full equipment description", "Ex: Mitutoyo": "e.g. Mitutoyo", "Ex: Metrologia": "e.g. Metrology", "Ex: Wellington Freitas": "e.g. Wellington Freitas", "Ex: Labortec": "e.g. Labortec", "Observações adicionais (opcional)": "Additional notes (optional)", "Todos": "All", "Responsável": "Owner"}, "es": {"Código de Controle": "Código de Control", "Tipo de Equipamento": "Tipo de Equipo", "Código Labortec": "Código Labortec", "Cliente": "Cliente", "Descrição": "Descripción", "Fabricante": "Fabricante", "Localização / Máquina": "Ubicación / Máquina", "Empresa Executante": "Empresa Ejecutora", "Última Calibração": "Última Calibración", "Próxima Calibração": "Próxima Calibración", "Frequência (dias)": "Frecuencia (días)", "Status Operacional": "Estado Operativo", "Status Calibração": "Estado Calibración", "Observações": "Observaciones", "Validade estimada": "Validez estimada", "Salvar Equipamento": "Guardar Equipo", "Limpar": "Limpiar", "Calibrado e Aprovado": "Calibrado y Aprobado", "Calibração Necessária": "Calibración Necesaria", "Descartado": "Descartado", "Não Encontrado": "No Encontrado", "ATIVO": "ACTIVO", "INATIVO": "INACTIVO", "Logs de Auditoria": "Registros de Auditoría", "Últimos 50 registos": "Últimos 50 registros", "Data / Hora": "Fecha / Hora", "Tipo": "Tipo", "ID Equip.": "ID Equipo", "Utilizador": "Usuario", "Exportar Logs CSV": "Exportar Registros CSV", "Importar Dados": "Importar Datos", "Arraste o ficheiro JSON aqui": "Arrastre el archivo JSON aquí", "ou use o botão abaixo": "o use el botón de abajo", "Selecionar arquivo JSON": "Seleccionar archivo JSON", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Arrastre el archivo o haga clic en \"Seleccionar archivo\"", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Se mostrará una vista previa antes de aplicar cualquier cambio.", "Ex: BAL-020": "Ej: BAL-020", "Ex: Balança Eletrônica": "Ej: Balanza Electrónica", "Ex: 61714545": "Ej: 61714545", "Ex: Honda / Todos": "Ej: Honda / Todos", "Descrição completa do equipamento": "Descripción completa del equipo", "Ex: Mitutoyo": "Ej: Mitutoyo", "Ex: Metrologia": "Ej: Metrología", "Ex: Wellington Freitas": "Ej: Wellington Freitas", "Ex: Labortec": "Ej: Labortec", "Observações adicionais (opcional)": "Observaciones adicionales (opcional)", "Todos": "Todos", "Responsável": "Responsable"}, "de": {"Código de Controle": "Kontrollcode", "Tipo de Equipamento": "Gerätetyp", "Código Labortec": "Labortec-Code", "Cliente": "Kunde", "Descrição": "Beschreibung", "Fabricante": "Hersteller", "Localização / Máquina": "Standort / Maschine", "Empresa Executante": "Ausführendes Unternehmen", "Última Calibração": "Letzte Kalibrierung", "Próxima Calibração": "Nächste Kalibrierung", "Frequência (dias)": "Frequenz (Tage)", "Status Operacional": "Betriebsstatus", "Status Calibração": "Kalibrierstatus", "Observações": "Bemerkungen", "Validade estimada": "Geschätzte Gültigkeit", "Salvar Equipamento": "Gerät speichern", "Limpar": "Leeren", "Calibrado e Aprovado": "Kalibriert & freigegeben", "Calibração Necessária": "Kalibrierung nötig", "Descartado": "Verworfen", "Não Encontrado": "Nicht gefunden", "ATIVO": "AKTIV", "INATIVO": "INAKTIV", "Logs de Auditoria": "Audit-Protokolle", "Últimos 50 registos": "Letzte 50 Einträge", "Data / Hora": "Datum / Uhrzeit", "Tipo": "Typ", "ID Equip.": "Geräte-ID", "Utilizador": "Benutzer", "Exportar Logs CSV": "Logs als CSV exportieren", "Importar Dados": "Daten importieren", "Arraste o ficheiro JSON aqui": "JSON-Datei hier ablegen", "ou use o botão abaixo": "oder Knopf unten verwenden", "Selecionar arquivo JSON": "JSON-Datei auswählen", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Datei ablegen oder „Datei auswählen“ klicken", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Eine Vorschau wird vor jeder Änderung angezeigt.", "Ex: BAL-020": "z.B. BAL-020", "Ex: Balança Eletrônica": "z.B. Elektronische Waage", "Ex: 61714545": "z.B. 61714545", "Ex: Honda / Todos": "z.B. Honda / Alle", "Descrição completa do equipamento": "Vollständige Gerätebeschreibung", "Ex: Mitutoyo": "z.B. Mitutoyo", "Ex: Metrologia": "z.B. Messtechnik", "Ex: Wellington Freitas": "z.B. Wellington Freitas", "Ex: Labortec": "z.B. Labortec", "Observações adicionais (opcional)": "Zusätzliche Bemerkungen (optional)", "Todos": "Alle", "Responsável": "Verantwortlich"}, "fr": {"Código de Controle": "Code de contrôle", "Tipo de Equipamento": "Type d’équipement", "Código Labortec": "Code Labortec", "Cliente": "Client", "Descrição": "Description", "Fabricante": "Fabricant", "Localização / Máquina": "Emplacement / Machine", "Empresa Executante": "Société exécutante", "Última Calibração": "Dernière calibration", "Próxima Calibração": "Prochaine calibration", "Frequência (dias)": "Fréquence (jours)", "Status Operacional": "Statut opérationnel", "Status Calibração": "Statut calibration", "Observações": "Notes", "Validade estimada": "Validité estimée", "Salvar Equipamento": "Enregistrer l’équipement", "Limpar": "Effacer", "Calibrado e Aprovado": "Calibré et approuvé", "Calibração Necessária": "Calibration requise", "Descartado": "Mis au rebut", "Não Encontrado": "Introuvable", "ATIVO": "ACTIF", "INATIVO": "INACTIF", "Logs de Auditoria": "Journaux d’audit", "Últimos 50 registos": "50 derniers enregistrements", "Data / Hora": "Date / Heure", "Tipo": "Type", "ID Equip.": "ID équip.", "Utilizador": "Utilisateur", "Exportar Logs CSV": "Exporter les journaux CSV", "Importar Dados": "Importer des données", "Arraste o ficheiro JSON aqui": "Glissez le fichier JSON ici", "ou use o botão abaixo": "ou utilisez le bouton ci-dessous", "Selecionar arquivo JSON": "Sélectionner un fichier JSON", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Glissez le fichier ou cliquez sur « Sélectionner un fichier »", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Un aperçu sera affiché avant toute modification.", "Ex: BAL-020": "Ex : BAL-020", "Ex: Balança Eletrônica": "Ex : Balance électronique", "Ex: 61714545": "Ex : 61714545", "Ex: Honda / Todos": "Ex : Honda / Tous", "Descrição completa do equipamento": "Description complète de l’équipement", "Ex: Mitutoyo": "Ex : Mitutoyo", "Ex: Metrologia": "Ex : Métrologie", "Ex: Wellington Freitas": "Ex : Wellington Freitas", "Ex: Labortec": "Ex : Labortec", "Observações adicionais (opcional)": "Notes supplémentaires (optionnel)", "Todos": "Tous", "Responsável": "Responsable"}, "it": {"Código de Controle": "Codice di Controllo", "Tipo de Equipamento": "Tipo di Strumento", "Código Labortec": "Codice Labortec", "Cliente": "Cliente", "Descrição": "Descrizione", "Fabricante": "Produttore", "Localização / Máquina": "Posizione / Macchina", "Empresa Executante": "Azienda Esecutrice", "Última Calibração": "Ultima Taratura", "Próxima Calibração": "Prossima Taratura", "Frequência (dias)": "Frequenza (giorni)", "Status Operacional": "Stato Operativo", "Status Calibração": "Stato Taratura", "Observações": "Note", "Validade estimada": "Validità stimata", "Salvar Equipamento": "Salva Strumento", "Limpar": "Pulisci", "Calibrado e Aprovado": "Tarato e Approvato", "Calibração Necessária": "Taratura Necessaria", "Descartado": "Scartato", "Não Encontrado": "Non Trovato", "ATIVO": "ATTIVO", "INATIVO": "INATTIVO", "Logs de Auditoria": "Log di Audit", "Últimos 50 registos": "Ultime 50 voci", "Data / Hora": "Data / Ora", "Tipo": "Tipo", "ID Equip.": "ID Strum.", "Utilizador": "Utente", "Exportar Logs CSV": "Esporta Log CSV", "Importar Dados": "Importa Dati", "Arraste o ficheiro JSON aqui": "Trascina qui il file JSON", "ou use o botão abaixo": "oppure usa il pulsante sotto", "Selecionar arquivo JSON": "Seleziona file JSON", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Trascina il file o clicca su \"Seleziona file\"", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Verrà mostrata un’anteprima prima di applicare qualsiasi modifica.", "Ex: BAL-020": "Es: BAL-020", "Ex: Balança Eletrônica": "Es: Bilancia Elettronica", "Ex: 61714545": "Es: 61714545", "Ex: Honda / Todos": "Es: Honda / Tutti", "Descrição completa do equipamento": "Descrizione completa dello strumento", "Ex: Mitutoyo": "Es: Mitutoyo", "Ex: Metrologia": "Es: Metrologia", "Ex: Wellington Freitas": "Es: Wellington Freitas", "Ex: Labortec": "Es: Labortec", "Observações adicionais (opcional)": "Note aggiuntive (opzionale)", "Todos": "Tutti", "Responsável": "Responsabile"}, "pl": {"Código de Controle": "Kod kontrolny", "Tipo de Equipamento": "Typ urządzenia", "Código Labortec": "Kod Labortec", "Cliente": "Klient", "Descrição": "Opis", "Fabricante": "Producent", "Localização / Máquina": "Lokalizacja / Maszyna", "Empresa Executante": "Wykonawca", "Última Calibração": "Ostatnia kalibracja", "Próxima Calibração": "Następna kalibracja", "Frequência (dias)": "Częstotliwość (dni)", "Status Operacional": "Status operacyjny", "Status Calibração": "Status kalibracji", "Observações": "Uwagi", "Validade estimada": "Szacowana ważność", "Salvar Equipamento": "Zapisz urządzenie", "Limpar": "Wyczyść", "Calibrado e Aprovado": "Skalibrowane i zatwierdzone", "Calibração Necessária": "Wymagana kalibracja", "Descartado": "Wycofane", "Não Encontrado": "Nie znaleziono", "ATIVO": "AKTYWNE", "INATIVO": "NIEAKTYWNE", "Logs de Auditoria": "Logi audytu", "Últimos 50 registos": "Ostatnie 50 wpisów", "Data / Hora": "Data / Godzina", "Tipo": "Typ", "ID Equip.": "ID urządz.", "Utilizador": "Użytkownik", "Exportar Logs CSV": "Eksportuj logi CSV", "Importar Dados": "Importuj dane", "Arraste o ficheiro JSON aqui": "Przeciągnij plik JSON tutaj", "ou use o botão abaixo": "lub użyj przycisku poniżej", "Selecionar arquivo JSON": "Wybierz plik JSON", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Przeciągnij plik lub kliknij „Wybierz plik”", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Przed wprowadzeniem zmian zostanie pokazany podgląd.", "Ex: BAL-020": "np. BAL-020", "Ex: Balança Eletrônica": "np. Waga elektroniczna", "Ex: 61714545": "np. 61714545", "Ex: Honda / Todos": "np. Honda / Wszyscy", "Descrição completa do equipamento": "Pełny opis urządzenia", "Ex: Mitutoyo": "np. Mitutoyo", "Ex: Metrologia": "np. Metrologia", "Ex: Wellington Freitas": "np. Wellington Freitas", "Ex: Labortec": "np. Labortec", "Observações adicionais (opcional)": "Dodatkowe uwagi (opcjonalnie)", "Todos": "Wszyscy", "Responsável": "Odpowiedzialny"}};
+  var _EXTRA2 = {"en": {"Código de Controle": "Control Code", "Tipo de Equipamento": "Equipment Type", "Número de Série": "Serial Number", "Cliente": "Customer", "Descrição": "Description", "Fabricante": "Manufacturer", "Localização / Máquina": "Location / Machine", "Empresa Executante": "Executing Company", "Última Calibração": "Last Calibration", "Próxima Calibração": "Next Calibration", "Frequência (dias)": "Frequency (days)", "Status Operacional": "Operational Status", "Status Calibração": "Calibration Status", "Observações": "Notes", "Validade estimada": "Estimated validity", "Salvar Equipamento": "Save Equipment", "Limpar": "Clear", "Calibrado e Aprovado": "Calibrated & Approved", "Calibração Necessária": "Calibration Needed", "Descartado": "Discarded", "Não Encontrado": "Not Found", "ATIVO": "ACTIVE", "INATIVO": "INACTIVE", "Logs de Auditoria": "Audit Logs", "Últimos 50 registos": "Last 50 records", "Data / Hora": "Date / Time", "Tipo": "Type", "ID Equip.": "Equip. ID", "Utilizador": "User", "Exportar Logs CSV": "Export Logs CSV", "Importar Dados": "Import Data", "Arraste o ficheiro JSON aqui": "Drop the JSON file here", "ou use o botão abaixo": "or use the button below", "Selecionar arquivo JSON": "Select JSON file", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Drop the file or click \"Select file\"", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "A preview will be shown before any change is applied.", "Ex: BAL-020": "e.g. BAL-020", "Ex: Balança Eletrônica": "e.g. Electronic Scale", "Ex: 61714545": "e.g. 61714545", "Ex: Honda / Todos": "e.g. Honda / All", "Descrição completa do equipamento": "Full equipment description", "Ex: Mitutoyo": "e.g. Mitutoyo", "Ex: Metrologia": "e.g. Metrology", "Ex: Wellington Freitas": "e.g. Wellington Freitas", "Ex: Nº de Série": "e.g. Serial No.", "Observações adicionais (opcional)": "Additional notes (optional)", "Todos": "All", "Responsável": "Owner"}, "es": {"Código de Controle": "Código de Control", "Tipo de Equipamento": "Tipo de Equipo", "Número de Série": "Número de Série", "Cliente": "Cliente", "Descrição": "Descripción", "Fabricante": "Fabricante", "Localização / Máquina": "Ubicación / Máquina", "Empresa Executante": "Empresa Ejecutora", "Última Calibração": "Última Calibración", "Próxima Calibração": "Próxima Calibración", "Frequência (dias)": "Frecuencia (días)", "Status Operacional": "Estado Operativo", "Status Calibração": "Estado Calibración", "Observações": "Observaciones", "Validade estimada": "Validez estimada", "Salvar Equipamento": "Guardar Equipo", "Limpar": "Limpiar", "Calibrado e Aprovado": "Calibrado y Aprobado", "Calibração Necessária": "Calibración Necesaria", "Descartado": "Descartado", "Não Encontrado": "No Encontrado", "ATIVO": "ACTIVO", "INATIVO": "INACTIVO", "Logs de Auditoria": "Registros de Auditoría", "Últimos 50 registos": "Últimos 50 registros", "Data / Hora": "Fecha / Hora", "Tipo": "Tipo", "ID Equip.": "ID Equipo", "Utilizador": "Usuario", "Exportar Logs CSV": "Exportar Registros CSV", "Importar Dados": "Importar Datos", "Arraste o ficheiro JSON aqui": "Arrastre el archivo JSON aquí", "ou use o botão abaixo": "o use el botón de abajo", "Selecionar arquivo JSON": "Seleccionar archivo JSON", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Arrastre el archivo o haga clic en \"Seleccionar archivo\"", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Se mostrará una vista previa antes de aplicar cualquier cambio.", "Ex: BAL-020": "Ej: BAL-020", "Ex: Balança Eletrônica": "Ej: Balanza Electrónica", "Ex: 61714545": "Ej: 61714545", "Ex: Honda / Todos": "Ej: Honda / Todos", "Descrição completa do equipamento": "Descripción completa del equipo", "Ex: Mitutoyo": "Ej: Mitutoyo", "Ex: Metrologia": "Ej: Metrología", "Ex: Wellington Freitas": "Ej: Wellington Freitas", "Ex: Nº de Série": "Ej: Nº de Serie", "Observações adicionais (opcional)": "Observaciones adicionales (opcional)", "Todos": "Todos", "Responsável": "Responsable"}, "de": {"Código de Controle": "Kontrollcode", "Tipo de Equipamento": "Gerätetyp", "Número de Série": "Seriennummer", "Cliente": "Kunde", "Descrição": "Beschreibung", "Fabricante": "Hersteller", "Localização / Máquina": "Standort / Maschine", "Empresa Executante": "Ausführendes Unternehmen", "Última Calibração": "Letzte Kalibrierung", "Próxima Calibração": "Nächste Kalibrierung", "Frequência (dias)": "Frequenz (Tage)", "Status Operacional": "Betriebsstatus", "Status Calibração": "Kalibrierstatus", "Observações": "Bemerkungen", "Validade estimada": "Geschätzte Gültigkeit", "Salvar Equipamento": "Gerät speichern", "Limpar": "Leeren", "Calibrado e Aprovado": "Kalibriert & freigegeben", "Calibração Necessária": "Kalibrierung nötig", "Descartado": "Verworfen", "Não Encontrado": "Nicht gefunden", "ATIVO": "AKTIV", "INATIVO": "INAKTIV", "Logs de Auditoria": "Audit-Protokolle", "Últimos 50 registos": "Letzte 50 Einträge", "Data / Hora": "Datum / Uhrzeit", "Tipo": "Typ", "ID Equip.": "Geräte-ID", "Utilizador": "Benutzer", "Exportar Logs CSV": "Logs als CSV exportieren", "Importar Dados": "Daten importieren", "Arraste o ficheiro JSON aqui": "JSON-Datei hier ablegen", "ou use o botão abaixo": "oder Knopf unten verwenden", "Selecionar arquivo JSON": "JSON-Datei auswählen", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Datei ablegen oder „Datei auswählen“ klicken", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Eine Vorschau wird vor jeder Änderung angezeigt.", "Ex: BAL-020": "z.B. BAL-020", "Ex: Balança Eletrônica": "z.B. Elektronische Waage", "Ex: 61714545": "z.B. 61714545", "Ex: Honda / Todos": "z.B. Honda / Alle", "Descrição completa do equipamento": "Vollständige Gerätebeschreibung", "Ex: Mitutoyo": "z.B. Mitutoyo", "Ex: Metrologia": "z.B. Messtechnik", "Ex: Wellington Freitas": "z.B. Wellington Freitas", "Ex: Nº de Série": "z.B. Seriennr.", "Observações adicionais (opcional)": "Zusätzliche Bemerkungen (optional)", "Todos": "Alle", "Responsável": "Verantwortlich"}, "fr": {"Código de Controle": "Code de contrôle", "Tipo de Equipamento": "Type d’équipement", "Número de Série": "Numéro de série", "Cliente": "Client", "Descrição": "Description", "Fabricante": "Fabricant", "Localização / Máquina": "Emplacement / Machine", "Empresa Executante": "Société exécutante", "Última Calibração": "Dernière calibration", "Próxima Calibração": "Prochaine calibration", "Frequência (dias)": "Fréquence (jours)", "Status Operacional": "Statut opérationnel", "Status Calibração": "Statut calibration", "Observações": "Notes", "Validade estimada": "Validité estimée", "Salvar Equipamento": "Enregistrer l’équipement", "Limpar": "Effacer", "Calibrado e Aprovado": "Calibré et approuvé", "Calibração Necessária": "Calibration requise", "Descartado": "Mis au rebut", "Não Encontrado": "Introuvable", "ATIVO": "ACTIF", "INATIVO": "INACTIF", "Logs de Auditoria": "Journaux d’audit", "Últimos 50 registos": "50 derniers enregistrements", "Data / Hora": "Date / Heure", "Tipo": "Type", "ID Equip.": "ID équip.", "Utilizador": "Utilisateur", "Exportar Logs CSV": "Exporter les journaux CSV", "Importar Dados": "Importer des données", "Arraste o ficheiro JSON aqui": "Glissez le fichier JSON ici", "ou use o botão abaixo": "ou utilisez le bouton ci-dessous", "Selecionar arquivo JSON": "Sélectionner un fichier JSON", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Glissez le fichier ou cliquez sur « Sélectionner un fichier »", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Un aperçu sera affiché avant toute modification.", "Ex: BAL-020": "Ex : BAL-020", "Ex: Balança Eletrônica": "Ex : Balance électronique", "Ex: 61714545": "Ex : 61714545", "Ex: Honda / Todos": "Ex : Honda / Tous", "Descrição completa do equipamento": "Description complète de l’équipement", "Ex: Mitutoyo": "Ex : Mitutoyo", "Ex: Metrologia": "Ex : Métrologie", "Ex: Wellington Freitas": "Ex : Wellington Freitas", "Ex: Nº de Série": "Ex : N° de série", "Observações adicionais (opcional)": "Notes supplémentaires (optionnel)", "Todos": "Tous", "Responsável": "Responsable"}, "it": {"Código de Controle": "Codice di Controllo", "Tipo de Equipamento": "Tipo di Strumento", "Número de Série": "Numero di serie", "Cliente": "Cliente", "Descrição": "Descrizione", "Fabricante": "Produttore", "Localização / Máquina": "Posizione / Macchina", "Empresa Executante": "Azienda Esecutrice", "Última Calibração": "Ultima Taratura", "Próxima Calibração": "Prossima Taratura", "Frequência (dias)": "Frequenza (giorni)", "Status Operacional": "Stato Operativo", "Status Calibração": "Stato Taratura", "Observações": "Note", "Validade estimada": "Validità stimata", "Salvar Equipamento": "Salva Strumento", "Limpar": "Pulisci", "Calibrado e Aprovado": "Tarato e Approvato", "Calibração Necessária": "Taratura Necessaria", "Descartado": "Scartato", "Não Encontrado": "Non Trovato", "ATIVO": "ATTIVO", "INATIVO": "INATTIVO", "Logs de Auditoria": "Log di Audit", "Últimos 50 registos": "Ultime 50 voci", "Data / Hora": "Data / Ora", "Tipo": "Tipo", "ID Equip.": "ID Strum.", "Utilizador": "Utente", "Exportar Logs CSV": "Esporta Log CSV", "Importar Dados": "Importa Dati", "Arraste o ficheiro JSON aqui": "Trascina qui il file JSON", "ou use o botão abaixo": "oppure usa il pulsante sotto", "Selecionar arquivo JSON": "Seleziona file JSON", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Trascina il file o clicca su \"Seleziona file\"", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Verrà mostrata un’anteprima prima di applicare qualsiasi modifica.", "Ex: BAL-020": "Es: BAL-020", "Ex: Balança Eletrônica": "Es: Bilancia Elettronica", "Ex: 61714545": "Es: 61714545", "Ex: Honda / Todos": "Es: Honda / Tutti", "Descrição completa do equipamento": "Descrizione completa dello strumento", "Ex: Mitutoyo": "Es: Mitutoyo", "Ex: Metrologia": "Es: Metrologia", "Ex: Wellington Freitas": "Es: Wellington Freitas", "Ex: Nº de Série": "Es: N° di serie", "Observações adicionais (opcional)": "Note aggiuntive (opzionale)", "Todos": "Tutti", "Responsável": "Responsabile"}, "pl": {"Código de Controle": "Kod kontrolny", "Tipo de Equipamento": "Typ urządzenia", "Número de Série": "Numer seryjny", "Cliente": "Klient", "Descrição": "Opis", "Fabricante": "Producent", "Localização / Máquina": "Lokalizacja / Maszyna", "Empresa Executante": "Wykonawca", "Última Calibração": "Ostatnia kalibracja", "Próxima Calibração": "Następna kalibracja", "Frequência (dias)": "Częstotliwość (dni)", "Status Operacional": "Status operacyjny", "Status Calibração": "Status kalibracji", "Observações": "Uwagi", "Validade estimada": "Szacowana ważność", "Salvar Equipamento": "Zapisz urządzenie", "Limpar": "Wyczyść", "Calibrado e Aprovado": "Skalibrowane i zatwierdzone", "Calibração Necessária": "Wymagana kalibracja", "Descartado": "Wycofane", "Não Encontrado": "Nie znaleziono", "ATIVO": "AKTYWNE", "INATIVO": "NIEAKTYWNE", "Logs de Auditoria": "Logi audytu", "Últimos 50 registos": "Ostatnie 50 wpisów", "Data / Hora": "Data / Godzina", "Tipo": "Typ", "ID Equip.": "ID urządz.", "Utilizador": "Użytkownik", "Exportar Logs CSV": "Eksportuj logi CSV", "Importar Dados": "Importuj dane", "Arraste o ficheiro JSON aqui": "Przeciągnij plik JSON tutaj", "ou use o botão abaixo": "lub użyj przycisku poniżej", "Selecionar arquivo JSON": "Wybierz plik JSON", "JSON · Arraste o ficheiro ou clique em \"Selecionar arquivo\"": "JSON · Przeciągnij plik lub kliknij „Wybierz plik”", "Uma pré-visualização será exibida antes de qualquer alteração ser aplicada.": "Przed wprowadzeniem zmian zostanie pokazany podgląd.", "Ex: BAL-020": "np. BAL-020", "Ex: Balança Eletrônica": "np. Waga elektroniczna", "Ex: 61714545": "np. 61714545", "Ex: Honda / Todos": "np. Honda / Wszyscy", "Descrição completa do equipamento": "Pełny opis urządzenia", "Ex: Mitutoyo": "np. Mitutoyo", "Ex: Metrologia": "np. Metrologia", "Ex: Wellington Freitas": "np. Wellington Freitas", "Ex: Nº de Série": "np. Nr seryjny", "Observações adicionais (opcional)": "Dodatkowe uwagi (opcjonalnie)", "Todos": "Wszyscy", "Responsável": "Odpowiedzialny"}};
   Object.keys(_EXTRA2).forEach(function(lang){
     if (!DICT[lang]) DICT[lang] = {};
     var src = _EXTRA2[lang];
