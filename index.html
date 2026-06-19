@@ -152,6 +152,64 @@ window.cancelAnimationFrame = window.cancelAnimationFrame || window.webkitCancel
 })();
 
 /* ═══════════════════════════════════════════════
+   [v49.9 FIX] EARLY DB INITIALIZATION
+   Moved from line 6838 to prevent "Temporal Dead Zone" errors
+   when functions reference DB before its original declaration
+   ═══════════════════════════════════════════════ */
+let DB = [];
+let alertFilter = 'vencido', alertSearch = '';
+let sortState = {};
+let PER_PAGE = 50; // Will be properly initialized after StorageService is loaded
+let pag = { eq:{p:1,rows:[]}, alert:{p:1,rows:[]}, rep:{p:1,rows:[]} };
+
+// [v49.9 FIX] Additional variables moved early to prevent Temporal Dead Zone
+let charts = {};  // Needs to be before buildAllCharts() is called
+let colWidths = {};
+let colVis = {};
+let _colMenuTbl = null;
+let _resizing = null;
+let _statsCache = null;
+
+// [v49.9 FIX] Language and storage variables - moved early for i18n initialization
+// Note: StorageService is defined later (line 4103+), so these use defaults initially
+let LANG     = 'pt'; // Will be updated after StorageService loads
+let DATE_FMT = 'dmy'; // Will be updated after StorageService loads
+
+// [v49.9 FIX] Supabase and authentication state - moved early to prevent init errors
+let _supabaseUrl = ''; // Filled via modal
+let _supabaseKey = ''; // Filled via modal
+let _sb = null;  // Supabase client instance
+let _sbActive = false;
+let _pending = false;
+let _pushTimer = null;
+let _sbInitialized = false;
+let _currentUnidade = null;
+let _isDirector = false;
+let _pushRetryCount = 0;
+let _appInitialized = false;
+let _auth = null; // alias mantido; não usado diretamente com Supabase (usa _sb.auth)
+
+// [v49.9 FIX] UI state variables - moved early
+let _inlineActive = null; // { uid, k, td }
+let _pendingFilterRefresh = false;
+let _renderTableDebounceTimer = {};
+let _notifRead = new Set();
+let _$toast = null;
+let _$toastMsg = null;
+let _$syncInd = null;
+let _toastT = null;
+let _undoStack = [];
+let _redoStack = [];
+let _eqViewMode = localStorage.getItem ? (localStorage.getItem('rochling_eq_view') || 'cards') : 'cards';
+let _cardPage = 1;
+let _cardSelectMode = false;
+let _mensalRange = 12;
+let _autoNotifInterval = null;
+let _notifOpen = false;
+let _lastCrit = 0;
+let _repRows = [];
+
+/* ═══════════════════════════════════════════════
    [v35 FIX] SISTEMA DE UNDO/REDO + TOAST NOTIFICAÇÕES
    ═══════════════════════════════════════════════ */
 window._undoRedoManager = {
@@ -175,7 +233,7 @@ window._undoRedoManager = {
   },
   
   undo: function() {
-    if (this.currentIdx <= 0) { window.showToast(t('toast_undo_empty'), 'info'); return false; }
+    if (this.currentIdx <= 0) { window.showToast((window.T && window.T[window.LANG||'pt'] && window.T[window.LANG||'pt'].toast_undo_empty) || '⚠️ Nada para desfazer', 'info'); return false; }
     var action = this.history[this.currentIdx - 1];
     // [v49.9 FIX] Substitui o array DB completo em vez de corromper apenas DB[0]
     try {
@@ -195,7 +253,7 @@ window._undoRedoManager = {
   },
   
   redo: function() {
-    if (this.currentIdx >= this.history.length - 1) { window.showToast(t('toast_redo_empty'), 'info'); return false; }
+    if (this.currentIdx >= this.history.length - 1) { window.showToast((window.T && window.T[window.LANG||'pt'] && window.T[window.LANG||'pt'].toast_redo_empty) || '⚠️ Nada para refazer', 'info'); return false; }
     var action = this.history[this.currentIdx + 1];
     // [v49.9 FIX] Substitui o array DB completo em vez de corromper apenas DB[0]
     try {
@@ -2569,20 +2627,20 @@ input[type="checkbox"], input[type="radio"] {
         <line x1="0" y1="31" x2="155" y2="31" stroke="#0064b3" stroke-width="1.5" opacity="0.35"/>
         <text x="1" y="41" font-family="Arial,sans-serif" font-size="8.5" font-weight="600" fill="#0064b3" letter-spacing="3.2">AUTOMOTIVE</text>
       </svg>
-      <div class="login-logo-text">Controle de Equipamentos<br>de Medição</div>
+      <div class="login-logo-text" id="login-logo-txt">Controle de Equipamentos<br>de Medição</div>
     </div>
 
-    <div class="login-title">Acesso ao Sistema</div>
-    <div class="login-subtitle">Entre com seu e-mail corporativo cadastrado.</div>
+    <div class="login-title" id="login-title-lbl">Acesso ao Sistema</div>
+    <div class="login-subtitle" id="login-subtitle-lbl">Entre com seu e-mail corporativo cadastrado.</div>
 
     <form id="login-form" onsubmit="event.preventDefault();doLogin();" autocomplete="on">
     <div class="login-field">
-      <label for="login-email">E-mail</label>
+      <label for="login-email" id="login-email-lbl">E-mail</label>
       <input class="login-input" type="email" id="login-email" name="email" required
         placeholder="seu@email.com" autocomplete="username">
     </div>
     <div class="login-field">
-      <label for="login-pass">Senha</label>
+      <label for="login-pass" id="login-pass-lbl">Senha</label>
       <input class="login-input" type="password" id="login-pass" name="password" required
         placeholder="••••••••" autocomplete="current-password">
     </div>
@@ -2590,7 +2648,7 @@ input[type="checkbox"], input[type="radio"] {
     <div class="login-error" id="login-error" role="alert" aria-live="polite"><span aria-hidden="true">❌ </span><span id="login-error-msg">E-mail ou senha incorretos.</span></div>
 
     <button class="login-btn" id="login-btn" type="submit">
-      <span class="btn-label">Entrar</span>
+      <span class="btn-label" id="login-btn-lbl">Entrar</span>
       <span class="btn-spinner"></span>
     </button>
     </form>
@@ -2598,7 +2656,7 @@ input[type="checkbox"], input[type="radio"] {
     <div class="login-footer">
       Acesso restrito a e-mails autorizados.<br>
       Para solicitar acesso, contate o administrador.<br>
-      <button type="button" id="login-forgot" style="background:transparent;border:none;color:var(--accent2);font-size:11px;margin-top:6px;display:inline-block;text-decoration:underline;cursor:pointer;font-family:var(--font);padding:0">Esqueci minha senha</button>
+      <button type="button" id="login-forgot" style="background:transparent;border:none;color:var(--accent2);font-size:11px;margin-top:6px;display:inline-block;text-decoration:underline;cursor:pointer;font-family:var(--font);padding:0" id="login-forgot">Esqueci minha senha</button>
     </div>
   </div>
 </div>
@@ -2642,14 +2700,14 @@ input[type="checkbox"], input[type="radio"] {
     <button class="btn-g" id="btn-redo" onclick="redoAction()" title="Refazer (Ctrl+Y)" aria-label="Refazer" style="opacity:.4;font-size:13px;padding:4px 9px" disabled>↪</button>
 
     <!-- Data actions -->
-    <button class="btn-g" onclick="v12OpenImportModal(event)" title="Import JSON — Drag &amp; Drop" id="btn-import-v12">↓ <span data-i18n="btn_import_lbl">Import</span></button>
-    <button class="btn-g" onclick="v12ExportData()" title="Export JSON (Backup)">↑ <span data-i18n="btn_export_lbl">Export</span></button>
+    <button class="btn-g" onclick="v12OpenImportModal(event)" title="Importar JSON — Arrastar &amp; Soltar" id="btn-import-v12">↓ <span data-i18n="btn_import_lbl">Import</span></button>
+    <button class="btn-g" onclick="v12ExportData()" title="Exportar JSON (Backup)">↑ <span data-i18n="btn_export_lbl">Export</span></button>
     <!-- [v36 NOVO] Export avançado -->
-    <button class="btn-g" onclick="exportJSON()" title="Export JSON Backup" style="font-size:11px">📄 JSON</button>
-    <button class="btn-g" onclick="exportSQL()" title="Export SQL Insert" style="font-size:11px">🗄️ SQL</button>
-    <button class="btn-g" onclick="exportCSVAdvanced()" title="Export CSV Completo" style="font-size:11px">📊 CSV+</button>
-    <button class="btn-g" onclick="openGsConfig()" id="btn-gs-cfg" title="Supabase config" aria-label="Configurar Supabase" style="font-size:11px">☁</button>
-    <button class="btn-g" onclick="resetDB()" title="Reset to original data" aria-label="Resetar para dados originais" style="font-size:11px">↺</button>
+    <button class="btn-g" onclick="exportJSON()" title="Exportar JSON (Backup)" style="font-size:11px">📄 JSON</button>
+    <button class="btn-g" onclick="exportSQL()" title="Exportar SQL Insert" style="font-size:11px">🗄️ SQL</button>
+    <button class="btn-g" onclick="exportCSVAdvanced()" title="Exportar CSV Completo" style="font-size:11px">📊 CSV+</button>
+    <button class="btn-g" onclick="openGsConfig()" id="btn-gs-cfg" title="Configurar Supabase" aria-label="Configurar Supabase" style="font-size:11px">☁</button>
+    <button class="btn-g" onclick="resetDB()" title="Resetar para dados originais" aria-label="Resetar para dados originais" style="font-size:11px">↺</button>
 
     <!-- Divider -->
     <div class="hdr-divider"></div>
@@ -2663,7 +2721,7 @@ input[type="checkbox"], input[type="radio"] {
       <button class="lang-btn"    id="lb-fr" onclick="StorageService.set('rochling_lang_manual','1');setLang('fr')" title="Français">FR</button>
       <button class="lang-btn"    id="lb-it" onclick="StorageService.set('rochling_lang_manual','1');setLang('it')" title="Italiano">IT</button>
       <button class="lang-btn"    id="lb-pl" onclick="StorageService.set('rochling_lang_manual','1');setLang('pl')" title="Polski">PL</button>
-      <select id="lang-select" title="More languages"
+      <select id="lang-select" title="Mais idiomas"
         onchange="StorageService.set('rochling_lang_manual','1');setLang(this.value)"
         style="font-size:10px;padding:2px 4px;border-radius:5px;border:1px solid var(--bdr2);background:var(--surf2);color:var(--tx);cursor:pointer;font-family:var(--font);height:22px;max-width:72px">
         <option value="pt">🇧🇷 PT</option>
@@ -2679,7 +2737,7 @@ input[type="checkbox"], input[type="radio"] {
         <option value="ru">🇷🇺 RU</option>
       </select>
     </div>
-    <div class="lang-tgl" title="Date format">
+    <div class="lang-tgl" title="Formato de data">
       <button class="lang-btn on" id="df-dmy" onclick="setDateFmt('dmy')">DD/MM</button>
       <button class="lang-btn"    id="df-iso" onclick="setDateFmt('iso')">ISO</button>
     </div>
@@ -2825,7 +2883,7 @@ input[type="checkbox"], input[type="radio"] {
       <div class="kpi-footer"><span class="kpi-sub" id="ks-90d">monitorar</span><canvas class="kpi-sparkline" id="sp-90d"></canvas></div>
       <span class="kpi-drill-hint">↗ ver registros</span>
     </div>
-    <div class="kpi c-purple" onclick="openDrill('saude',t('lbl_health_idx'))">
+    <div class="kpi c-purple" onclick="openDrill('saude','Health Index')">
       <div class="kpi-header"><span class="kpi-lbl">Índice Saúde</span><span class="kpi-icon">💚</span></div>
       <div class="kpi-val" id="k-saude">—</div>
       <div class="kpi-footer"><span class="kpi-sub" id="ks-saude">equip. em dia</span><canvas class="kpi-sparkline" id="sp-saude"></canvas></div>
@@ -2837,7 +2895,7 @@ input[type="checkbox"], input[type="radio"] {
   <div id="charts-empty-state" style="display:none;padding:32px 24px;text-align:center;background:var(--surf);border-radius:12px;margin:20px;border:2px dashed var(--bdr2)">
     <div style="font-size:32px;margin-bottom:12px">📭</div>
     <div style="font-size:18px;font-weight:600;color:var(--tx);margin-bottom:8px" data-i18n="empty_equip_title">Nenhum equipamento cadastrado</div>
-    <div style="font-size:13px;color:var(--tx2);margin-bottom:20px">Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.</div>
+    <div style="font-size:13px;color:var(--tx2);margin-bottom:20px" data-i18n="empty_equip_sub">Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.</div>
     <button onclick="document.getElementById('edit-modal').style.display='flex';initEquipModal('new')" style="padding:10px 20px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-family:var(--font)">
       ➕ <span data-i18n="empty_equip_btn">Adicionar primeiro equipamento</span>
     </button>
@@ -2874,7 +2932,7 @@ input[type="checkbox"], input[type="radio"] {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
       <div class="chart-title" style="margin-bottom:0">
         <span class="chart-title-dot" style="background:var(--brand)"></span>
-        📆 Calibrações por Mês — Previstas vs Realizadas
+        <span id="ch-mensal-title">📆 Calibrações por Mês — Previstas vs Realizadas</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         <div style="display:flex;gap:4px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:5px;padding:3px 4px">
@@ -2886,9 +2944,9 @@ input[type="checkbox"], input[type="radio"] {
       </div>
     </div>
     <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#0064b3;display:inline-block"></span>Previstas (vencem)</div>
-      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#16a34a;display:inline-block"></span>Realizadas (última calib.)</div>
-      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#dc2626;display:inline-block"></span>Vencidas sem realização</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#0064b3;display:inline-block"></span><span id="ch-leg-prev">Previstas (vencem)</span></div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#16a34a;display:inline-block"></span><span id="ch-leg-real">Realizadas (última calib.)</span></div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:12px;height:12px;border-radius:2px;background:#dc2626;display:inline-block"></span><span id="ch-leg-venc">Vencidas sem realização</span></div>
     </div>
     <div style="height:270px;position:relative"><canvas id="ch-mensal"></canvas></div>
     <div id="ch-mensal-sumario" style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--bdr2)"></div>
@@ -2932,7 +2990,7 @@ input[type="checkbox"], input[type="radio"] {
       <span class="bulk-bar-count" id="bulk-count-alert">0</span>
       <span>selecionado(s)</span>
       <div class="bulk-field-row">
-        <label style="font-size:10px;color:var(--tx3);font-weight:700;white-space:nowrap">Editar campo:</label>
+        <label style="font-size:10px;color:var(--tx3);font-weight:700;white-space:nowrap" data-i18n="lbl_edit_field">Editar campo:</label>
         <select id="bulk-field-alert" onchange="onBulkFieldChange('alert')">
           <option value="">— escolha —</option>
           <option value="status">Status Operacional</option>
@@ -3076,7 +3134,7 @@ input[type="checkbox"], input[type="radio"] {
         <span class="bulk-bar-count" id="bulk-count-geral">0</span>
         <span>selecionado(s)</span>
         <div class="bulk-field-row">
-          <label style="font-size:10px;color:var(--tx3);font-weight:700;white-space:nowrap">Editar campo:</label>
+          <label style="font-size:10px;color:var(--tx3);font-weight:700;white-space:nowrap" data-i18n="lbl_edit_field">Editar campo:</label>
           <select id="bulk-field-geral" onchange="onBulkFieldChange('geral')">
             <option value="">— escolha —</option>
             <option value="status">Status Operacional</option>
@@ -3237,7 +3295,7 @@ input[type="checkbox"], input[type="radio"] {
       <span class="bulk-bar-count" id="bulk-count-rep">0</span>
       <span>selecionado(s)</span>
       <div class="bulk-field-row">
-        <label style="font-size:10px;color:var(--tx3);font-weight:700;white-space:nowrap">Editar campo:</label>
+        <label style="font-size:10px;color:var(--tx3);font-weight:700;white-space:nowrap" data-i18n="lbl_edit_field">Editar campo:</label>
         <select id="bulk-field-rep" onchange="onBulkFieldChange('rep')">
           <option value="">— escolha —</option>
           <option value="status">Status Operacional</option>
@@ -3461,19 +3519,19 @@ input[type="checkbox"], input[type="radio"] {
   <div class="audit-card">
     <div class="audit-hdr">
       <div class="audit-hdr-title">
-        🔏 Logs de Auditoria
+        <span id="v12-audit-title">🔏 Logs de Auditoria</span>
         <span style="font-size:9.5px;font-weight:500;color:var(--tx3);background:var(--surf3);border:1px solid var(--bdr3);border-radius:4px;padding:1px 7px;font-family:var(--mono)">IATF 16949</span>
-        <span style="font-size:10px;color:var(--tx3);font-weight:400">— Últimos 50 registos</span>
+        <span style="font-size:10px;color:var(--tx3);font-weight:400" id="v12-audit-last50">— Últimos 50 registos</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <span id="audit-count-badge" style="font-size:10px;color:var(--tx3);font-family:var(--mono)"></span>
-        <button class="btn-g" onclick="v12ExportAuditCSV()" style="font-size:11px">↓ Exportar Logs CSV</button>
-        <button class="btn-g" onclick="v12ClearAuditLogs()" style="font-size:11px;color:var(--red)">🗑 Limpar</button>
+        <button class="btn-g" onclick="v12ExportAuditCSV()" style="font-size:11px" id="v12-btn-export-csv">↓ Exportar Logs CSV</button>
+        <button class="btn-g" onclick="v12ClearAuditLogs()" style="font-size:11px;color:var(--red)" id="v12-btn-clear">🗑 Limpar</button>
         <button class="btn-g" onclick="v12RenderAuditTable()" style="font-size:11px">🔄</button>
       </div>
     </div>
     <div class="audit-wrap" id="v12-audit-wrap">
-      <div class="audit-empty" id="audit-empty">Nenhum log registado ainda. As ações críticas aparecerão aqui.</div>
+      <div class="audit-empty" id="audit-empty" data-i18n="audit_empty_msg">Nenhum log registado ainda. As ações críticas aparecerão aqui.</div>
       <table id="audit-tbl" style="display:none">
         <thead>
           <tr>
@@ -3731,11 +3789,11 @@ input[type="checkbox"], input[type="radio"] {
 <div id="tab-auditoria" class="page">
   <div class="tbl-card" style="margin-bottom:16px">
     <div class="tbl-hdr">
-      <span class="tbl-title">&#128220; Log de Auditoria</span>
+      <span class="tbl-title" id="audit-tab-title">&#128220; Log de Auditoria</span>
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
         <span class="tbl-cnt" id="audit-cnt">0</span>
         <input class="search-box" id="audit-search" placeholder="&#128269; Filtrar log..." data-i18n-ph="ph_filter_log" oninput="renderAuditLog()" style="min-width:200px">
-        <button class="btn-g" onclick="clearAuditLog()">&#128465; Limpar Log</button>
+        <button class="btn-g" onclick="clearAuditLog()" id="audit-btn-clear-log">&#128465; Limpar Log</button>
         <button class="btn-g" onclick="exportAuditCSV()">&#8595; CSV</button>
       </div>
     </div>
@@ -3743,57 +3801,57 @@ input[type="checkbox"], input[type="radio"] {
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead id="audit-thead">
           <tr>
-            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--bdr2);position:sticky;top:0;z-index:2">Data/Hora</th>
-            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--bdr2);position:sticky;top:0;z-index:2">Ação</th>
-            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--bdr2);position:sticky;top:0;z-index:2">Código</th>
-            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--bdr2);position:sticky;top:0;z-index:2">Detalhes</th>
-            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--bdr2);position:sticky;top:0;z-index:2">Usuário</th>
+            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--bdr2);position:sticky;top:0;z-index:2" id="audit-th-date">Data/Hora</th>
+            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--bdr2);position:sticky;top:0;z-index:2" id="audit-th-acao">Ação</th>
+            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--bdr2);position:sticky;top:0;z-index:2" id="audit-th-cod">Código</th>
+            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--bdr2);position:sticky;top:0;z-index:2" id="audit-th-det">Detalhes</th>
+            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--bdr2);position:sticky;top:0;z-index:2" id="audit-th-user">Usuário</th>
           </tr>
         </thead>
         <tbody id="audit-tbody">
-          <tr><td colspan="5" style="padding:32px;text-align:center;color:var(--tx3);font-size:12px">&#128203; Nenhum evento registrado ainda.</td></tr>
+          <tr id="audit-empty-row"><td colspan="5" style="padding:32px;text-align:center;color:var(--tx3);font-size:12px" id="audit-empty-row-td">📋 Nenhum evento registrado ainda.</td></tr>
         </tbody>
       </table>
     </div>
-    <div class="pag"><span id="audit-pinfo">Aguardando eventos...</span></div>
+    <div class="pag"><span id="audit-pinfo" data-i18n-default="audit_waiting">Aguardando eventos...</span></div>
   </div>
   <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
-    <div class="kpi c-blue"><div class="kpi-header"><span class="kpi-lbl">Total de Eventos</span><span class="kpi-icon">&#128202;</span></div><div class="kpi-val" id="audit-k-total">0</div><div class="kpi-footer"><span class="kpi-sub">registros auditados</span></div></div>
-    <div class="kpi c-green"><div class="kpi-header"><span class="kpi-lbl">Adições</span><span class="kpi-icon">&#10133;</span></div><div class="kpi-val" id="audit-k-add">0</div><div class="kpi-footer"><span class="kpi-sub">novos cadastros</span></div></div>
-    <div class="kpi c-orange"><div class="kpi-header"><span class="kpi-lbl">Edições</span><span class="kpi-icon">&#9999;</span></div><div class="kpi-val" id="audit-k-edit">0</div><div class="kpi-footer"><span class="kpi-sub">alterações salvas</span></div></div>
-    <div class="kpi c-red"><div class="kpi-header"><span class="kpi-lbl">Exclusões</span><span class="kpi-icon">&#128465;</span></div><div class="kpi-val" id="audit-k-del">0</div><div class="kpi-footer"><span class="kpi-sub">registros removidos</span></div></div>
-    <div class="kpi c-purple"><div class="kpi-header"><span class="kpi-lbl">Importações</span><span class="kpi-icon">&#128229;</span></div><div class="kpi-val" id="audit-k-import">0</div><div class="kpi-footer"><span class="kpi-sub">arquivos importados</span></div></div>
+    <div class="kpi c-blue"><div class="kpi-header"><span class="kpi-lbl" id="audit-kpi-lbl-total">Total de Eventos</span><span class="kpi-icon">&#128202;</span></div><div class="kpi-val" id="audit-k-total">0</div><div class="kpi-footer"><span class="kpi-sub" id="audit-kpi-sub-total">registros auditados</span></div></div>
+    <div class="kpi c-green"><div class="kpi-header"><span class="kpi-lbl" id="audit-kpi-lbl-add">Adições</span><span class="kpi-icon">&#10133;</span></div><div class="kpi-val" id="audit-k-add">0</div><div class="kpi-footer"><span class="kpi-sub" id="audit-kpi-sub-add">novos cadastros</span></div></div>
+    <div class="kpi c-orange"><div class="kpi-header"><span class="kpi-lbl" id="audit-kpi-lbl-edit">Edições</span><span class="kpi-icon">&#9999;</span></div><div class="kpi-val" id="audit-k-edit">0</div><div class="kpi-footer"><span class="kpi-sub" id="audit-kpi-sub-edit">alterações salvas</span></div></div>
+    <div class="kpi c-red"><div class="kpi-header"><span class="kpi-lbl" id="audit-kpi-lbl-del">Exclusões</span><span class="kpi-icon">&#128465;</span></div><div class="kpi-val" id="audit-k-del">0</div><div class="kpi-footer"><span class="kpi-sub" id="audit-kpi-sub-del">registros removidos</span></div></div>
+    <div class="kpi c-purple"><div class="kpi-header"><span class="kpi-lbl" id="audit-kpi-lbl-import">Importações</span><span class="kpi-icon">&#128229;</span></div><div class="kpi-val" id="audit-k-import">0</div><div class="kpi-footer"><span class="kpi-sub" id="audit-kpi-sub-import">arquivos importados</span></div></div>
   </div>
 </div>
 
 <!-- ═══════════════════════ RESPONSAVEIS v19 ══════════════════════ -->
 <div id="tab-responsaveis" class="page">
   <div class="tbl-hdr" style="background:var(--surf);border:1px solid var(--bdr2);border-radius:var(--r2) var(--r2) 0 0;margin-bottom:0;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-    <span class="tbl-title">&#128100; Dashboard de Responsaveis</span>
+    <span class="tbl-title" id="resp-dash-title">&#128100; Dashboard de Responsaveis</span>
     <div style="display:flex;gap:5px">
-      <input class="search-box" id="resp-search" placeholder="&#128269; Filtrar responsavel..." oninput="renderRespDashboard()" style="min-width:180px">
+      <input class="search-box" id="resp-search" placeholder="&#128269; Filtrar responsavel..." data-i18n-ph="ph_filter_resp" oninput="renderRespDashboard()" style="min-width:180px">
       <button class="btn-g" onclick="exportRespCSV()">&#8595; CSV</button>
     </div>
   </div>
   <div id="resp-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;padding:16px 0;margin-bottom:16px"></div>
   <div class="tbl-card">
-    <div class="tbl-hdr"><span class="tbl-title">&#127942; Ranking de Saude por Responsavel</span></div>
+    <div class="tbl-hdr"><span class="tbl-title" id="resp-rank-title">&#127942; Ranking de Saude por Responsavel</span></div>
     <div class="tbl-wrap" style="max-height:400px;overflow-y:auto">
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead>
           <tr>
             <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0">#</th>
-            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0">Responsavel</th>
-            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0">Total</th>
-            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0">Vencidos</th>
-            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0">30d</th>
-            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0">OK</th>
-            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0">Indice Saude</th>
-            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0">Barra</th>
+            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0" id="resp-th-resp">Responsavel</th>
+            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0" id="resp-th-total">Total</th>
+            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0" id="resp-th-venc">Vencidos</th>
+            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0" id="resp-th-30d">30d</th>
+            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0" id="resp-th-ok">OK</th>
+            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0" id="resp-th-saude">Indice Saude</th>
+            <th style="padding:8px;background:var(--surf2);color:var(--tx2);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bdr2);position:sticky;top:0" id="resp-th-barra">Barra</th>
           </tr>
         </thead>
         <tbody id="resp-ranking-tbody">
-          <tr><td colspan="8" style="padding:24px;text-align:center;color:var(--tx3)">Carregando...</td></tr>
+          <tr><td colspan="8" style="padding:24px;text-align:center;color:var(--tx3)" id="resp-loading-row">Carregando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -3844,7 +3902,7 @@ input[type="checkbox"], input[type="radio"] {
       <!-- Setup SQL -->
       <details style="margin-bottom:16px;border:1px solid var(--bdr2);border-radius:8px;overflow:hidden">
         <summary style="cursor:pointer;color:var(--accent);font-size:12px;font-weight:600;padding:10px 14px;background:var(--surf2);list-style:none;display:flex;align-items:center;gap:6px">
-          📋 Configuração inicial — clique para ver o SQL necessário
+          <span id="admin-sql-title">📋 Configuração inicial — clique para ver o SQL necessário</span>
         </summary>
         <div style="padding:14px;background:var(--surf)">
           <p style="color:var(--tx2);font-size:12px;margin:0 0 10px">Execute este SQL no <b>Supabase → SQL Editor</b> uma única vez para criar a tabela de perfis:</p>
@@ -3884,7 +3942,7 @@ ALTER TABLE equipamentos ADD COLUMN IF NOT EXISTS unidade TEXT;</pre>
 
       <!-- Formulário para adicionar/atualizar -->
       <div style="background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:14px;margin-bottom:16px">
-        <div style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:10px">➕ Adicionar / Atualizar Usuário</div>
+        <div style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:10px" id="admin-add-user-title">➕ Adicionar / Atualizar Usuário</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
           <div style="flex:2;min-width:200px">
             <label style="font-size:10px;color:var(--tx3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">E-mail do usuário</label>
@@ -3920,9 +3978,9 @@ ALTER TABLE equipamentos ADD COLUMN IF NOT EXISTS unidade TEXT;</pre>
             </div>
           </div>
           <div style="display:flex;gap:6px;align-self:flex-end;flex-wrap:wrap">
-            <button class="btn-p" onclick="adminSaveUser()" style="padding:8px 14px;font-size:11px;white-space:nowrap" title="Apenas vincula o e-mail à planta — usuário já deve existir no Supabase Auth">💾 Salvar perfil</button>
-            <button class="btn-p" onclick="adminCreateWithPassword()" style="padding:8px 14px;font-size:11px;white-space:nowrap;background:#7c3aed;border-color:#7c3aed" title="Cria o usuário com senha definida agora — sem precisar de e-mail real">🔑 Criar c/ senha</button>
-            <button class="btn-p" onclick="adminInviteUser()" style="padding:8px 14px;font-size:11px;white-space:nowrap;background:var(--green,#16a34a);border-color:var(--green,#16a34a)" title="Envia e-mail de convite — o usuário define a própria senha">✉ Convidar</button>
+            <button class="btn-p" onclick="adminSaveUser()" style="padding:8px 14px;font-size:11px;white-space:nowrap" title="Apenas vincula o e-mail à planta — usuário já deve existir no Supabase Auth" id="admin-btn-save-profile">💾 Salvar perfil</button>
+            <button class="btn-p" onclick="adminCreateWithPassword()" style="padding:8px 14px;font-size:11px;white-space:nowrap;background:#7c3aed;border-color:#7c3aed" title="Cria o usuário com senha definida agora — sem precisar de e-mail real" id="admin-btn-create-pwd">🔑 Criar c/ senha</button>
+            <button class="btn-p" onclick="adminInviteUser()" style="padding:8px 14px;font-size:11px;white-space:nowrap;background:var(--green,#16a34a);border-color:var(--green,#16a34a)" title="Envia e-mail de convite — o usuário define a própria senha" id="admin-btn-invite">✉ Convidar</button>
           </div>
         </div>
       </div>
@@ -3939,7 +3997,7 @@ ALTER TABLE equipamentos ADD COLUMN IF NOT EXISTS unidade TEXT;</pre>
             </tr>
           </thead>
           <tbody id="admin-users-tbody">
-            <tr><td colspan="4" style="padding:24px;text-align:center;color:var(--tx3);font-size:12px">Clique em <b>Atualizar Lista</b> para carregar os usuários.</td></tr>
+            <tr id="admin-users-load-row"><td colspan="4" style="padding:24px;text-align:center;color:var(--tx3);font-size:12px">Clique em <b>Atualizar Lista</b> para carregar os usuários.</td></tr>
           </tbody>
         </table>
       </div>
@@ -4081,20 +4139,20 @@ window.addEventListener('unhandledrejection', function(e) {
 // ═══════════════════════════════════════════════════════
 // [v20] STORAGE SERVICE — cached, version-aware, fail-safe
 // ═══════════════════════════════════════════════════════
-var StorageService = (() => {
-  var _cache = {};
+const StorageService = (() => {
+  const _cache = {};
   return {
     get(key, fallback = null) {
       if (key in _cache) return _cache[key];
       try {
-        var v = localStorage.getItem(key);
+        const v = localStorage.getItem(key);
         _cache[key] = v !== null ? v : fallback;
         return _cache[key];
       } catch(e) { console.warn('[StorageService.get]', key, e); return fallback; }
     },
     set(key, value) {
       try {
-        var s = typeof value === 'string' ? value : JSON.stringify(value);
+        const s = typeof value === 'string' ? value : JSON.stringify(value);
         localStorage.setItem(key, s);
         _cache[key] = value;
         return true;
@@ -4106,7 +4164,7 @@ var StorageService = (() => {
     },
     getJSON(key, fallback = null) {
       try {
-        var raw = this.get(key);
+        const raw = this.get(key);
         return raw ? JSON.parse(raw) : fallback;
       } catch(e) { console.warn('[StorageService.getJSON] parse error', key, e); return fallback; }
     },
@@ -4114,14 +4172,16 @@ var StorageService = (() => {
   };
 })();
 
-var LS_KEY    = 'rochling_db_v1';
-var LS_SB_CFG = 'rochling_sb_cfg'; // Supabase config key (URL + anon key)
+const LS_KEY    = 'rochling_db_v1';
+const LS_SB_CFG = 'rochling_sb_cfg'; // Supabase config key (URL + anon key)
 
 // ═══════════════════════════════════════════════════════
 // i18n — Bilíngue PT / EN
 // ═══════════════════════════════════════════════════════
-var LANG     = StorageService.get('rochling_lang', 'pt');
-var DATE_FMT = StorageService.get('rochling_datefmt', 'dmy'); // 'dmy' = DD/MM/AAAA | 'iso' = AAAA-MM-DD
+// [Already declared early at line 176-177 to prevent Temporal Dead Zone]
+// Now update with StorageService values
+LANG = StorageService.get('rochling_lang', 'pt');
+DATE_FMT = StorageService.get('rochling_datefmt', 'dmy'); // 'dmy' = DD/MM/AAAA | 'iso' = AAAA-MM-DD
 
 // fmtDate é mantido por compatibilidade; delega para fmtDateSafe (timezone-safe)
 // Toda a formatação de datas passa por string-splitting — zero risco de desvio iOS/Safari.
@@ -4140,7 +4200,7 @@ function setDateFmt(fmt) {
   renderTable('alert');
 }
 
-var T = {
+const T = {
   pt: {
     // Header / nav
     title:          'Controle de Equipamentos de Medição',
@@ -4242,10 +4302,10 @@ var T = {
     rep_evolucao:   '📈 Evolução Acumulada (7 meses)',
     rep_resp:       '👤 Por Responsável',
     rep_emp_venc:   '🏭 Vencidos por Empresa',
-    rep_freq:       t('ch_lbl_freq'),
+    rep_freq:       '📅 Frequência de Calibração',
     rep_heatmap:    '🌡️ Status por Localização',
-    rep_resumo:     t('lbl_general_summary'),
-    rep_urgentes:   t('lbl_top_urgent'),
+    rep_resumo:     '📊 Resumo Geral',
+    rep_urgentes:   '🔴 Top Urgentes',
     rep_kpi_venc:   'Vencidos',
     rep_kpi_30d:    'Vencem 30d',
     rep_kpi_90d:    'Vencem 90d',
@@ -4312,17 +4372,17 @@ var T = {
     ch_lbl_due30: 'Vencem em 30 dias',
     ch_lbl_due90: 'Vencem em 90 dias',
     ch_lbl_ontime: 'Em dia (>90d)',
-    ch_lbl_nodate: t('lbl_no_date'),
+    ch_lbl_nodate: 'Sem Data',
     ch_lbl_avg: 'Média',
-    ch_lbl_done: t('ch_lbl_done'),
-    ch_lbl_sched: t('ch_lbl_sched'),
-    ch_lbl_missed: t('ch_lbl_missed'),
-    ch_lbl_freq: t('ch_lbl_freq'),
-    ch_lbl_exp_type: t('ch_lbl_exp_type'),
-    ch_lbl_calib_ok: t('ch_lbl_calib_ok'),
-    ch_lbl_exp_calib: t('ch_lbl_exp_calib'),
-    ch_lbl_location: t('ch_lbl_location'),
-    ch_lbl_resp: t('ch_lbl_resp'),
+    ch_lbl_done: 'Calibrado',
+    ch_lbl_sched: 'Agendado',
+    ch_lbl_missed: 'Atrasado',
+    ch_lbl_freq: 'Frequência',
+    ch_lbl_exp_type: 'Tipo de Vencimento',
+    ch_lbl_calib_ok: 'Calibração OK',
+    ch_lbl_exp_calib: 'Calibração Vencida',
+    ch_lbl_location: 'Localização',
+    ch_lbl_resp: 'Responsável',
     lbl_click_edit: 'Clique para editar',
     lbl_edit: 'Editar',
     lbl_duplicate: 'Duplicar linha — copiar para novo cadastro',
@@ -4356,13 +4416,13 @@ var T = {
     lbl_storage_used: '% usado',
     bulk_calibrated: 'Marcar como calibrado',
     bulk_delete_confirm: 'Excluir {n} registro(s) selecionado(s)? Esta ação não pode ser desfeita.',
-    lbl_health_idx: t('lbl_health_idx'),
-    lbl_total_equip: t('lbl_total_equip'),
+    lbl_health_idx: 'Índice de Saúde',
+    lbl_total_equip: 'Total de Equipamentos',
     lbl_active_equip: 'Ativos',
     lbl_inactive_equip: 'Inativos',
-    lbl_no_date: t('lbl_no_date'),
-    lbl_top_urgent: t('lbl_top_urgent'),
-    lbl_general_summary: t('lbl_general_summary'),
+    lbl_no_date: 'Sem Data',
+    lbl_top_urgent: 'Top Urgentes',
+    lbl_general_summary: 'Resumo Geral',
   
     s_calib_approved: 'Instrumento Calibrado e aprovado',
     s_calib_required: 'Calibração Necessária',
@@ -4378,39 +4438,39 @@ var T = {
   
     confirm_delete: 'Excluir "{name}"?\nEsta ação não pode ser desfeita.',
   
-    toast_undo_empty: t('toast_undo_empty'),
-    toast_redo_empty: t('toast_redo_empty'),
-    toast_directors_only: t('toast_directors_only'),
-    toast_email_invalid: t('toast_email_invalid'),
-    toast_fill_email_plant: t('toast_fill_email_plant'),
-    toast_pwd_required: t('toast_pwd_required'),
-    toast_pwd_short: t('toast_pwd_short'),
+    toast_undo_empty: '⚠️ Nada para desfazer',
+    toast_redo_empty: '⚠️ Nada para refazer',
+    toast_directors_only: 'Apenas diretores',
+    toast_email_invalid: '⚠️ E-mail inválido',
+    toast_fill_email_plant: 'Preencha e-mail e planta',
+    toast_pwd_required: 'Senha obrigatória',
+    toast_pwd_short: 'Senha muito curta',
     toast_creating_user: '⏳ Criando usuário...',
     toast_edge_unavail: 'ℹ️ Edge Function indisponível — usando criação direta...',
     toast_user_existed: 'ℹ️ Usuário já existia no Auth — vinculando à planta...',
-    toast_invite_fill: t('toast_invite_fill'),
-    toast_sql_copied: t('toast_sql_copied'),
-    toast_dir_only_plant: t('toast_dir_only_plant'),
-    toast_plant_code_req: t('toast_plant_code_req'),
-    toast_plant_code_inv: t('toast_plant_code_inv'),
-    toast_private_mode: t('toast_private_mode'),
-    toast_sb_not_config: t('toast_sb_not_config'),
-    toast_desc_required: t('toast_desc_required'),
-    toast_loc_required: t('toast_loc_required'),
-    toast_date_order: t('toast_date_order'),
-    toast_file_too_big: t('toast_file_too_big'),
-    toast_none_selected: t('toast_none_selected'),
-    toast_updated_ok: t('toast_updated_ok'),
-    toast_none_visible: t('toast_none_visible'),
-    toast_not_found: t('toast_not_found'),
-    toast_changes_discarded: t('toast_changes_discarded'),
-    toast_json_only: t('toast_json_only'),
-    toast_import_invalid: t('toast_import_invalid'),
-    toast_import_cancel: t('toast_import_cancel'),
-    toast_backup_ok: t('toast_backup_ok'),
-    toast_fill_required: t('toast_fill_required'),
-    toast_cam_unsupported: t('toast_cam_unsupported'),
-    toast_scan_unavail: t('toast_scan_unavail'),
+    toast_invite_fill: 'Preencha todos os campos',
+    toast_sql_copied: 'SQL copiado',
+    toast_dir_only_plant: 'Apenas diretores',
+    toast_plant_code_req: 'Código da planta obrigatório',
+    toast_plant_code_inv: '⚠️ Código inválido. Use 2–12 letras, números, _ ou -.',
+    toast_private_mode: 'Modo privado',
+    toast_sb_not_config: 'Supabase não configurado',
+    toast_desc_required: 'Descrição obrigatória',
+    toast_loc_required: 'Localização obrigatória',
+    toast_date_order: '⚠ Próxima Calibração não pode ser anterior à Última Calibração.',
+    toast_file_too_big: 'Arquivo muito grande',
+    toast_none_selected: 'Nenhum selecionado',
+    toast_updated_ok: 'Atualizado com sucesso',
+    toast_none_visible: 'Nenhum visível',
+    toast_not_found: 'Não encontrado',
+    toast_changes_discarded: 'Alterações descartadas',
+    toast_json_only: 'Apenas JSON',
+    toast_import_invalid: 'Importação cancelada — dados inválidos',
+    toast_import_cancel: 'Importação cancelada',
+    toast_backup_ok: 'Backup criado',
+    toast_fill_required: 'Preencha todos os campos obrigatórios',
+    toast_cam_unsupported: 'Câmera não suportada',
+    toast_scan_unavail: 'Scanner indisponível',
   
     toast_creating_user_name: '⏳ Criando usuário {name}...',
     toast_user_created: '✅ Usuário criado: {name}',
@@ -4428,6 +4488,156 @@ var T = {
   
     btn_new_lbl: 'Novo',
     sb_overview: 'Visão Geral',
+
+    // Login
+    login_logo_text:   'Controle de Equipamentos<br>de Medição',
+    login_title:       'Acesso ao Sistema',
+    login_subtitle:    'Entre com seu e-mail corporativo cadastrado.',
+    login_email_lbl:   'E-mail',
+    login_pass_lbl:    'Senha',
+    login_error_msg:   'E-mail ou senha incorretos.',
+    login_btn_lbl:     'Entrar',
+    login_forgot:      'Esqueci minha senha',
+    login_footer:      'Acesso restrito a e-mails autorizados.',
+
+    // Dashboard monthly chart
+    ch_mensal_title:   '📆 Calibrações por Mês — Previstas vs Realizadas',
+    ch_leg_prev:       'Previstas (vencem)',
+    ch_leg_real:       'Realizadas (última calib.)',
+    ch_leg_venc:       'Vencidas sem realização',
+    ch_click_detail:   'clique nas barras para detalhes',
+
+    // Bulk edit
+    lbl_edit_field:    'Editar campo:',
+
+    // Bulk field options
+    bfe_status:        'Status Operacional',
+    bfe_status_calib:  'Status Calibração',
+    bfe_empresa:       'Empresa Executante',
+    bfe_responsavel:   'Responsável',
+    bfe_localizacao:   'Localização',
+    bfe_freq:          'Frequência (dias)',
+    bfe_ult_calib:     'Última Calibração',
+    bfe_cliente:       'Cliente',
+
+    // Header button tooltips
+    title_sync_now:    'Sincronizar agora',
+    title_undo:        'Desfazer (Ctrl+Z)',
+    title_redo:        'Refazer (Ctrl+Y)',
+    title_import:      'Importar JSON — Arrastar & Soltar',
+    title_export:      'Exportar JSON (Backup)',
+    title_supabase:    'Configurar Supabase',
+    title_reset:       'Resetar para dados originais',
+    title_more_langs:  'Mais idiomas',
+    title_date_fmt:    'Formato de data',
+    title_plant_sel:   'Trocar planta (modo diretor)',
+    title_logout:      'Sair',
+    aria_logo:         'Röchling Automotive',
+    aria_sync:         'Sincronizar agora',
+    aria_undo:         'Desfazer',
+    aria_redo:         'Refazer',
+    aria_supabase:     'Configurar Supabase',
+    aria_reset:        'Resetar para dados originais',
+    aria_logout:       'Sair do sistema',
+    aria_nav:          'Navegação principal',
+    aria_search_eq:    'Buscar equipamentos por código ou descrição',
+
+    // Toolbar tooltips
+    title_pdf_alerts:  'Gerar PDF das linhas visíveis',
+    title_refresh:     'Atualizar tabela',
+    title_adv_filter:  'Filtros avançados',
+    title_clear_f:     'Limpar todos os filtros',
+    title_apply_f:     'Reaplicar filtros e atualizar gráficos',
+    title_sel_qr:      'Selecionar equipamentos para imprimir QR em lote',
+    title_tbl_view:    'Alternar para visão de tabela',
+    title_card_view:   'Voltar para lista de cards',
+    title_scan_qr:     'Escanear QR Code com a câmera para localizar equipamento',
+    title_scan_hist:   'Histórico dos últimos QR Codes escaneados nesta sessão',
+
+    // Audit session empty
+    audit_log_count_suffix: 'log(s) guardado(s)',
+    audit_session_empty: 'Nenhum equipamento cadastrado nesta sessão.',
+
+    // Audit mini-panel (v12)
+    v12_audit_title:     '🔏 Logs de Auditoria',
+    v12_audit_last50:    '— Últimos 50 registos',
+    v12_btn_export_csv:  '↓ Exportar Logs CSV',
+    v12_btn_clear:       '🗑 Limpar',
+    audit_empty_msg:     'Nenhum log registado ainda. As ações críticas aparecerão aqui.',
+    v12_th_date:         'Data / Hora',
+    v12_th_tipo:         'Tipo',
+    v12_th_id:           'ID Equip.',
+    v12_th_desc:         'Descrição',
+    v12_th_user:         'Utilizador',
+
+    // Audit full tab
+    audit_tab_title:     '📄 Log de Auditoria',
+    audit_btn_clear_log: '🗑 Limpar Log',
+    audit_th_date:       'Data/Hora',
+    audit_th_acao:       'Ação',
+    audit_th_cod:        'Código',
+    audit_th_det:        'Detalhes',
+    audit_th_user:       'Usuário',
+    audit_waiting:       'Aguardando eventos...',
+    audit_no_events:     '📄 Nenhum evento registrado ainda. Realize ações (adicionar, editar, excluir, importar) para gerar logs.',
+    audit_events_count:  '{n} evento(s) exibido(s)',
+    audit_events_zero:   '0 evento(s)',
+
+    // Audit KPIs
+    audit_kpi_total:     'Total de Eventos',
+    audit_kpi_sub_total: 'registros auditados',
+    audit_kpi_add:       'Adições',
+    audit_kpi_sub_add:   'novos cadastros',
+    audit_kpi_edit:      'Edições',
+    audit_kpi_sub_edit:  'alterações salvas',
+    audit_kpi_del:       'Exclusões',
+    audit_kpi_sub_del:   'registros removidos',
+    audit_kpi_import:    'Importações',
+    audit_kpi_sub_import:'arquivos importados',
+
+    // Responsáveis section
+    resp_dash_title:     '👤 Dashboard de Responsáveis',
+    ph_filter_resp:      '🔍 Filtrar responsável...',
+    resp_rank_title:     '🏆 Ranking de Saúde por Responsável',
+    resp_th_resp:        'Responsável',
+    resp_th_total:       'Total',
+    resp_th_venc:        'Vencidos',
+    resp_th_30d:         '30d',
+    resp_th_ok:          'OK',
+    resp_th_saude:       'Índice Saúde',
+    resp_th_barra:       'Barra',
+    resp_loading:        'Carregando...',
+
+    // Admin user form (not covered by data-adm-i18n)
+    admin_sql_title:     '📋 Configuração inicial — clique para ver o SQL necessário',
+    admin_add_user_title:'➕ Adicionar / Atualizar Usuário',
+    admin_btn_save_prof: '💾 Salvar perfil',
+    admin_btn_create_pwd:'🔑 Criar c/ senha',
+    admin_btn_invite:    '✉ Convidar',
+    admin_users_load:    'Clique em <b>Atualizar Lista</b> para carregar os usuários.',
+    admin_lbl_email_usr: 'E-MAIL DO USUÁRIO',
+    admin_lbl_country_c: 'PAÍS (CÓDIGO)',
+    admin_lbl_name_opt:  'NOME (OPCIONAL)',
+    admin_lbl_pass:      'SENHA (CRIAR COM SENHA)',
+
+    // Mensal chart dataset labels + summary
+    ch_mensal_prev:      'Previstas (vencem)',
+    ch_mensal_real:      'Realizadas',
+    ch_mensal_venc:      'Vencidas s/ realização',
+    ch_mensal_sum_prev:  '📋 Previstas',
+    ch_mensal_sum_real:  '✅ Realizadas',
+    ch_mensal_sum_venc:  '🚨 Sem realização',
+    ch_mensal_sum_taxa:  '📊 Taxa de execução',
+    ch_mensal_tooltip:   'Taxa de execução: {tx}%',
+
+    tab_active:   'Ativos',
+    tab_inactive: 'Inativos',
+    tab_expired:  'Vencidos',
+    tab_due30:    'Vencem 30d',
+    tab_due90:    'Vencem 90d',
+    btn_cols_lbl: 'Colunas',
+    btn_import_lbl: 'Importar',
+    btn_export_lbl: 'Exportar',
   },
   en: {
     title:          'Measurement Equipment Control',
@@ -4705,6 +4915,135 @@ var T = {
   
     btn_new_lbl: 'New',
     sb_overview: 'Overview',
+
+    // Login
+    login_logo_text:   'Measurement Equipment Control',
+    login_title:       'System Access',
+    login_subtitle:    'Sign in with your registered corporate email.',
+    login_email_lbl:   'Email',
+    login_pass_lbl:    'Password',
+    login_error_msg:   'Incorrect email or password.',
+    login_btn_lbl:     'Sign In',
+    login_forgot:      'Forgot my password',
+    login_footer:      'Access restricted to authorized emails.',
+    ch_mensal_title:   '📆 Monthly Calibrations — Scheduled vs Completed',
+    ch_leg_prev:       'Scheduled (due)',
+    ch_leg_real:       'Completed (last calib.)',
+    ch_leg_venc:       'Overdue (not completed)',
+    ch_click_detail:   'click bars for details',
+    lbl_edit_field:    'Edit field:',
+    bfe_status:        'Operational Status',
+    bfe_status_calib:  'Calibration Status',
+    bfe_empresa:       'Executing Company',
+    bfe_responsavel:   'Responsible',
+    bfe_localizacao:   'Location',
+    bfe_freq:          'Frequency (days)',
+    bfe_ult_calib:     'Last Calibration',
+    bfe_cliente:       'Client',
+    title_sync_now:    'Sync now',
+    title_undo:        'Undo (Ctrl+Z)',
+    title_redo:        'Redo (Ctrl+Y)',
+    title_import:      'Import JSON — Drag & Drop',
+    title_export:      'Export JSON (Backup)',
+    title_supabase:    'Supabase config',
+    title_reset:       'Reset to original data',
+    title_more_langs:  'More languages',
+    title_date_fmt:    'Date format',
+    title_plant_sel:   'Switch plant (director mode)',
+    title_logout:      'Logout',
+    aria_logo:         'Röchling Automotive',
+    aria_sync:         'Sync now',
+    aria_undo:         'Undo',
+    aria_redo:         'Redo',
+    aria_supabase:     'Configure Supabase',
+    aria_reset:        'Reset to original data',
+    aria_logout:       'Sign out',
+    aria_nav:          'Main navigation',
+    aria_search_eq:    'Search equipment by code or description',
+    title_pdf_alerts:  'Generate PDF of visible rows',
+    title_refresh:     'Refresh table',
+    title_adv_filter:  'Advanced filters',
+    title_clear_f:     'Clear all filters',
+    title_apply_f:     'Re-apply filters and update charts',
+    title_sel_qr:      'Select equipment to batch-print QR',
+    title_tbl_view:    'Switch to table view',
+    title_card_view:   'Back to card list',
+    title_scan_qr:     'Scan QR Code with camera to locate equipment',
+    title_scan_hist:   'History of QR codes scanned this session',
+    audit_log_count_suffix: 'log(s) saved',
+    audit_session_empty: 'No equipment registered in this session.',
+
+    // Audit mini-panel (v12)
+    v12_audit_title:     '🔏 Audit Logs',
+    v12_audit_last50:    '— Last 50 records',
+    v12_btn_export_csv:  '↓ Export Logs CSV',
+    v12_btn_clear:       '🗑 Clear',
+    audit_empty_msg:     'No logs recorded yet. Critical actions will appear here.',
+    v12_th_date:         'Date / Time',
+    v12_th_tipo:         'Type',
+    v12_th_id:           'Equip. ID',
+    v12_th_desc:         'Description',
+    v12_th_user:         'User',
+
+    // Audit full tab
+    audit_tab_title:     '📄 Audit Log',
+    audit_btn_clear_log: '🗑 Clear Log',
+    audit_th_date:       'Date/Time',
+    audit_th_acao:       'Action',
+    audit_th_cod:        'Code',
+    audit_th_det:        'Details',
+    audit_th_user:       'User',
+    audit_waiting:       'Waiting for events...',
+    audit_no_events:     '📄 No events yet. Perform actions (add, edit, delete, import) to generate logs.',
+    audit_events_count:  '{n} event(s) shown',
+    audit_events_zero:   '0 event(s)',
+
+    // Audit KPIs
+    audit_kpi_total:     'Total Events',
+    audit_kpi_sub_total: 'audited records',
+    audit_kpi_add:       'Additions',
+    audit_kpi_sub_add:   'new records',
+    audit_kpi_edit:      'Edits',
+    audit_kpi_sub_edit:  'saved changes',
+    audit_kpi_del:       'Deletions',
+    audit_kpi_sub_del:   'removed records',
+    audit_kpi_import:    'Imports',
+    audit_kpi_sub_import:'imported files',
+
+    // Responsibles section
+    resp_dash_title:     '👤 Responsible Dashboard',
+    ph_filter_resp:      '🔍 Filter responsible...',
+    resp_rank_title:     '🏆 Health Ranking by Responsible',
+    resp_th_resp:        'Responsible',
+    resp_th_total:       'Total',
+    resp_th_venc:        'Overdue',
+    resp_th_30d:         '30d',
+    resp_th_ok:          'OK',
+    resp_th_saude:       'Health Index',
+    resp_th_barra:       'Bar',
+    resp_loading:        'Loading...',
+
+    // Admin user form
+    admin_sql_title:     '📋 Initial setup — click to view the required SQL',
+    admin_add_user_title:'➕ Add / Update User',
+    admin_btn_save_prof: '💾 Save profile',
+    admin_btn_create_pwd:'🔑 Create with password',
+    admin_btn_invite:    '✉ Invite',
+    admin_users_load:    'Click <b>Refresh List</b> to load users.',
+    admin_lbl_email_usr: 'USER EMAIL',
+    admin_lbl_country_c: 'COUNTRY (CODE)',
+    admin_lbl_name_opt:  'NAME (OPTIONAL)',
+    admin_lbl_pass:      'PASSWORD (CREATE WITH PASSWORD)',
+
+    // Mensal chart
+    ch_mensal_prev:      'Scheduled (due)',
+    ch_mensal_real:      'Completed',
+    ch_mensal_venc:      'Overdue (not completed)',
+    ch_mensal_sum_prev:  '📋 Scheduled',
+    ch_mensal_sum_real:  '✅ Completed',
+    ch_mensal_sum_venc:  '🚨 Not completed',
+    ch_mensal_sum_taxa:  '📊 Execution rate',
+    ch_mensal_tooltip:   'Execution rate: {tx}%',
   },
 
   // ── [v47] ESPAÑOL ──────────────────────────────────────────────
@@ -4937,7 +5276,7 @@ var T = {
     toast_undo_empty: '⚠️ Nada para deshacer',
     toast_redo_empty: '⚠️ Nada para rehacer',
     toast_directors_only: '⚠️ Solo los directores pueden acceder a esta área.',
-    toast_email_invalid: t('toast_email_invalid'),
+    toast_email_invalid: 'Invalid email',
     toast_fill_email_plant: '⚠️ Complete e-mail y planta.',
     toast_pwd_required: '⚠️ Ingrese una contraseña para el usuario.',
     toast_pwd_short: '⚠️ La contraseña debe tener al menos 6 caracteres.',
@@ -4982,6 +5321,67 @@ var T = {
   
     toast_inline_edited: '✏️ Editado — haga clic en 💾 Guardar cambios para confirmar',
   
+
+    v12_audit_title: 'Registros de Auditoria',
+    v12_audit_last50: 'Ultimos 50 registros',
+    v12_btn_export_csv: 'Exportar Registros CSV',
+    v12_btn_clear: 'Limpiar',
+    audit_empty_msg: 'Aun no hay registros. Las acciones criticas apareceran aqui.',
+    v12_th_date: 'Fecha / Hora',
+    v12_th_tipo: 'Tipo',
+    v12_th_id: 'ID Equipo',
+    v12_th_desc: 'Descripcion',
+    v12_th_user: 'Usuario',
+    audit_tab_title: 'Registro de Auditoria',
+    audit_btn_clear_log: 'Limpiar Registro',
+    audit_th_date: 'Fecha/Hora',
+    audit_th_acao: 'Accion',
+    audit_th_cod: 'Codigo',
+    audit_th_det: 'Detalles',
+    audit_th_user: 'Usuario',
+    audit_waiting: 'Esperando eventos...',
+    audit_events_count: '{n} evento(s)',
+    audit_events_zero: '0 evento(s)',
+    audit_no_events: 'Sin eventos aun. Realice acciones para generar registros.',
+    audit_kpi_total: 'Total Eventos',
+    audit_kpi_sub_total: 'registros auditados',
+    audit_kpi_add: 'Adiciones',
+    audit_kpi_sub_add: 'nuevos registros',
+    audit_kpi_edit: 'Ediciones',
+    audit_kpi_sub_edit: 'cambios guardados',
+    audit_kpi_del: 'Eliminaciones',
+    audit_kpi_sub_del: 'registros eliminados',
+    audit_kpi_import: 'Importaciones',
+    audit_kpi_sub_import: 'archivos importados',
+    resp_dash_title: 'Panel de Responsables',
+    ph_filter_resp: 'Filtrar responsable...',
+    resp_rank_title: 'Ranking de Salud por Responsable',
+    resp_th_resp: 'Responsable',
+    resp_th_total: 'Total',
+    resp_th_venc: 'Vencidos',
+    resp_th_30d: '30d',
+    resp_th_ok: 'OK',
+    resp_th_saude: 'Indice Salud',
+    resp_th_barra: 'Barra',
+    resp_loading: 'Cargando...',
+    admin_sql_title: 'Configuracion inicial - haga clic para ver el SQL necesario',
+    admin_add_user_title: 'Agregar / Actualizar Usuario',
+    admin_btn_save_prof: 'Guardar perfil',
+    admin_btn_create_pwd: 'Crear con contrasena',
+    admin_btn_invite: 'Invitar',
+    admin_users_load: 'Haga clic en Actualizar Lista para cargar los usuarios.',
+    admin_lbl_email_usr: 'CORREO DEL USUARIO',
+    admin_lbl_country_c: 'PAIS (CODIGO)',
+    admin_lbl_name_opt: 'NOMBRE (OPCIONAL)',
+    admin_lbl_pass: 'CONTRASENA',
+    ch_mensal_prev: 'Previstas (vencen)',
+    ch_mensal_real: 'Realizadas',
+    ch_mensal_venc: 'Vencidas sin realizacion',
+    ch_mensal_sum_prev: 'Previstas',
+    ch_mensal_sum_real: 'Realizadas',
+    ch_mensal_sum_venc: 'Sin realizacion',
+    ch_mensal_sum_taxa: 'Tasa de ejecucion',
+    ch_mensal_tooltip: 'Tasa de ejecucion: {tx}%',
     btn_new_lbl: 'Nuevo',
     sb_overview: 'Resumen',
   },
@@ -5261,6 +5661,67 @@ var T = {
     toast_cells_filled: '✅ {n} Zelle(n) ausgefüllt — klicken Sie auf 🔄 zum Aktualisieren',
     toast_instr_not_found: '⚠️ Gerät nicht gefunden',
   
+
+    v12_audit_title: 'Audit-Protokolle',
+    v12_audit_last50: 'Letzte 50 Eintraege',
+    v12_btn_export_csv: 'Protokolle als CSV exportieren',
+    v12_btn_clear: 'Leeren',
+    audit_empty_msg: 'Noch keine Eintraege. Kritische Aktionen erscheinen hier.',
+    v12_th_date: 'Datum / Uhrzeit',
+    v12_th_tipo: 'Typ',
+    v12_th_id: 'Geraete-ID',
+    v12_th_desc: 'Beschreibung',
+    v12_th_user: 'Benutzer',
+    audit_tab_title: 'Audit-Protokoll',
+    audit_btn_clear_log: 'Protokoll leeren',
+    audit_th_date: 'Datum/Uhrzeit',
+    audit_th_acao: 'Aktion',
+    audit_th_cod: 'Code',
+    audit_th_det: 'Details',
+    audit_th_user: 'Benutzer',
+    audit_waiting: 'Warte auf Ereignisse...',
+    audit_events_count: '{n} Ereignis(se)',
+    audit_events_zero: '0 Ereignisse',
+    audit_no_events: 'Noch keine Ereignisse. Aktionen durchfuehren um Protokolle zu erzeugen.',
+    audit_kpi_total: 'Gesamtereignisse',
+    audit_kpi_sub_total: 'geprufte Eintraege',
+    audit_kpi_add: 'Hinzugefuegt',
+    audit_kpi_sub_add: 'neue Eintraege',
+    audit_kpi_edit: 'Bearbeitet',
+    audit_kpi_sub_edit: 'gespeicherte Aenderungen',
+    audit_kpi_del: 'Geloescht',
+    audit_kpi_sub_del: 'entfernte Eintraege',
+    audit_kpi_import: 'Importe',
+    audit_kpi_sub_import: 'importierte Dateien',
+    resp_dash_title: 'Verantwortlichen-Dashboard',
+    ph_filter_resp: 'Verantwortlichen filtern...',
+    resp_rank_title: 'Gesundheits-Ranking nach Verantwortlichem',
+    resp_th_resp: 'Verantwortlich',
+    resp_th_total: 'Gesamt',
+    resp_th_venc: 'Ueberfaellig',
+    resp_th_30d: '30T',
+    resp_th_ok: 'OK',
+    resp_th_saude: 'Gesundheitsindex',
+    resp_th_barra: 'Balken',
+    resp_loading: 'Laden...',
+    admin_sql_title: 'Ersteinrichtung - SQL anzeigen',
+    admin_add_user_title: 'Benutzer hinzufuegen / aktualisieren',
+    admin_btn_save_prof: 'Profil speichern',
+    admin_btn_create_pwd: 'Mit Passwort anlegen',
+    admin_btn_invite: 'Einladen',
+    admin_users_load: 'Liste aktualisieren um Benutzer zu laden.',
+    admin_lbl_email_usr: 'BENUTZER-E-MAIL',
+    admin_lbl_country_c: 'LAND (CODE)',
+    admin_lbl_name_opt: 'NAME (OPTIONAL)',
+    admin_lbl_pass: 'PASSWORT',
+    ch_mensal_prev: 'Geplant (faellig)',
+    ch_mensal_real: 'Durchgefuehrt',
+    ch_mensal_venc: 'Ueberfaellig (nicht durchgefuehrt)',
+    ch_mensal_sum_prev: 'Geplant',
+    ch_mensal_sum_real: 'Durchgefuehrt',
+    ch_mensal_sum_venc: 'Nicht durchgefuehrt',
+    ch_mensal_sum_taxa: 'Ausfuehrungsrate',
+    ch_mensal_tooltip: 'Ausfuehrungsrate: {tx}%',
     toast_inline_edited: '✏️ Bearbeitet — klicken Sie auf 💾 Änderungen speichern',
   },
 
@@ -5539,6 +6000,67 @@ var T = {
     toast_cells_filled: '✅ {n} cellule(s) remplie(s) — cliquez sur 🔄 pour actualiser',
     toast_instr_not_found: '⚠️ Instrument introuvable',
   
+
+    v12_audit_title: 'Journaux d audit',
+    v12_audit_last50: '50 derniers enregistrements',
+    v12_btn_export_csv: 'Exporter journaux CSV',
+    v12_btn_clear: 'Effacer',
+    audit_empty_msg: 'Aucun journal enregistre. Les actions critiques apparaitront ici.',
+    v12_th_date: 'Date / Heure',
+    v12_th_tipo: 'Type',
+    v12_th_id: 'ID equip.',
+    v12_th_desc: 'Description',
+    v12_th_user: 'Utilisateur',
+    audit_tab_title: 'Journal d audit',
+    audit_btn_clear_log: 'Effacer journal',
+    audit_th_date: 'Date/Heure',
+    audit_th_acao: 'Action',
+    audit_th_cod: 'Code',
+    audit_th_det: 'Details',
+    audit_th_user: 'Utilisateur',
+    audit_waiting: 'En attente d evenements...',
+    audit_events_count: '{n} evenement(s)',
+    audit_events_zero: '0 evenement(s)',
+    audit_no_events: 'Aucun evenement. Effectuez des actions pour generer des journaux.',
+    audit_kpi_total: 'Total evenements',
+    audit_kpi_sub_total: 'enregistrements audites',
+    audit_kpi_add: 'Ajouts',
+    audit_kpi_sub_add: 'nouveaux enregistrements',
+    audit_kpi_edit: 'Modifications',
+    audit_kpi_sub_edit: 'changements sauvegardes',
+    audit_kpi_del: 'Suppressions',
+    audit_kpi_sub_del: 'enregistrements supprimes',
+    audit_kpi_import: 'Importations',
+    audit_kpi_sub_import: 'fichiers importes',
+    resp_dash_title: 'Tableau de bord des responsables',
+    ph_filter_resp: 'Filtrer responsable...',
+    resp_rank_title: 'Classement sante par responsable',
+    resp_th_resp: 'Responsable',
+    resp_th_total: 'Total',
+    resp_th_venc: 'En retard',
+    resp_th_30d: '30j',
+    resp_th_ok: 'OK',
+    resp_th_saude: 'Indice sante',
+    resp_th_barra: 'Barre',
+    resp_loading: 'Chargement...',
+    admin_sql_title: 'Configuration initiale - voir le SQL necessaire',
+    admin_add_user_title: 'Ajouter / Mettre a jour un utilisateur',
+    admin_btn_save_prof: 'Enregistrer le profil',
+    admin_btn_create_pwd: 'Creer avec mot de passe',
+    admin_btn_invite: 'Inviter',
+    admin_users_load: 'Cliquez sur Actualiser la liste pour charger les utilisateurs.',
+    admin_lbl_email_usr: 'E-MAIL UTILISATEUR',
+    admin_lbl_country_c: 'PAYS (CODE)',
+    admin_lbl_name_opt: 'NOM (OPTIONNEL)',
+    admin_lbl_pass: 'MOT DE PASSE',
+    ch_mensal_prev: 'Prevues (echeance)',
+    ch_mensal_real: 'Realisees',
+    ch_mensal_venc: 'En retard (non realisees)',
+    ch_mensal_sum_prev: 'Prevues',
+    ch_mensal_sum_real: 'Realisees',
+    ch_mensal_sum_venc: 'Non realisees',
+    ch_mensal_sum_taxa: 'Taux d execution',
+    ch_mensal_tooltip: 'Taux d execution : {tx}%',
     toast_inline_edited: '✏️ Modifié — cliquez sur 💾 Enregistrer les modifications',
   },
 
@@ -5817,6 +6339,67 @@ var T = {
     toast_cells_filled: '✅ {n} cella/e compilata/e — clicca su 🔄 per aggiornare i filtri',
     toast_instr_not_found: '⚠️ Strumento non trovato',
   
+
+    v12_audit_title: 'Log di Audit',
+    v12_audit_last50: 'Ultimi 50 record',
+    v12_btn_export_csv: 'Esporta log CSV',
+    v12_btn_clear: 'Cancella',
+    audit_empty_msg: 'Nessun log registrato. Le azioni critiche appariranno qui.',
+    v12_th_date: 'Data / Ora',
+    v12_th_tipo: 'Tipo',
+    v12_th_id: 'ID Strum.',
+    v12_th_desc: 'Descrizione',
+    v12_th_user: 'Utente',
+    audit_tab_title: 'Log di Audit',
+    audit_btn_clear_log: 'Cancella log',
+    audit_th_date: 'Data/Ora',
+    audit_th_acao: 'Azione',
+    audit_th_cod: 'Codice',
+    audit_th_det: 'Dettagli',
+    audit_th_user: 'Utente',
+    audit_waiting: 'In attesa di eventi...',
+    audit_events_count: '{n} evento/i mostrato/i',
+    audit_events_zero: '0 eventi',
+    audit_no_events: 'Nessun evento. Esegui azioni per generare log.',
+    audit_kpi_total: 'Totale eventi',
+    audit_kpi_sub_total: 'record verificati',
+    audit_kpi_add: 'Aggiunte',
+    audit_kpi_sub_add: 'nuovi record',
+    audit_kpi_edit: 'Modifiche',
+    audit_kpi_sub_edit: 'modifiche salvate',
+    audit_kpi_del: 'Eliminazioni',
+    audit_kpi_sub_del: 'record rimossi',
+    audit_kpi_import: 'Importazioni',
+    audit_kpi_sub_import: 'file importati',
+    resp_dash_title: 'Dashboard Responsabili',
+    ph_filter_resp: 'Filtra responsabile...',
+    resp_rank_title: 'Classifica salute per responsabile',
+    resp_th_resp: 'Responsabile',
+    resp_th_total: 'Totale',
+    resp_th_venc: 'Scaduti',
+    resp_th_30d: '30g',
+    resp_th_ok: 'OK',
+    resp_th_saude: 'Indice salute',
+    resp_th_barra: 'Barra',
+    resp_loading: 'Caricamento...',
+    admin_sql_title: 'Configurazione iniziale - clicca per vedere il SQL necessario',
+    admin_add_user_title: 'Aggiungi / Aggiorna Utente',
+    admin_btn_save_prof: 'Salva profilo',
+    admin_btn_create_pwd: 'Crea con password',
+    admin_btn_invite: 'Invita',
+    admin_users_load: 'Clicca Aggiorna elenco per caricare gli utenti.',
+    admin_lbl_email_usr: 'E-MAIL UTENTE',
+    admin_lbl_country_c: 'PAESE (CODICE)',
+    admin_lbl_name_opt: 'NOME (OPZIONALE)',
+    admin_lbl_pass: 'PASSWORD',
+    ch_mensal_prev: 'Previste (scadenza)',
+    ch_mensal_real: 'Eseguite',
+    ch_mensal_venc: 'Scadute (non eseguite)',
+    ch_mensal_sum_prev: 'Previste',
+    ch_mensal_sum_real: 'Eseguite',
+    ch_mensal_sum_venc: 'Non eseguite',
+    ch_mensal_sum_taxa: 'Tasso di esecuzione',
+    ch_mensal_tooltip: 'Tasso di esecuzione: {tx}%',
     toast_inline_edited: '✏️ Modificato — fare clic su 💾 Salva modifiche per confermare',
   },
 
@@ -6096,20 +6679,57 @@ var T = {
     toast_instr_not_found: '⚠️ Nie znaleziono przyrządu',
   
     toast_inline_edited: '✏️ Edytowano — kliknij 💾 Zapisz zmiany aby potwierdzić',
+
+    v12_audit_title:'Logi audytu', v12_audit_last50:'Ostatnie 50 wpisow',
+    v12_btn_export_csv:'Eksportuj logi CSV', v12_btn_clear:'Wyczysc',
+    audit_empty_msg:'Brak logow. Krytyczne dzialania pojawia sie tutaj.',
+    v12_th_date:'Data / Godzina', v12_th_tipo:'Typ', v12_th_id:'ID urządz.',
+    v12_th_desc:'Opis', v12_th_user:'Uzytkownik',
+    audit_tab_title:'Dziennik audytu', audit_btn_clear_log:'Wyczysc dziennik',
+    audit_th_date:'Data/Godzina', audit_th_acao:'Akcja', audit_th_cod:'Kod',
+    audit_th_det:'Szczegoly', audit_th_user:'Uzytkownik',
+    audit_waiting:'Oczekiwanie na zdarzenia...', audit_events_count:'{n} zdarzenie(n)', audit_events_zero:'0 zdarzen',
+    audit_no_events:'Brak zdarzen. Wykonaj akcje aby wygenerowac logi.',
+    audit_kpi_total:'Lacznie zdarzen', audit_kpi_sub_total:'zweryfikowane rekordy',
+    audit_kpi_add:'Dodania', audit_kpi_sub_add:'nowe rekordy',
+    audit_kpi_edit:'Edycje', audit_kpi_sub_edit:'zapisane zmiany',
+    audit_kpi_del:'Usuniecia', audit_kpi_sub_del:'usuniete rekordy',
+    audit_kpi_import:'Importy', audit_kpi_sub_import:'zaimportowane pliki',
+    resp_dash_title:'Panel odpowiedzialnych', ph_filter_resp:'Filtruj odpowiedzialnego...',
+    resp_rank_title:'Ranking stanu wg odpowiedzialnego',
+    resp_th_resp:'Odpowiedzialny', resp_th_total:'Razem', resp_th_venc:'Zaleglosci',
+    resp_th_30d:'30d', resp_th_ok:'OK', resp_th_saude:'Wskaznik stanu', resp_th_barra:'Pasek',
+    resp_loading:'Ladowanie...',
+    admin_sql_title:'Konfiguracja poczatkowa - kliknij aby zobaczyc SQL',
+    admin_add_user_title:'Dodaj / Zaktualizuj uzytkownika',
+    admin_btn_save_prof:'Zapisz profil', admin_btn_create_pwd:'Utworz z haslem',
+    admin_btn_invite:'Zaprosz',
+    admin_users_load:'Kliknij Odswiez liste aby zaladowac uzytkownikow.',
+    admin_lbl_email_usr:'E-MAIL UZYTKOWNIKA', admin_lbl_country_c:'KRAJ (KOD)',
+    admin_lbl_name_opt:'NAZWA (OPCJONALNIE)', admin_lbl_pass:'HASLO',
+    ch_mensal_prev:'Zaplanowane (termin)', ch_mensal_real:'Wykonane',
+    ch_mensal_venc:'Zaleglosci (niewykonane)',
+    ch_mensal_sum_prev:'Zaplanowane', ch_mensal_sum_real:'Wykonane',
+    ch_mensal_sum_venc:'Niewykonane', ch_mensal_sum_taxa:'Wskaznik wykonania',
+    ch_mensal_tooltip:'Wskaznik wykonania: {tx}%',
+    tab_active:'Aktywne', tab_inactive:'Nieaktywne', tab_expired:'Przeterminowane',
+    tab_due30:'Termin 30d', tab_due90:'Termin 90d', btn_cols_lbl:'Kolumny',
+    btn_import_lbl:'Importuj', btn_export_lbl:'Eksportuj',
+    audit_session_empty:'Brak urządzeń zarejestrowanych w tej sesji.',
   }
 };
 
 function t(key) { return (T[LANG] || T.pt)[key] || (T.pt)[key] || key; }
 // Sidebar i18n + extras (added in v5)
 (function(){
-  var extras_pt = {sb_overview:'Visão Geral', sb_manage:'Gestão',  sb_analysis:'Análise',  btn_new_lbl:'Novo',   btn_import_lbl:'Import',  btn_export_lbl:'Export'};
-  var extras_en = {sb_overview:'Overview',    sb_manage:'Manage',  sb_analysis:'Analysis', btn_new_lbl:'New',    btn_import_lbl:'Import',  btn_export_lbl:'Export'};
-  var extras_es = {sb_overview:'Resumen',     sb_manage:'Gestión', sb_analysis:'Análisis', btn_new_lbl:'Nuevo',  btn_import_lbl:'Importar',btn_export_lbl:'Exportar'};
+  const extras_pt = {sb_overview:'Visão Geral', sb_manage:'Gestão',  sb_analysis:'Análise',  btn_new_lbl:'Novo',   btn_import_lbl:'Importar',  btn_export_lbl:'Exportar'};
+  const extras_en = {sb_overview:'Overview',    sb_manage:'Manage',  sb_analysis:'Analysis', btn_new_lbl:'New',    btn_import_lbl:'Import',  btn_export_lbl:'Export'};
+  const extras_es = {sb_overview:'Resumen',     sb_manage:'Gestión', sb_analysis:'Análisis', btn_new_lbl:'Nuevo',  btn_import_lbl:'Importar',btn_export_lbl:'Exportar'};
   if(T.pt) Object.assign(T.pt, extras_pt);
   if(T.en) Object.assign(T.en, extras_en);
   if(T.es) Object.assign(T.es, extras_es);
   // [v48] extras for new languages (already inlined in their objects above)
-  var _newLangs = ['de','fr','it','pl'];
+  const _newLangs = ['de','fr','it','pl'];
   _newLangs.forEach(function(l){ if(!T[l]) T[l] = {}; if(!T[l].sb_overview) Object.assign(T[l], {sb_overview:T[l].sb_overview||T.en.sb_overview, sb_manage:T[l].sb_manage||T.en.sb_manage, sb_analysis:T[l].sb_analysis||T.en.sb_analysis, btn_new_lbl:T[l].btn_new_lbl||T.en.btn_new_lbl, btn_import_lbl:T[l].btn_import_lbl||T.en.btn_import_lbl, btn_export_lbl:T[l].btn_export_lbl||T.en.btn_export_lbl}); });
 })();
 
@@ -6142,7 +6762,7 @@ function t(key) { return (T[LANG] || T.pt)[key] || (T.pt)[key] || key; }
 })();
 
 // [v48] ISO-3166-1 alpha-2 country code → language code
-var _COUNTRY_LANG = {
+const _COUNTRY_LANG = {
   BR:'pt', PT:'pt', AO:'pt', MZ:'pt', CV:'pt',
   MX:'es', AR:'es', CL:'es', CO:'es', PE:'es', VE:'es', EC:'es', BO:'es',
   GT:'es', HN:'es', SV:'es', CR:'es', PA:'es', DO:'es', CU:'es', PY:'es', UY:'es',
@@ -6161,7 +6781,7 @@ var _COUNTRY_LANG = {
 // [v48] Runtime map: plant code → { label, country }  (populated from user_profiles + legacy)
 var _DYNAMIC_PLANTS = {};
 // [v47 compat] Legacy hardcoded plant → language (used as fallback when no country set)
-var _PLANT_LANG = { SP:'pt', MX:'es', USA:'en', DUNCAN:'en', AKRON:'en' };
+const _PLANT_LANG = { SP:'pt', MX:'es', USA:'en', DUNCAN:'en', AKRON:'en' };
 // [v48] Get language for a given plant code + country (country takes priority over legacy map)
 function _langForPlant(unidade, country) {
   if (country) {
@@ -6288,10 +6908,10 @@ function applyLang() {
     ['📈 Evolução Acumulada (7 meses)','📈 Cumulative Trend (7 months)','rep_evolucao'],
     ['👤 Por Responsável','👤 By Responsible','rep_resp'],
     ['🏭 Vencidos por Empresa','🏭 Expired by Company','rep_emp_venc'],
-    [t('ch_lbl_freq'),'⏱ Calibration Frequency','rep_freq'],
+    ['Frequency','⏱ Calibration Frequency','rep_freq'],
     ['🌡️ Status por Localização','🌡️ Status by Location','rep_heatmap'],
-    [t('lbl_general_summary'),'🔢 General Summary','rep_resumo'],
-    [t('lbl_top_urgent'),'⏱️ Top 15 Most Urgent','rep_urgentes'],
+    ['General Summary','🔢 General Summary','rep_resumo'],
+    ['Top Urgent','⏱️ Top 15 Most Urgent','rep_urgentes'],
     ['📋 Relatório por Período','📋 Period Report','rep_period_title'],
   ];
   document.querySelectorAll('.chart-title, .tbl-title').forEach(el => {
@@ -6587,12 +7207,262 @@ function applyLang() {
   }
   // ── END i18n SWEEP ────────────────────────────────────────────────────────
 
+  // 9. LOGIN section
+  (function(){
+    var _lmap = [
+      ['login-title-lbl',    'login_title'],
+      ['login-subtitle-lbl', 'login_subtitle'],
+      ['login-email-lbl',    'login_email_lbl'],
+      ['login-pass-lbl',     'login_pass_lbl'],
+      ['login-error-msg',    'login_error_msg'],
+      ['login-btn-lbl',      'login_btn_lbl'],
+      ['login-forgot',       'login_forgot'],
+    ];
+    _lmap.forEach(function(pair){
+      var el = document.getElementById(pair[0]);
+      if(el) el.textContent = t(pair[1]);
+    });
+    var logoTxt = document.getElementById('login-logo-txt');
+    if(logoTxt) logoTxt.innerHTML = t('login_logo_text');
+  })();
+
+  // 10. Dashboard monthly chart legend + title
+  (function(){
+    var _dmap = [
+      ['ch-mensal-title', 'ch_mensal_title'],
+      ['ch-leg-prev',     'ch_leg_prev'],
+      ['ch-leg-real',     'ch_leg_real'],
+      ['ch-leg-venc',     'ch_leg_venc'],
+    ];
+    _dmap.forEach(function(pair){
+      var el = document.getElementById(pair[0]);
+      if(el) el.textContent = t(pair[1]);
+    });
+  })();
+
+  // 11. Bulk-edit field select options (all 3 tables)
+  (function(){
+    var _bfMap = {
+      'status':       'bfe_status',
+      'status_calib': 'bfe_status_calib',
+      'empresa':      'bfe_empresa',
+      'responsavel':  'bfe_responsavel',
+      'localizacao':  'bfe_localizacao',
+      'freq_dias':    'bfe_freq',
+      'ult_calib':    'bfe_ult_calib',
+      'cliente':      'bfe_cliente',
+    };
+    ['bulk-field-alert','bulk-field-geral','bulk-field-rep'].forEach(function(selId){
+      var sel = document.getElementById(selId);
+      if(!sel) return;
+      Array.from(sel.options).forEach(function(opt){
+        if(opt.value && _bfMap[opt.value]) opt.text = t(_bfMap[opt.value]);
+      });
+    });
+  })();
+
+  // 12. Title attributes on header buttons (translatable tooltips)
+  (function(){
+    var _titleMap = [
+      ['btn-sync-now',   'title_sync_now',   'aria_sync'],
+      ['btn-undo',       'title_undo',        'aria_undo'],
+      ['btn-redo',       'title_redo',        'aria_redo'],
+      ['btn-gs-cfg',     'title_supabase',    'aria_supabase'],
+      ['btn-logout',     'title_logout',      'aria_logout'],
+    ];
+    _titleMap.forEach(function(row){
+      var el = document.getElementById(row[0]);
+      if(!el) return;
+      el.title = t(row[1]);
+      if(row[2]) el.setAttribute('aria-label', t(row[2]));
+    });
+    // Import button
+    var importBtn = document.getElementById('btn-import-v12');
+    if(importBtn) importBtn.title = t('title_import');
+    // aria-label on logo SVG
+    var logoSvg = document.querySelector('.hdr-l svg[aria-label]');
+    if(logoSvg) logoSvg.setAttribute('aria-label', t('aria_logo'));
+    // Nav aria-label
+    var nav = document.getElementById('sidebar-nav');
+    if(nav) nav.setAttribute('aria-label', t('aria_nav'));
+    // Equip search aria-label
+    var fsEl = document.getElementById('f-search');
+    if(fsEl) fsEl.setAttribute('aria-label', t('aria_search_eq'));
+    // Reset button
+    var resetBtn = document.querySelector('[onclick="resetDB()"]');
+    if(resetBtn){ resetBtn.title = t('title_reset'); resetBtn.setAttribute('aria-label', t('aria_reset')); }
+    // Export JSON button
+    document.querySelectorAll('[onclick="v12ExportData()"]').forEach(function(btn){ btn.title = t('title_export'); });
+    // Advanced filter / clear / apply / scan buttons by onclick
+    var _onclickTitles = {
+      'toggleAdvancedSearch()': 'title_adv_filter',
+      'clearF()':               'title_clear_f',
+      'applyFiltersNow()':      'title_apply_f',
+      'toggleCardSelectMode()': 'title_sel_qr',
+      'openQrScannerModal()':   'title_scan_qr',
+      'openScanHistoryModal()': 'title_scan_hist',
+    };
+    Object.entries(_onclickTitles).forEach(function(pair){
+      document.querySelectorAll('[onclick="'+pair[0]+'"]').forEach(function(btn){ btn.title = t(pair[1]); });
+    });
+    // toggleEqView - two titles depending on current mode
+    document.querySelectorAll('[onclick="toggleEqView()"]').forEach(function(btn){
+      btn.title = t(btn.textContent.includes('Lista') ? 'title_card_view' : 'title_tbl_view');
+    });
+    // PDF alert button
+    document.querySelectorAll('[onclick="printAlertsPDF()"]').forEach(function(btn){ btn.title = t('title_pdf_alerts'); });
+    // Refresh buttons
+    document.querySelectorAll('[onclick="quickRefresh()"]').forEach(function(btn){ btn.title = t('title_refresh'); });
+    // Date format select
+    var dfTgl = document.querySelector('.lang-tgl[title]');
+    if(dfTgl && (dfTgl.title === 'Date format' || dfTgl.title === 'Formato de data')) dfTgl.title = t('title_date_fmt');
+    // More languages select
+    var langSel2 = document.getElementById('lang-select');
+    if(langSel2) langSel2.title = t('title_more_langs');
+    // Plant selector
+    var plantSel = document.getElementById('planta-selector');
+    if(plantSel) plantSel.title = t('title_plant_sel');
+  })();
+
+  // 13. Audit session empty row
+  (function(){
+    var cells = document.querySelectorAll('#audit-tbody td');
+    cells.forEach(function(td){
+      if(td.textContent.trim() === 'Nenhum equipamento cadastrado nesta sessão.' ||
+         td.textContent.trim() === 'No equipment registered in this session.') {
+        td.textContent = t('audit_session_empty');
+      }
+    });
+  })();
+
   // [BUG14 FIX] Removido bloco inútil: `const isEdit = ...` era declarada mas nunca lida.
   // O if estava vazio e não executava nenhuma ação.
+
+  // ── 14. AUDIT mini-panel (v12) ─────────────────────────────────────────────
+  (function(){
+    var _m = [
+      ['v12-audit-title',     'v12_audit_title'],
+      ['v12-audit-last50',    'v12_audit_last50'],
+      ['v12-btn-export-csv',  'v12_btn_export_csv'],
+      ['v12-btn-clear',       'v12_btn_clear'],
+      ['audit-empty',         'audit_empty_msg'],
+      ['v12-th-date',         'v12_th_date'],
+      ['v12-th-tipo',         'v12_th_tipo'],
+      ['v12-th-id',           'v12_th_id'],
+      ['v12-th-desc',         'v12_th_desc'],
+      ['v12-th-user',         'v12_th_user'],
+    ];
+    _m.forEach(function(p){ var e=document.getElementById(p[0]); if(e) e.textContent=t(p[1]); });
+  })();
+
+  // ── 15. AUDIT full tab ─────────────────────────────────────────────────────
+  (function(){
+    var _m = [
+      ['audit-tab-title',    'audit_tab_title'],
+      ['audit-btn-clear-log','audit_btn_clear_log'],
+      ['audit-th-date',      'audit_th_date'],
+      ['audit-th-acao',      'audit_th_acao'],
+      ['audit-th-cod',       'audit_th_cod'],
+      ['audit-th-det',       'audit_th_det'],
+      ['audit-th-user',      'audit_th_user'],
+      ['audit-kpi-lbl-total', 'audit_kpi_total'],
+      ['audit-kpi-sub-total', 'audit_kpi_sub_total'],
+      ['audit-kpi-lbl-add',   'audit_kpi_add'],
+      ['audit-kpi-sub-add',   'audit_kpi_sub_add'],
+      ['audit-kpi-lbl-edit',  'audit_kpi_edit'],
+      ['audit-kpi-sub-edit',  'audit_kpi_sub_edit'],
+      ['audit-kpi-lbl-del',   'audit_kpi_del'],
+      ['audit-kpi-sub-del',   'audit_kpi_sub_del'],
+      ['audit-kpi-lbl-import','audit_kpi_import'],
+      ['audit-kpi-sub-import','audit_kpi_sub_import'],
+    ];
+    _m.forEach(function(p){ var e=document.getElementById(p[0]); if(e) e.textContent=t(p[1]); });
+    // static empty tbody row
+    var ertd = document.getElementById('audit-empty-row-td');
+    if(ertd) ertd.textContent = t('audit_no_events');
+    // pinfo default text
+    var pi = document.getElementById('audit-pinfo');
+    if(pi && (pi.textContent==='Aguardando eventos...' || pi.getAttribute('data-i18n-default'))) {
+      pi.textContent = t('audit_waiting');
+    }
+    // audit search placeholder
+    var as = document.getElementById('audit-search');
+    if(as) as.placeholder = '\uD83D\uDD0D ' + t('ph_filter_log');
+    // static empty tbody row
+    var atb = document.getElementById('audit-tbody');
+    if(atb) {
+      var tr = atb.querySelector('tr td[colspan]');
+      if(tr && tr.textContent.indexOf('evento') > -1) tr.innerHTML = '\uD83D\uDCCB ' + t('audit_no_events');
+    }
+  })();
+
+  // ── 16. RESPONSÁVEIS section ────────────────────────────────────────────────
+  (function(){
+    var _m = [
+      ['resp-dash-title',  'resp_dash_title'],
+      ['resp-rank-title',  'resp_rank_title'],
+      ['resp-th-resp',     'resp_th_resp'],
+      ['resp-th-total',    'resp_th_total'],
+      ['resp-th-venc',     'resp_th_venc'],
+      ['resp-th-30d',      'resp_th_30d'],
+      ['resp-th-ok',       'resp_th_ok'],
+      ['resp-th-saude',    'resp_th_saude'],
+      ['resp-th-barra',    'resp_th_barra'],
+      ['resp-loading-row', 'resp_loading'],
+    ];
+    _m.forEach(function(p){ var e=document.getElementById(p[0]); if(e) e.textContent=t(p[1]); });
+    // placeholder
+    var rs = document.getElementById('resp-search');
+    if(rs) rs.placeholder = t('ph_filter_resp');
+  })();
+
+  // ── 17. ADMIN user form (elements not covered by data-adm-i18n) ────────────
+  (function(){
+    var _m = [
+      ['admin-sql-title',       'admin_sql_title'],
+      ['admin-add-user-title',  'admin_add_user_title'],
+      ['admin-btn-save-profile','admin_btn_save_prof'],
+      ['admin-btn-create-pwd',  'admin_btn_create_pwd'],
+      ['admin-btn-invite',      'admin_btn_invite'],
+    ];
+    _m.forEach(function(p){ var e=document.getElementById(p[0]); if(e) e.textContent=t(p[1]); });
+    // Users load row
+    var ulr = document.getElementById('admin-users-load-row');
+    if(ulr) ulr.querySelector('td').innerHTML = t('admin_users_load');
+    // Re-apply admin i18n (covers data-adm-i18n elements)
+    if(typeof window.adminApplyI18n === 'function') {
+      try { window.adminApplyI18n(); } catch(e2){}
+    }
+  })();
+
+  // ── 18. ChartMap — extend to match ALL language titles ──────────────────────
+  (function(){
+    // Update chartMap to include all lang variants so re-render works in any lang
+    var extraChartKeys = [
+      'ch_health','ch_calib','ch_oper','ch_types','ch_types_exp','ch_due6m',
+      'ch_locations','ch_companies','rep_venc_mes','rep_evolucao','rep_resp',
+      'rep_emp_venc','rep_freq','rep_heatmap','rep_resumo','rep_urgentes','rep_period_title'
+    ];
+    document.querySelectorAll('.chart-title, .tbl-title').forEach(function(el){
+      var txt = el.textContent.trim();
+      // Try matching against all lang translations of each chart key
+      for(var i=0; i<extraChartKeys.length; i++){
+        var key = extraChartKeys[i];
+        var langs = Object.keys(window.T||{});
+        for(var j=0; j<langs.length; j++){
+          var d = window.T[langs[j]];
+          if(d && d[key] && d[key].trim()===txt){
+            el.textContent = t(key);
+            return;
+          }
+        }
+      }
+    });
+  })();
 }
 
 
-var COL_DEFS = {
+const COL_DEFS = {
   geral: [
     {k:'_chk',        l:'',               def:true, noSort:true, w:30},
     {k:'_act',        l:'Ações',          def:true, noSort:true, w:170},
@@ -6652,7 +7522,7 @@ var COL_DEFS = {
 };
 
 // Per-table column widths (px) — mutable
-var colWidths = {};
+// [Already declared early at line 167 to prevent Temporal Dead Zone]
 
 // [BUG12 FIX] Parâmetro renomeado de `t` para `tbl` em ambos os forEach — `t` é a função global de i18n
 function initColWidths() {
@@ -6662,7 +7532,7 @@ function initColWidths() {
   });
 }
 
-var colVis = {};
+// [Already declared early at line 168 to prevent Temporal Dead Zone]
 function initColVis() {
   Object.entries(COL_DEFS).forEach(([tbl, cols]) => {
     colVis[tbl] = {};
@@ -6672,12 +7542,12 @@ function initColVis() {
 function buildColPanel(tbl) { /* rebuilt by showColMenu */ }
 function buildAllColPanels() { /* portal rebuilt on open */ }
 // ── Column selector — single global dropdown portal ──────────────
-var _colMenu = document.createElement('div');
+const _colMenu = document.createElement('div');
 _colMenu.id = 'col-menu-portal';
 _colMenu.style.cssText = 'display:none;position:fixed;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:6px 2px;z-index:99999;min-width:210px;max-height:340px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)';
 document.addEventListener('DOMContentLoaded', () => document.body.appendChild(_colMenu));
 
-var _colMenuTbl = null;
+// [Already declared early at line 169 to prevent Temporal Dead Zone]
 
 function showColMenu(tbl, btn, evt) {
   // Stop click from bubbling to document (which would immediately close the menu)
@@ -6723,7 +7593,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════════
 // COLUMN RESIZE
 // ═══════════════════════════════════════════════════════
-var _resizing = null;
+// [Already declared early at line 170 to prevent Temporal Dead Zone]
 
 function attachResizers(tbl) {
   const tblEl = document.getElementById(tbl==='geral'?'eq-tbl':tbl==='rep'?'rep-tbl':'alert-tbl');
@@ -6754,10 +7624,10 @@ function attachResizers(tbl) {
 document.addEventListener('mousemove', e => {
   if(!_resizing) return;
   const { tbl, colKey, startX, startW } = _resizing;
-  var newW = Math.max(40, startW + (e.clientX - startX));
+  const newW = Math.max(40, startW + (e.clientX - startX));
   colWidths[tbl][colKey] = newW;
   // Apply width directly to th and corresponding tds
-  var tblEl = document.getElementById(tbl==='geral'?'eq-tbl':'alert-tbl');
+  const tblEl = document.getElementById(tbl==='geral'?'eq-tbl':'alert-tbl');
   if(tblEl) {
     tblEl.querySelectorAll(`[data-col="${colKey}"]`).forEach(el => {
       el.style.width = newW+'px';
@@ -6800,9 +7670,9 @@ document.addEventListener('touchend', function() {
 // ═══════════════════════════════════════════════════════
 // THEME
 // ═══════════════════════════════════════════════════════
-var CC = ['#0064b3','#f59e0b','#16a34a','#1a1a1a','#7c3aed','#ea580c','#0d9488','#db2777','#1a7fcc','#fbbf24','#4ade80','#f87171'];
-var CC_LIGHT = ['rgba(0,100,179,.15)','rgba(245,158,11,.15)','rgba(22,163,74,.15)','rgba(26,26,26,.15)'];
-var charts = {};
+const CC = ['#0064b3','#f59e0b','#16a34a','#1a1a1a','#7c3aed','#ea580c','#0d9488','#db2777','#1a7fcc','#fbbf24','#4ade80','#f87171'];
+const CC_LIGHT = ['rgba(0,100,179,.15)','rgba(245,158,11,.15)','rgba(22,163,74,.15)','rgba(26,26,26,.15)'];
+// [Already declared early at line 166 to prevent Temporal Dead Zone]
 
 // [BUG11 FIX] Parâmetro renomeado de `t` para `themeMode` — `t` é o nome da função global de i18n
 function setTheme(themeMode) {
@@ -6814,12 +7684,12 @@ function setTheme(themeMode) {
 }
 // Restore saved theme on load (default: light)
 (function() {
-  var saved = StorageService.get('rochling_theme', 'light');
+  const saved = StorageService.get('rochling_theme', 'light');
   document.documentElement.setAttribute('data-theme', saved);
 })();
-var isDark = () => document.documentElement.getAttribute('data-theme')==='dark';
-var tc = () => isDark() ? '#8b949e' : '#57606a';
-var gc = () => isDark() ? 'rgba(33,38,45,.8)' : 'rgba(208,215,222,.6)';
+const isDark = () => document.documentElement.getAttribute('data-theme')==='dark';
+const tc = () => isDark() ? '#8b949e' : '#57606a';
+const gc = () => isDark() ? 'rgba(33,38,45,.8)' : 'rgba(208,215,222,.6)';
 
 // ═══════════════════════════════════════════════════════
 // TABS
@@ -6833,14 +7703,10 @@ function showTab(id, el) {
 }
 
 // ═══════════════════════════════════════════════════════
-// DB
+// DB — Already declared earlier to prevent Temporal Dead Zone
 // ═══════════════════════════════════════════════════════
-var DB = [];
-var alertFilter = 'vencido', alertSearch = '';
-var sortState = {};
-var PER_PAGE = parseInt(StorageService.get('rochling_pp','50'),10) || 50;
 function setPageSize(n){ PER_PAGE = parseInt(n)||50; StorageService.set('rochling_pp', String(PER_PAGE)); ['eq','alert','rep'].forEach(k=>{ if(pag[k]) pag[k].p=1; }); renderTable('geral'); renderAlerts && renderAlerts(); }
-var pag = { eq:{p:1,rows:[]}, alert:{p:1,rows:[]}, rep:{p:1,rows:[]} };
+
 // Centralized lookup for tbl-keyed state
 function _PAG(tbl){return tbl==='geral'?pag.eq:tbl==='alert'?pag.alert:pag.rep;}
 function _IDS(tbl){
@@ -6887,7 +7753,8 @@ function fmtDateSafe(iso){
 // ── computeStats: single-pass aggregation, cached until DB changes ──
 // v11 CORREÇÃO 1: Saúde calculada apenas sobre equipamentos ATIVOS
 // (INATIVO e DESCARTADO são excluídos do numerador e denominador do gauge)
-var _statsCache = null;
+// [Already declared early at line 171 to prevent Temporal Dead Zone]
+
 function _isAtivo(r) {
   var st = (r.status || '').toUpperCase().trim();
   return st === 'ATIVO' || st === 'ACTIVE';
@@ -7016,20 +7883,15 @@ function recalcDias(records) {
     }
   } catch(e) { console.warn('[v27] Erro ao pré-configurar Supabase:', e); }
 })();
-var _supabaseUrl = ''; // Preenchido via modal de configuração — nunca hardcode aqui
-var _supabaseKey = ''; // Preenchido via modal de configuração — nunca hardcode aqui
-var _sb          = null;   // Supabase client instance
-var _sbActive    = false;
-var _pending     = false;
-var _pushTimer   = null;
-var _sbInitialized = false; // [v15 FIX] evita double-init pelo onAuthStateChange que dispara SIGNED_IN imediatamente
+
+// ── [v49.9 FIX] Supabase variables already declared early at line 179-209 to prevent Temporal Dead Zone ──
+// Preenchido via modal de configuração — nunca hardcode aqui
 
 // ── [v47 MULTI-PLANTA] ─────────────────────────────────────────────
 // _currentUnidade: planta ativa do usuário logado ('SP', 'MX', 'USA', …)
 // _isDirector: true → vê todas as plantas (sem filtro)
-var _currentUnidade = null;
-var _isDirector     = false;
-var _UNIDADE_LABELS = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DUNCAN: '🇺🇸 Duncan, SC', AKRON: '🇺🇸 Akron, OH', DIRECTOR: '🌎 Global' };
+// [Already declared early at line 183-184]
+let _UNIDADE_LABELS = { SP: '🇧🇷 São Paulo', MX: '🇲🇽 México', USA: '🇺🇸 EUA', DUNCAN: '🇺🇸 Duncan, SC', AKRON: '🇺🇸 Akron, OH', DIRECTOR: '🌎 Global' };
 
 function _setUnidade(unidade) {
   if (!unidade || unidade === 'DIRECTOR') {
@@ -7098,7 +7960,7 @@ window.switchPlanta = function(unidade) {
   if (!unidade) {
     _currentUnidade = null;
     StorageService.set('rochling_director_plant', ''); // [v49.5 FIX] limpa persistência
-    var badge = document.getElementById('planta-badge');
+    const badge = document.getElementById('planta-badge');
     if (badge) badge.textContent = '🌎 Global';
     // Volta ao português ao deselecionar planta
     StorageService.set('rochling_lang_manual', '');
@@ -7110,11 +7972,11 @@ window.switchPlanta = function(unidade) {
   } else {
     _currentUnidade = String(unidade).toUpperCase();
     StorageService.set('rochling_director_plant', _currentUnidade); // [v49.5 FIX] persiste planta
-    var badge = document.getElementById('planta-badge');
+    const badge = document.getElementById('planta-badge');
     if (badge) badge.textContent = _getPlantLabel(_currentUnidade);
     // [v48] Idioma troca SEMPRE ao Director selecionar planta — usa country do perfil dinâmico.
-    var _smeta = _DYNAMIC_PLANTS[_currentUnidade] || {};
-    var autoLang = _langForPlant(_currentUnidade, _smeta.country) || 'pt';
+    const _smeta = _DYNAMIC_PLANTS[_currentUnidade] || {};
+    const autoLang = _langForPlant(_currentUnidade, _smeta.country) || 'pt';
     StorageService.set('rochling_lang_manual', '');
     setLang(autoLang);
   }
@@ -7434,7 +8296,7 @@ function _ocultarSelecaoPlanta() {
 
 // [v49.2] Plantas legadas movidas para _DYNAMIC_PLANTS (editáveis/excluíveis).
 // _PLANTAS_FIXAS mantido vazio só para compatibilidade com referências antigas.
-var _PLANTAS_FIXAS = ['SP','MX','USA','DUNCAN','AKRON'];
+const _PLANTAS_FIXAS = ['SP','MX','USA','DUNCAN','AKRON'];
 
 // [v49.6] Gerenciamento de plantas fixas excluídas — persiste no localStorage
 // para que o seed não as reinsira após reload.
@@ -7494,11 +8356,11 @@ window._removeDeletedFixed = function(code) {
 })();
 window._loadPlantasDisponiveis = async function() {
   if (!_isDirector) return;
-  var sel = document.getElementById('planta-selector');
+  const sel = document.getElementById('planta-selector');
   if (!sel) return;
-  var current = sel.value;
-  var seen = {};
-  var plantas = [];
+  const current = sel.value;
+  let seen = {};
+  let plantas = [];
   // Seed with legacy fixed plants
   _PLANTAS_FIXAS.forEach(function(p){ if(!seen[p]){seen[p]=true;plantas.push(p);} });
   // [v48] Load from user_profiles (includes dynamically added plants)
@@ -7532,8 +8394,8 @@ window._loadPlantasDisponiveis = async function() {
   plantas = plantas.sort();
   sel.innerHTML = '<option value="">🌎 Todas as plantas</option>';
   plantas.forEach(function(p) {
-    var label = _getPlantLabel(p);
-    var opt = document.createElement('option');
+    const label = _getPlantLabel(p);
+    const opt = document.createElement('option');
     opt.value = p;
     opt.textContent = label;
     if (p === current) opt.selected = true;
@@ -7547,12 +8409,12 @@ window._loadPlantasDisponiveis = async function() {
 // [v48] ADMIN PLANTAS — Gerenciar usuários e plantas sem acessar Supabase
 // ═══════════════════════════════════════════════════════════════════
 window.adminLoadUsers = async function() {
-  var sb = window._globalSupabaseClient || window._sb;
+  const sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) {
-    showToast(t('toast_directors_only'), 'error');
+    showToast('Directors only', 'error');
     return;
   }
-  var tbody = document.getElementById('admin-users-tbody');
+  const tbody = document.getElementById('admin-users-tbody');
   if (!tbody) return;
   tbody.innerHTML = '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--tx3)">⏳ Carregando...</td></tr>';
 
@@ -7560,21 +8422,21 @@ window.adminLoadUsers = async function() {
     const { data: rawData, error } = await sb.from('user_profiles').select('*').order('email');
     if (error) throw error;
     // [FIX] Filter out plant-sentinel rows (created by "Nova Planta" modal)
-    var data = (rawData || []).filter(function(u){ return !(u && u.email && u.email.indexOf('__plant__') === 0); });
+    const data = (rawData || []).filter(function(u){ return !(u && u.email && u.email.indexOf('__plant__') === 0); });
 
     if (!data || data.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--tx3);font-size:12px">Nenhum perfil cadastrado ainda. Use o formulário acima para adicionar.</td></tr>';
       return;
     }
 
-    var thStyle = 'padding:9px 12px;border-bottom:1px solid var(--bdr2);';
-    var allPlants = Array.from(new Set([..._PLANTAS_FIXAS, ...Object.keys(_DYNAMIC_PLANTS), 'DIRECTOR'])).sort();
+    const thStyle = 'padding:9px 12px;border-bottom:1px solid var(--bdr2);';
+    const allPlants = Array.from(new Set([..._PLANTAS_FIXAS, ...Object.keys(_DYNAMIC_PLANTS), 'DIRECTOR'])).sort();
     tbody.innerHTML = data.map(function(u) {
-      var opts = allPlants.map(function(v) {
+      const opts = allPlants.map(function(v) {
         return '<option value="' + v + '"' + (u.unidade === v ? ' selected' : '') + '>' + _getPlantLabel(v) + '</option>';
       }).join('');
-      var countryFlag = u.country ? _countryFlagEmoji(u.country) : '';
-      var countryDisp = u.country ? (countryFlag + ' ' + u.country) : '<span style="color:var(--tx3)">—</span>';
+      const countryFlag = u.country ? _countryFlagEmoji(u.country) : '';
+      const countryDisp = u.country ? (countryFlag + ' ' + u.country) : '<span style="color:var(--tx3)">—</span>';
       return '<tr style="border-bottom:1px solid var(--bdr2)">'
         + '<td style="' + thStyle + '">' + (u.email || '—') + '</td>'
         + '<td style="' + thStyle + '">' + (u.display_name || '<span style="color:var(--tx3)">—</span>') + '</td>'
@@ -7587,7 +8449,7 @@ window.adminLoadUsers = async function() {
         + '</tr>';
     }).join('');
   } catch(e) {
-    var isNotFound = e.message && (e.message.includes('does not exist') || e.message.includes('42P01'));
+    const isNotFound = e.message && (e.message.includes('does not exist') || e.message.includes('42P01'));
     tbody.innerHTML = '<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--red,#dc2626);font-size:12px">'
       + (isNotFound
         ? '❌ Tabela <code>user_profiles</code> não existe ainda.<br><span style="color:var(--tx2)">Expanda "Configuração inicial" acima e execute o SQL no Supabase.</span>'
@@ -7658,12 +8520,12 @@ function _handleProfilesError(e, contexto) {
 }
 
 window.adminSaveUser = async function() {
-  var sb = window._globalSupabaseClient || window._sb;
+  const sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
-  var email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
-  var unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
-  var country     = (document.getElementById('admin-country').value || '').trim().toUpperCase() || null;
-  var displayName = (document.getElementById('admin-display-name').value || '').trim();
+  const email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
+  const unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
+  const country     = (document.getElementById('admin-country').value || '').trim().toUpperCase() || null;
+  const displayName = (document.getElementById('admin-display-name').value || '').trim();
 
   if (!email || !unidade) { showToast(t('toast_fill_email_plant'), 'warning'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast(t('toast_email_invalid'), 'warning'); return; }
@@ -7696,13 +8558,13 @@ window.adminSaveUser = async function() {
 // Usa sb.auth.admin.createUser — requer service_role key no Supabase client.
 // Se não disponível, orienta o usuário a usar o Dashboard.
 window.adminCreateWithPassword = async function() {
-  var sb = window._globalSupabaseClient || window._sb;
+  const sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
-  var email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
-  var unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
-  var country     = (document.getElementById('admin-country') ? document.getElementById('admin-country').value : '').trim().toUpperCase() || null;
-  var displayName = (document.getElementById('admin-display-name').value || '').trim();
-  var password    = (document.getElementById('admin-password').value || '').trim();
+  const email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
+  const unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
+  const country     = (document.getElementById('admin-country') ? document.getElementById('admin-country').value : '').trim().toUpperCase() || null;
+  const displayName = (document.getElementById('admin-display-name').value || '').trim();
+  const password    = (document.getElementById('admin-password').value || '').trim();
 
   if (!email || !unidade)  { showToast(t('toast_fill_email_plant'), 'warning'); return; }
   if (!password)           { showToast(t('toast_pwd_required'), 'warning'); return; }
@@ -7712,16 +8574,16 @@ window.adminCreateWithPassword = async function() {
   showToast(t('toast_creating_user_name').replace('{name}', email) + '…', 'info');
 
   // [v49.3] Coerção defensiva — garante que tudo é string e sem caracteres invisíveis
-  var _emailStr = String(email);
-  var _passStr  = String(password);
-  var _uniStr   = String(unidade);
-  var _ctryStr  = country ? String(country) : null;
-  var _nameStr  = displayName ? String(displayName) : null;
+  const _emailStr = String(email);
+  const _passStr  = String(password);
+  const _uniStr   = String(unidade);
+  const _ctryStr  = country ? String(country) : null;
+  const _nameStr  = displayName ? String(displayName) : null;
 
   // Preserva sessão atual do diretor (signUp pode trocar a sessão ativa)
-  var _savedSession = null;
+  let _savedSession = null;
   try {
-    var _s = await sb.auth.getSession();
+    const _s = await sb.auth.getSession();
     _savedSession = (_s && _s.data && _s.data.session) ? _s.data.session : null;
   } catch(_) { /* ignore */ }
 
@@ -7795,9 +8657,9 @@ window.adminCreateWithPassword = async function() {
     // ── Fallback: cria via sb.auth.signUp (sem service_role) ──
     // Funciona sem Edge Function. Limitação: respeita configuração de confirmação de e-mail do projeto.
     showToast(t('toast_edge_unavail'), 'info');
-    var signUpData = null, signUpErr = null;
+    let signUpData = null, signUpErr = null;
     try {
-      var r = await sb.auth.signUp({
+      const r = await sb.auth.signUp({
         email: _emailStr,
         password: _passStr,
         options: { data: { display_name: _nameStr, unidade: _uniStr, country: _ctryStr } }
@@ -7839,14 +8701,14 @@ window.adminCreateWithPassword = async function() {
 // ✉ CONVIDAR — cria usuário no Supabase Auth (envia e-mail convite) + salva em user_profiles
 // Não precisa de SQL manual nem do Dashboard do Supabase.
 window.adminInviteUser = async function() {
-  var sb = window._globalSupabaseClient || window._sb;
+  const sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
-  var email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
-  var unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
-  var country     = (document.getElementById('admin-country') ? document.getElementById('admin-country').value : '').trim().toUpperCase() || null;
-  var displayName = (document.getElementById('admin-display-name').value || '').trim();
+  const email       = (document.getElementById('admin-email').value || '').trim().toLowerCase();
+  const unidade     = (document.getElementById('admin-unidade').value || '').trim().toUpperCase();
+  const country     = (document.getElementById('admin-country') ? document.getElementById('admin-country').value : '').trim().toUpperCase() || null;
+  const displayName = (document.getElementById('admin-display-name').value || '').trim();
 
-  if (!email || !unidade) { showToast(t('toast_invite_fill'), 'warning'); return; }
+  if (!email || !unidade) { showToast(t('toast_fill_required'), 'warning'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast(t('toast_email_invalid'), 'warning'); return; }
 
   showToast('⏳ Enviando convite para ' + email + '…', 'info');
@@ -7892,7 +8754,7 @@ window.adminInviteUser = async function() {
 };
 
 window.adminUpdateUnidade = async function(email, unidade, country) {
-  var sb = window._globalSupabaseClient || window._sb;
+  const sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
   try {
     var upd = { unidade: unidade, updated_at: new Date().toISOString() };
@@ -7908,7 +8770,7 @@ window.adminUpdateUnidade = async function(email, unidade, country) {
 };
 
 window.adminDeleteUser = async function(email) {
-  var sb = window._globalSupabaseClient || window._sb;
+  const sb = window._globalSupabaseClient || window._sb;
   if (!sb || !_isDirector) return;
   if (!confirm('Remover perfil de ' + email + '?\n\nO usuário perderá o acesso à planta configurada.')) return;
   try {
@@ -7922,11 +8784,11 @@ window.adminDeleteUser = async function(email) {
 };
 
 window.adminCopySql = function() {
-  var pre = document.getElementById('admin-sql-pre');
-  var text = pre ? pre.textContent : '';
+  const pre = document.getElementById('admin-sql-pre');
+  const text = pre ? pre.textContent : '';
   if (navigator.clipboard && text) {
     navigator.clipboard.writeText(text).then(function() {
-      showToast(t('toast_sql_copied'), 'success');
+      showToast('SQL copied', 'success');
     }).catch(function() {
       showToast('Selecione e copie o SQL manualmente.', 'info');
     });
@@ -7978,7 +8840,7 @@ window._repopulatePlantSelects = function _repopulatePlantSelects() {
 
 window.adminOpenNewPlantModal = function() {
   if (typeof _isDirector !== 'undefined' && !_isDirector) {
-    showToast(t('toast_dir_only_plant'), 'warning');
+    showToast('Directors only', 'warning');
     return;
   }
   var m = document.getElementById('np-modal');
@@ -8001,14 +8863,14 @@ window.adminCloseNewPlantModal = function() {
 
 window.adminCreatePlant = async function() {
   if (typeof _isDirector !== 'undefined' && !_isDirector) {
-    showToast(t('toast_dir_only_plant'), 'warning');
+    showToast('Directors only', 'warning');
     return;
   }
   var code    = (document.getElementById('np-code').value    || '').trim().toUpperCase();
   var name    = (document.getElementById('np-name').value    || '').trim();
   var country = (document.getElementById('np-country').value || '').trim().toUpperCase() || null;
 
-  if (!code)                              { showToast(t('toast_plant_code_req'), 'warning'); return; }
+  if (!code)                              { showToast('Plant code required', 'warning'); return; }
   if (!/^[A-Z0-9_-]{2,12}$/.test(code))   { showToast(t('toast_plant_code_inv'), 'warning'); return; }
   if (code === 'DIRECTOR')                { showToast('⚠️ "DIRECTOR" é um código reservado.', 'warning'); return; }
 
@@ -8135,7 +8997,7 @@ function saveLS(skipUnsaved) {
           sessionStorage.setItem('r_v12_last_change', Date.now().toString());
         }
         if (typeof showToast === 'function') {
-          showToast(t('toast_private_mode'), 'warning');
+          showToast('Private mode', 'warning');
         }
       }
     } catch(fallback) {
@@ -8266,8 +9128,8 @@ function sbSchedulePush() {
 }
 
 // Tenta enviar; se Supabase não está pronto, reagenda (máx. 30 tentativas ≈ 60s)
-var _pushRetryCount = 0;
-var _PUSH_MAX_RETRIES = 30;
+// [Already declared early at line 186 to prevent Temporal Dead Zone]
+const _PUSH_MAX_RETRIES = 30;
 async function sbPushOrRetry() {
   if(!sbActive()) {
     _pushRetryCount++;
@@ -8285,7 +9147,7 @@ async function sbPushOrRetry() {
 }
 
 // ESCRITA — faz upsert de todos os registros na tabela 'equipamentos'
-async function sbPush(manual) {
+window.sbPush = async function(manual) {
   if(!sbActive()) { saveLS(); return; }
   if(_pushTimer) { clearTimeout(_pushTimer); _pushTimer = null; }
   setSyncInd(t('sync_saving'), 'var(--accent2)', true);
@@ -8442,7 +9304,7 @@ function fbStartListen() {
 }
 
 // ── Modal de configuração Supabase ────────────────────────────────
-function openGsConfig() {
+window.openGsConfig = function() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(LS_SB_CFG) || '{}'); } catch(e){ console.warn('[openGsConfig] parse LS_SB_CFG:', e); }
   const html = `
@@ -8634,8 +9496,8 @@ async function initSupabase() {
 // MODO PÚBLICO — Ficha de equipamento via QR (?view=ID)
 // ══════════════════════════════════════════════════════
 (function() {
-  var params = new URLSearchParams(window.location.search);
-  var viewId = params.get('view');
+  const params = new URLSearchParams(window.location.search);
+  const viewId = params.get('view');
   if (!viewId) return;
 
   // Injeta overlay de ficha pública antes do login aparecer
@@ -8730,14 +9592,14 @@ async function initSupabase() {
   }
 
   // Espera o DB estar pronto, depois renderiza
-  var _pubStart = Date.now();
+  const _pubStart = Date.now();
   // [v41 iOS FIX] Timeout dinâmico: 45s para iOS, 20s para outros — carregamento de dados via QR
-  var _QR_TIMEOUT = window._isIOS ? 45000 : 20000;
-  var _timeoutWarningShown = false;
-  var _loadingOverlay = null;
-  var _publicLoadDone = false;
-  var _publicLoadError = null;
-  var _publicLoadNoHit = false;
+  const _QR_TIMEOUT = window._isIOS ? 45000 : 20000;
+  let _timeoutWarningShown = false;
+  let _loadingOverlay = null;
+  let _publicLoadDone = false;
+  let _publicLoadError = null;
+  let _publicLoadNoHit = false;
   
   function showLoadingScreen() {
     if (_loadingOverlay) return;
@@ -8840,8 +9702,8 @@ async function initSupabase() {
 // ══════════════════════════════════════════════════════════════
   // [BUG19 AVISO DE SEGURANÇA] Segunda ocorrência de credenciais Supabase no código de leitura pública QR.
   // Para produção: use um backend proxy ou variáveis de ambiente — nunca exponha chaves em HTML.
-  var _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co';
-  var _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw';
+  const _QR_PUBLIC_SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co';
+  const _QR_PUBLIC_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw';
 
   // Oculta o login, lê a tabela 'equipamentos' no Supabase e renderiza a ficha.
   // [v45] Padrão seguro: verifica readyState ANTES de registrar o listener.
@@ -9071,7 +9933,7 @@ async function initSupabase() {
 // ══════════════════════════════════════════════════════
 // AUTENTICAÇÃO — Supabase Auth
 // ══════════════════════════════════════════════════════
-var _auth = null; // alias mantido; não usado diretamente com Supabase (usa _sb.auth)
+// [Already declared early at line 190 to prevent Temporal Dead Zone]
 
 async function initSupabaseAndAuth() {
   // ── GUARD: SDK Supabase deve ter carregado ──
@@ -9122,7 +9984,7 @@ async function initSupabaseAndAuth() {
   }
 }
 
-var _appInitialized = false; // [v15b FIX] evita double-init do updateAll/buildAllCharts pelo onAuthStateChange
+// [Already declared early at line 187 to prevent Temporal Dead Zone]
 
 function showApp(user) {
   // Atualiza UI de auth (sempre permitido: nome do utilizador, overlay de login)
@@ -9248,8 +10110,8 @@ function showLoginScreen() {
 async function doForgotPassword(ev) {
   if (ev && ev.preventDefault) ev.preventDefault();
   if (!_sb) {
-    if(typeof showToast==='function') showToast(t('toast_sb_not_config'),'err');
-    else showToast(t('toast_sb_not_config'));
+    if(typeof showToast==='function') showToast('Supabase not configured','err');
+    else showToast('Supabase not configured');
     return;
   }
   const emailField = document.getElementById('login-email');
@@ -9279,7 +10141,7 @@ document.addEventListener('DOMContentLoaded', function(){
   if (f) f.addEventListener('click', doForgotPassword);
 });
 
-async function doLogin() {
+window.doLogin = async function() {
   const email    = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-pass').value;
   const btn      = document.getElementById('login-btn');
@@ -9328,7 +10190,7 @@ async function doLogin() {
     errEl.classList.add('on');
     const msg = (err.message || '').toLowerCase();
     if (msg.includes('invalid login') || msg.includes('invalid credentials') || msg.includes('email not confirmed')) {
-      errMsg.textContent = 'E-mail ou senha incorretos. Verifique seus dados.';
+      errMsg.textContent = t('login_error_msg') + ' Verifique seus dados.';
     } else if (msg.includes('too many requests') || msg.includes('rate limit')) {
       errMsg.textContent = 'Muitas tentativas incorretas. Aguarde alguns minutos.';
     } else if (msg.includes('network') || msg.includes('fetch')) {
@@ -9421,9 +10283,9 @@ function dc(id){
     delete charts[id]; 
   }
 }
-var FONT = "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
-var MONO_F = "ui-monospace, 'SF Mono', Consolas, monospace";
-var donutOpts = () => ({
+const FONT = "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
+const MONO_F = "ui-monospace, 'SF Mono', Consolas, monospace";
+const donutOpts = () => ({
   responsive:true, maintainAspectRatio:false, cutout:'62%',
   animation: false, // [v15b FIX] sem animação → charts aparecem instantâneos, sem loop visual ao ser recriados
   plugins:{
@@ -9431,7 +10293,7 @@ var donutOpts = () => ({
     tooltip:{callbacks:{label:ctx=>' '+ctx.label+': '+ctx.parsed}}
   }
 });
-var barY = (extra) => ({
+const barY = (extra) => ({
   responsive:true, maintainAspectRatio:false, indexAxis:'y',
   animation: false, // [v15b FIX]
   plugins:{legend:{display:false}},
@@ -9440,7 +10302,7 @@ var barY = (extra) => ({
     y:{ticks:{color:tc(),font:{size:10,family:FONT}},grid:{display:false},border:{display:false}}
   },...(extra||{})
 });
-var barX = (extra) => ({
+const barX = (extra) => ({
   responsive:true, maintainAspectRatio:false,
   animation: false, // [v15b FIX]
   plugins:{legend:{display:false}},
@@ -9611,12 +10473,11 @@ function buildAllCharts() {
 // ═══════════════════════════════════════════════════════
 // GRÁFICO MÊS A MÊS — Previstas vs Realizadas
 // ═══════════════════════════════════════════════════════
-var _mensalRange = 12;
 
 window.setMensalRange = function(n) {
   _mensalRange = n;
   ['3','6','12'].forEach(m => {
-    var b = document.getElementById('ch-mensal-btn-'+m);
+    const b = document.getElementById('ch-mensal-btn-'+m);
     if(!b) return;
     b.style.background = (String(n)===m) ? 'var(--brand)' : 'transparent';
     b.style.color      = (String(n)===m) ? '#fff'         : 'var(--tx2)';
@@ -9646,9 +10507,9 @@ function buildMensalChart() {
       data: {
         labels: emptyLabels,
         datasets: [
-          { label: 'Previstas (vencem)', data: emptyData, backgroundColor: 'rgba(0,100,179,.75)', borderRadius: 4, borderWidth: 0, order: 2 },
-          { label: 'Realizadas', data: emptyData, backgroundColor: 'rgba(22,163,74,.8)', borderRadius: 4, borderWidth: 0, order: 1 },
-          { label: 'Vencidas s/ realização', data: emptyData, backgroundColor: 'rgba(220,38,38,.75)', borderRadius: 4, borderWidth: 0, order: 3 }
+          { label: t('ch_mensal_prev'), data: emptyData, backgroundColor: 'rgba(0,100,179,.75)', borderRadius: 4, borderWidth: 0, order: 2 },
+          { label: t('ch_mensal_real'), data: emptyData, backgroundColor: 'rgba(22,163,74,.8)', borderRadius: 4, borderWidth: 0, order: 1 },
+          { label: t('ch_mensal_venc'), data: emptyData, backgroundColor: 'rgba(220,38,38,.75)', borderRadius: 4, borderWidth: 0, order: 3 }
         ]
       },
       options: {
@@ -9710,10 +10571,10 @@ function buildMensalChart() {
     const totVenc = vencidosSemReal.reduce((a,b)=>a+b,0);
     const taxa = totPrev>0 ? Math.round(totReal/totPrev*100) : 0;
     sumEl.innerHTML = [
-      ['📋 Previstas','var(--brand)',totPrev],
-      ['✅ Realizadas','var(--green)',totReal],
-      ['🚨 Sem realização','var(--red)',totVenc],
-      ['📊 Taxa de execução','var(--accent)', taxa+'%'],
+      [t('ch_mensal_sum_prev'),'var(--brand)',totPrev],
+      [t('ch_mensal_sum_real'),'var(--green)',totReal],
+      [t('ch_mensal_sum_venc'),'var(--red)',totVenc],
+      [t('ch_mensal_sum_taxa'),'var(--accent)', taxa+'%'],
     ].map(([l,c,v])=>`<div style="font-size:11px;color:var(--tx2)">${l}: <strong style="color:${c};font-family:var(--mono)">${v}</strong></div>`).join('');
   }
 
@@ -9725,7 +10586,7 @@ function buildMensalChart() {
       labels,
       datasets: [
         {
-          label: 'Previstas (vencem)',
+          label: t('ch_mensal_prev'),
           data: previstos,
           backgroundColor: 'rgba(0,100,179,.75)',
           borderRadius: 4,
@@ -9733,7 +10594,7 @@ function buildMensalChart() {
           order: 2
         },
         {
-          label: 'Realizadas',
+          label: t('ch_mensal_real'),
           data: realizados,
           backgroundColor: 'rgba(22,163,74,.8)',
           borderRadius: 4,
@@ -9741,7 +10602,7 @@ function buildMensalChart() {
           order: 1
         },
         {
-          label: 'Vencidas s/ realização',
+          label: t('ch_mensal_venc'),
           data: vencidosSemReal,
           backgroundColor: 'rgba(220,38,38,.75)',
           borderRadius: 4,
@@ -9762,7 +10623,7 @@ function buildMensalChart() {
               if(idx===undefined) return '';
               const p = previstos[idx]||0, r = realizados[idx]||0;
               const tx = p>0 ? Math.round(r/p*100) : 0;
-              return `Taxa de execução: ${tx}%`;
+              return t('ch_mensal_tooltip').replace('{tx}', tx);
             }
           }
         }
@@ -9804,7 +10665,7 @@ function diasBadge(d){
 }
 // Translate data field values
 // ── Data translation dictionary PT → EN ──────────────────────────
-var DATA_EN = {
+const DATA_EN = {
   // Tipos de equipamento
   'Aferidor de Torque':                    'Torque Calibrator',
   'Balança Digital':                       'Digital Scale',
@@ -10006,7 +10867,7 @@ function fileIcon(n){const e=((n||'').split('.').pop()||'').toLowerCase();return
 
 
 // Inline-editable fields config
-var INLINE_EDITABLE = {
+const INLINE_EDITABLE = {
   id:          { type: 'text' },   // [DUPLICATE-ROW] permite editar código na linha duplicada/em branco
   tipo:        { type: 'text' },
   cliente:     { type: 'text' },
@@ -10029,7 +10890,7 @@ var INLINE_EDITABLE = {
   ]},
 };
 
-var _inlineActive = null; // { uid, k, td }
+// [Already declared early at line 193]
 
 function startInlineEdit(uid, k, td) {
   // [v20 FIX] Cancel any active inline edit first to prevent listener accumulation
@@ -10090,7 +10951,7 @@ function startInlineEdit(uid, k, td) {
     // Estratégia:
     //   • Digitação manual → confirma com Enter ou Tab
     //   • Calendário picker → ao selecionar a data, o input perde foco → blur commita
-    var _dateCommitted = false;
+    let _dateCommitted = false;
     const commitDate = () => {
       if(_dateCommitted) return;
       _dateCommitted = true;
@@ -10236,10 +11097,9 @@ function rerenderRow(uid, tbl) {
 }
 
 // ── Deferred filter refresh — user controls when filters re-apply ──────────
-var _pendingFilterRefresh = false;
+// [Already declared early at line 194]
 
 function updateApplyFilterBtn() {
-  const btn = document.getElementById('btn-apply-filters');
   if(!btn) return;
   if(_pendingFilterRefresh) {
     btn.classList.add('pending');
@@ -10327,11 +11187,11 @@ function renderCell(r, k, tbl) {
   return `<td ${attr} ${editAttr} title="${esc(vt||'')}">${esc(vt||'—')}${fillH}</td>`;
 }
 
-var _renderTableDebounceTimer = {};
+// [Already declared early at line 195 to prevent Temporal Dead Zone]
+
 function renderTableDebounced(tbl, delay) {
   delay = delay || 60;
   clearTimeout(_renderTableDebounceTimer[tbl]);
-  _renderTableDebounceTimer[tbl] = setTimeout(() => renderTable(tbl), delay);
 }
 function renderTable(tbl) {
   // [v49.9 FIX] Proteção defensiva: pag pode não estar inicializado ainda
@@ -10831,7 +11691,7 @@ function _syncFiltersFromTableView() {
   });
 }
 
-var FILTER_IDS = ['f-de','f-ate','f-ult-calib-de','f-ult-calib-ate','f-prox-calib-de','f-prox-calib-ate','f-search'];
+const FILTER_IDS = ['f-de','f-ate','f-ult-calib-de','f-ult-calib-ate','f-prox-calib-de','f-prox-calib-ate','f-search'];
 function _saveFilters(){ try{
   var o={};
   FILTER_IDS.forEach(function(id){var e=document.getElementById(id); if(e&&e.value) o[id]=e.value;});
@@ -11228,15 +12088,15 @@ function buildResumo() {
   const x = computeStats();
   el.innerHTML='';
   const rows = [
-    [t('lbl_total_equip'), x.tot, ''],
+    ['Total Equipment', x.tot, ''],
     ['Ativos',    `${x.ativos} (${x.tot?Math.round(x.ativos/x.tot*100):0}%)`, 'var(--green)'],
     ['Inativos',  x.inativos, ''],
     ['Vencidos',  `${x.vencidos} (${x.tot?Math.round(x.vencidos/x.tot*100):0}%)`, 'var(--red)'],
     ['Vencem em 30 dias', x.d30, 'var(--orange)'],
     ['Vencem em 90 dias', x.d90, 'var(--accent)'],
     ['Em dia (>90d)',     x.okFuturo, 'var(--green)'],
-    [t('lbl_no_date'),   x.semData, 'var(--tx3)'],
-    [t('lbl_health_idx'),   x.saude+'%', x.saude>=80?'var(--green)':x.saude>=50?'var(--orange)':'var(--red)'],
+    ['No Date',   x.semData, 'var(--tx3)'],
+    ['Health Index',   x.saude+'%', x.saude>=80?'var(--green)':x.saude>=50?'var(--orange)':'var(--red)'],
   ];
   rows.forEach(([l,v,c])=>
     el.innerHTML+=`<div class="stat-row"><span style="color:var(--tx2);font-size:12px">${l}</span><span style="font-weight:700;font-family:var(--mono);${c?'color:'+c:''}">${v}</span></div>`);
@@ -11257,7 +12117,8 @@ function buildUrgentes() {
   }).join('');
 }
 
-var _repRows=[];
+// [Already declared early to prevent Temporal Dead Zone]
+
 function _populateRepFilters(){
   const fill=(id,vals)=>{const s=document.getElementById(id);if(!s)return;const cur=s.value;s.innerHTML='<option value="">Todos</option>'+[...new Set(vals.filter(v=>v))].sort().map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');s.value=cur;};
   fill('rep-f-tipo',  DB.map(r=>r.tipo));
@@ -11331,7 +12192,7 @@ function exportRepCSV() {
 // ═══════════════════════════════════════════════════════
 // EDIT MODAL
 // ═══════════════════════════════════════════════════════
-var editUID=null;
+let editUID=null;
 function openEdit(uid){
   // [v49.9 FIX] Fallback por String(_uid) quando _uid numérico não casa (após sync que regera _uid)
   let r = DB.find(x => x._uid === uid);
@@ -11382,8 +12243,8 @@ function saveRecord(){
   // [v18 FIX] Validação de campos obrigatórios antes de salvar
   if(!idVal){showToast(t('toast_code_req'),'err');document.getElementById('m-id').focus();return;}
   if(!tipoVal){showToast(t('toast_type_req'),'err');document.getElementById('m-tipo').focus();return;}
-  if(!descVal){showToast(t('toast_desc_required'),'err');document.getElementById('m-desc').focus();return;}
-  if(!localVal){showToast(t('toast_loc_required'),'err');document.getElementById('m-local').focus();return;}
+  if(!descVal){showToast('Description required','err');document.getElementById('m-desc').focus();return;}
+  if(!localVal){showToast('Location required','err');document.getElementById('m-local').focus();return;}
   // [v19 MELHORIA 1] Validação de coerência de datas (prox >= ult)
   const ultVal = document.getElementById('m-ult').value;
   if(ultVal && prox && new Date(prox+'T00:00:00') < new Date(ultVal+'T00:00:00')) {
@@ -11624,7 +12485,7 @@ function addBlankRow() {
 }
 
 // deleteRecord_real é alias de deleteRecord (mantido para compatibilidade de hooks)
-var deleteRecord_real = deleteRecord;
+const deleteRecord_real = deleteRecord;
 
 
 function autoCalc(){
@@ -11683,7 +12544,9 @@ function openFileForRow(uid){
 // ═══════════════════════════════════════════════════════
 // NOTIFICATIONS
 // ═══════════════════════════════════════════════════════
-var _notifRead=new Set(),_notifOpen=false,_lastCrit=0;
+// [Already declared early at lines 196-199 to prevent Temporal Dead Zone]
+// _notifRead, _notifOpen, _lastCrit
+
 function buildNotifs(){
   const urgent=DB.filter(r=>r.prox_calib&&r.dias_vencer!==null&&r.dias_vencer<=90).sort((a,b)=>a.dias_vencer-b.dias_vencer);
   const crit=urgent.filter(r=>r.dias_vencer<=30);_lastCrit=crit.length;
@@ -11706,7 +12569,6 @@ function buildNotifs(){
 function toggleNotif(){/* sino removido — função mantida para não quebrar chamadas residuais */}
 function markAllRead(){DB.forEach(r=>{if(r.dias_vencer!==null&&r.dias_vencer<=30)_notifRead.add(r._uid);});}
 function notifClick(uid){_notifRead.add(uid);showTab('alertas',document.querySelectorAll('.tab')[1]);}
-var _autoNotifInterval = null;
 function startAutoNotif(){buildNotifs();if(_autoNotifInterval) clearInterval(_autoNotifInterval); _autoNotifInterval = setInterval(()=>{const prev=_lastCrit;buildNotifs();if(_lastCrit>prev){showToast('🔔 Novos alertas de vencimento!','err');}},30*60*1000);}
 
 // ═══════════════════════════════════════════════════════
@@ -11714,7 +12576,7 @@ function startAutoNotif(){buildNotifs();if(_autoNotifInterval) clearInterval(_au
 // ═══════════════════════════════════════════════════════
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='equipamentos_'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href);}
 // ── CAMPOS PERMITIDOS EM IMPORTAÇÃO — whitelist defensiva ─────────────────────
-var _IMPORT_STR_FIELDS = ['id','tipo','cliente','fabricante','descricao','localizacao',
+const _IMPORT_STR_FIELDS = ['id','tipo','cliente','fabricante','descricao','localizacao',
   'responsavel','empresa','cod_lab','ult_calib','prox_calib','status','status_calib',
   'notes','observacoes','link','link_data','sheet'];
 
@@ -11742,7 +12604,7 @@ function importData(e) {
   const f = e.target.files[0];
   if(!f) return;
   // Validação básica de tipo MIME e tamanho (máx. 10 MB)
-  if(f.size > 10 * 1024 * 1024) { showToast(t('toast_file_too_big'), 'err'); e.target.value = ''; return; }
+  if(f.size > 10 * 1024 * 1024) { showToast('File too big', 'err'); e.target.value = ''; return; }
   const rd = new FileReader();
   rd.onload = ev => {
     try {
@@ -11767,7 +12629,6 @@ function importData(e) {
 
 // ── Cache de seletores DOM frequentes — evita getElementById em hot paths ──────
 // Inicializado no DOMContentLoaded; safe porque estes elementos são estáticos.
-var _$toast = null, _$toastMsg = null, _$syncInd = null;
 document.addEventListener('DOMContentLoaded', function() {
   _$toast    = document.getElementById('toast');
   _$toastMsg = document.getElementById('toast-msg');
@@ -11777,7 +12638,6 @@ document.addEventListener('DOMContentLoaded', function() {
 // ═══════════════════════════════════════════════════════
 // TOAST
 // ═══════════════════════════════════════════════════════
-var _toastT = null;
 function showToast(msg, type = 'success') {
   // [v49.9 FIX] Normaliza aliases e propaga para o window.showToast centralizado quando #toast não existe
   // Isso garante que mensagens não sejam perdidas silenciosamente
@@ -11803,7 +12663,7 @@ function showToast(msg, type = 'success') {
 // ═══════════════════════════════════════════════════════
 // RESET
 // ═══════════════════════════════════════════════════════
-function resetDB(){
+window.resetDB = function(){
   // [v25 FIX] replaced blocking confirm() with _confirmModal
   _confirmModal('⚠️ Isso apagará TODAS as edições e voltará ao seed inicial. Tem certeza?', function() {
     localStorage.removeItem(LS_KEY);
@@ -11818,9 +12678,7 @@ function resetDB(){
 }
 // UNDO / REDO SYSTEM
 // ═══════════════════════════════════════════════════════
-var _undoStack = [];
-var _redoStack = [];
-var MAX_UNDO = 50;
+const MAX_UNDO = 50;
 
 function pushUndo() {
   // [v49.9 FIX] Respeita MAX_UNDO antes de empurrar para não crescer indefinidamente
@@ -11832,7 +12690,7 @@ function pushUndo() {
   updateUndoRedoBtns();
 }
 
-function undoAction() {
+window.undoAction = function() {
   if (!_undoStack.length) { showToast('Nada para desfazer','err'); return; }
   _redoStack.push(JSON.stringify(DB.map(r => { const {dias_vencer,...rest}=r; return rest; })));
   DB = recalcDias(JSON.parse(_undoStack.pop()));
@@ -11845,7 +12703,7 @@ function undoAction() {
   updateUndoRedoBtns();
 }
 
-function redoAction() {
+window.redoAction = function() {
   if (!_redoStack.length) { showToast('Nada para refazer','err'); return; }
   _undoStack.push(JSON.stringify(DB.map(r => { const {dias_vencer,...rest}=r; return rest; })));
   DB = recalcDias(JSON.parse(_redoStack.pop()));
@@ -11880,7 +12738,7 @@ function updateUndoRedoBtns() {
 // Keyboard shortcuts: Ctrl+Z = undo, Ctrl+Y or Ctrl+Shift+Z = redo
 document.addEventListener('keydown', e => {
   // Skip if user is typing inside an input/textarea/select
-  var tag = (e.target.tagName||'').toLowerCase();
+  const tag = (e.target.tagName||'').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
   if ((e.ctrlKey || e.metaKey) && !e.altKey) {
     if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undoAction(); return; }
@@ -11891,9 +12749,7 @@ document.addEventListener('keydown', e => {
 // ═══════════════════════════════════════════════════════
 // CARD LIST VIEW — Aba Equipamentos
 // ═══════════════════════════════════════════════════════
-var _eqViewMode = localStorage.getItem('rochling_eq_view') || 'cards'; // 'cards' | 'table'
-var CARDS_PER_PAGE = 24;
-var _cardPage = 1;
+const CARDS_PER_PAGE = 24;
 
 function toggleEqView() {
   _eqViewMode = _eqViewMode === 'cards' ? 'table' : 'cards';
@@ -12049,11 +12905,11 @@ function renderCardList() {
 
 // Sobrescreve applyF para também atualizar os cards
 (function() {
-  var _origApplyF = window.applyF;
+  const _origApplyF = window.applyF;
   if (typeof _origApplyF === 'function') {
     window.applyF = function() {
       _cardPage = 1;
-      var r = _origApplyF.apply(this, arguments);
+      const r = _origApplyF.apply(this, arguments);
       if (_eqViewMode === 'cards') renderCardList();
       return r;
     };
@@ -12062,10 +12918,10 @@ function renderCardList() {
 
 // Atualiza cards quando os dados mudam
 (function() {
-  var _origRefreshInPlace = window.refreshInPlace;
+  const _origRefreshInPlace = window.refreshInPlace;
   if (typeof _origRefreshInPlace === 'function') {
     window.refreshInPlace = function() {
-      var r = _origRefreshInPlace.apply(this, arguments);
+      const r = _origRefreshInPlace.apply(this, arguments);
       if (_eqViewMode === 'cards') renderCardList();
       return r;
     };
@@ -12189,8 +13045,8 @@ function _handleQrDeepLink() {
    DRILL_DOWN_INSTALLED — clique nos gráficos abre tabela editável
    ═══════════════════════════════════════════════════════ */
 (function(){
-  var norm = s => (s==null?'':String(s)).trim();
-  var lc   = s => norm(s).toLowerCase();
+  const norm = s => (s==null?'':String(s)).trim();
+  const lc   = s => norm(s).toLowerCase();
 
   // ── Helper: converte label do gráfico mensal → {year, month}
   // Suporta formatos: "mai./25", "mai/25", "mai. 2025", "May 25", "5/25" etc.
@@ -12235,50 +13091,50 @@ function _handleQrDeepLink() {
   }
 
   // Mapa: chartKey → { title, filter(label, idx) → array de registros DB }
-  var DRILL = {
+  const DRILL = {
     'todos':    { title:'📦 Todos os Equipamentos', filter:()=>DB },
     'ativos':   { title:'✅ Equipamentos Ativos',   filter:()=>DB.filter(r=>lc(r.status)==='ativo') },
     'inativos': { title:'⏸ Equipamentos Inativos', filter:()=>DB.filter(r=>lc(r.status)==='inativo') },
-    'calib-ok': { title:t('ch_lbl_calib_ok'), filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>90) },
-    'vencidos': { title:t('ch_lbl_exp_calib'),   filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0) },
+    'calib-ok': { title: 'Calibration OK', filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>90) },
+    'vencidos': { title:'Expired Calibration',   filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0) },
     'vence30':  { title:'⚠️ Vencem em 30 dias',    filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0&&r.dias_vencer<=30) },
     'vence90':  { title:'📅 Vencem em 90 dias',    filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>30&&r.dias_vencer<=90) },
     'saude':    { title:'💚 Equipamentos em Dia',  filter:()=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer>=0) },
     'mensal-prev': {
-      title: t('ch_lbl_sched'),
+      title: 'Scheduled',
       filter: (label) => {
-        var md = mensalLabelToDate(label);
+        const md = mensalLabelToDate(label);
         if(!md) return [];
         return DB.filter(r => {
           if(!r.prox_calib) return false;
-          var pc = new Date(r.prox_calib+'T00:00:00');
+          const pc = new Date(r.prox_calib+'T00:00:00');
           return pc.getFullYear()===md.year && pc.getMonth()===md.month;
         });
       }
     },
     'mensal-real': {
-      title: t('ch_lbl_done'),
+      title: 'Calibrated',
       filter: (label) => {
-        var md = mensalLabelToDate(label);
+        const md = mensalLabelToDate(label);
         if(!md) return [];
         return DB.filter(r => {
           if(!r.ult_calib) return false;
-          var uc = new Date(r.ult_calib+'T00:00:00');
+          const uc = new Date(r.ult_calib+'T00:00:00');
           return uc.getFullYear()===md.year && uc.getMonth()===md.month;
         });
       }
     },
     'mensal-venc': {
-      title: t('ch_lbl_missed'),
+      title: 'Missed',
       filter: (label) => {
-        var md = mensalLabelToDate(label);
+        const md = mensalLabelToDate(label);
         if(!md) return [];
         return DB.filter(r => {
           if(!r.prox_calib) return false;
-          var pc = new Date(r.prox_calib+'T00:00:00');
+          const pc = new Date(r.prox_calib+'T00:00:00');
           if(pc.getFullYear()!==md.year || pc.getMonth()!==md.month) return false;
           if(!r.ult_calib) return true;
-          var uc = new Date(r.ult_calib+'T00:00:00');
+          const uc = new Date(r.ult_calib+'T00:00:00');
           return !(uc.getFullYear()===md.year && uc.getMonth()===md.month);
         });
       }
@@ -12286,7 +13142,7 @@ function _handleQrDeepLink() {
     'calib': {
       title: '📊 Status de Calibração',
       filter: (label) => {
-        var l = lc(label);
+        const l = lc(label);
         if(l.includes('aprov'))   return DB.filter(r=>(r.status_calib||'').includes('aprovado'));
         if(l.includes('necess'))  return DB.filter(r=>(r.status_calib||'').includes('Necessária'));
         return DB.filter(r=>!((r.status_calib||'').includes('aprovado')||(r.status_calib||'').includes('Necessária')));
@@ -12295,24 +13151,24 @@ function _handleQrDeepLink() {
     'status': {
       title: '⚡ Status Operacional',
       filter: (label) => {
-        var l = lc(label);
+        const l = lc(label);
         if(l.includes('ativ') && !l.includes('inativ')) return DB.filter(r=>(r.status||'').toUpperCase()==='ATIVO');
         return DB.filter(r=>(r.status||'').toUpperCase()!=='ATIVO');
       }
     },
     'tipos':      { title:'🔧 Tipo de Equipamento',    filter:(label)=>DB.filter(r=>lc(r.tipo).startsWith(lc(label).replace(/…$/,'')))},
-    'tipos-venc': { title:t('ch_lbl_exp_type'), filter:(label)=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0&&lc(r.tipo).startsWith(lc(label).replace(/…$/,'')))},
+    'tipos-venc': { title: 'Expiration Type', filter:(label)=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0&&lc(r.tipo).startsWith(lc(label).replace(/…$/,'')))},
     'venc6': {
       title: '📅 Vencimentos — Próx. 6 Meses',
       filter: (label) => {
         // label vem como "MMM/YY" no padrão do app — match por mês/ano
-        var now = new Date();
-        for(var i=0;i<6;i++){
-          var d = new Date(now.getFullYear(), now.getMonth()+i, 1);
-          var lab = d.toLocaleDateString(_locale(),{month:'short'}).replace('.','') + '/' + String(d.getFullYear()).slice(-2);
+        const now = new Date();
+        for(let i=0;i<6;i++){
+          const d = new Date(now.getFullYear(), now.getMonth()+i, 1);
+          const lab = d.toLocaleDateString(_locale(),{month:'short'}).replace('.','') + '/' + String(d.getFullYear()).slice(-2);
           if(lc(lab) === lc(label) || lc(label).startsWith(lc(lab).slice(0,3))){
             return DB.filter(r=>{ if(!r.prox_calib) return false;
-              var pc=new Date(r.prox_calib+'T00:00:00');
+              const pc=new Date(r.prox_calib+'T00:00:00');
               return pc.getMonth()===d.getMonth() && pc.getFullYear()===d.getFullYear();
             });
           }
@@ -12320,17 +13176,17 @@ function _handleQrDeepLink() {
         return [];
       }
     },
-    'locais':  { title:t('ch_lbl_location'), filter:(label)=>DB.filter(r=>lc(r.localizacao).startsWith(lc(label).replace(/…$/,'')))},
+    'locais':  { title: 'Location', filter:(label)=>DB.filter(r=>lc(r.localizacao).startsWith(lc(label).replace(/…$/,'')))},
     'emp':     { title:'🏢 Empresa Executante', filter:(label)=>DB.filter(r=>lc(r.empresa)===lc(label))},
     'venc-mes':{ title:'📅 Vencimentos por Mês',
       filter:(label)=>{
-        var now=new Date();
-        for(var i=-6;i<=6;i++){
-          var d=new Date(now.getFullYear(),now.getMonth()+i,1);
-          var lab=d.toLocaleDateString(_locale(),{month:'short'}).replace('.','')+'/'+String(d.getFullYear()).slice(-2);
+        const now=new Date();
+        for(let i=-6;i<=6;i++){
+          const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+          const lab=d.toLocaleDateString(_locale(),{month:'short'}).replace('.','')+'/'+String(d.getFullYear()).slice(-2);
           if(lc(lab)===lc(label) || lc(label).startsWith(lc(lab).slice(0,3))){
             return DB.filter(r=>{if(!r.prox_calib)return false;
-              var pc=new Date(r.prox_calib+'T00:00:00');
+              const pc=new Date(r.prox_calib+'T00:00:00');
               return pc.getMonth()===d.getMonth()&&pc.getFullYear()===d.getFullYear();
             });
           }
@@ -12338,15 +13194,15 @@ function _handleQrDeepLink() {
         return [];
       }
     },
-    'resp':     { title:t('ch_lbl_resp'),     filter:(label)=>DB.filter(r=>lc(r.responsavel).startsWith(lc(label).replace(/…$/,'')))},
+    'resp':     { title: 'Responsible',     filter:(label)=>DB.filter(r=>lc(r.responsavel).startsWith(lc(label).replace(/…$/,'')))},
     'emp-venc': { title:'🏭 Vencidos por Empresa', filter:(label)=>DB.filter(r=>r.dias_vencer!==null&&r.dias_vencer<0 && lc(r.empresa).startsWith(lc(label).replace(/…$/,'')))},
     'freq': {
-      title: t('ch_lbl_freq'),
+      title: 'Frequency',
       filter: (label) => {
         // labels do gráfico = chaves de fb (ex: "Anual", "Semestral", etc)
         return DB.filter(r=>{
-          var days=Number(r.freq_dias)||0;
-          var bucket;
+          const days=Number(r.freq_dias)||0;
+          let bucket;
           if(days<=0) bucket='—';
           else if(days<=30) bucket='Mensal';
           else if(days<=90) bucket='Trimestral';
@@ -12360,7 +13216,7 @@ function _handleQrDeepLink() {
   };
 
   // Estado do drill atual (para refresh)
-  var drillState = null;
+  let drillState = null;
   window.__getDrillState = () => drillState;
 
   // fmtDate local removido — usa o global fmtDateSafe (timezone-safe, sem new Date(str))
@@ -12450,16 +13306,16 @@ function _handleQrDeepLink() {
   }
 
   // Estado de filtros inline do drill-down
-  var _drillFilters = {};
+  let _drillFilters = {};
 
   window.__drillApplyFilter = function(el) {
     // [v34 FIX] Salva qual campo estava ativo e sua posição de cursor antes de re-renderizar
-    var activeKey = el.dataset.key;
-    var activeCursor = el.selectionStart;
+    const activeKey = el.dataset.key;
+    const activeCursor = el.selectionStart;
     _drillFilters[el.dataset.key] = el.value;
     _doRefreshDrill();
     // Restaura foco no mesmo campo após re-render
-    var restored = document.querySelector(`.drill-col-filter[data-key="${activeKey}"][type="text"]`);
+    const restored = document.querySelector(`.drill-col-filter[data-key="${activeKey}"][type="text"]`);
     if (restored) {
       restored.focus();
       try { restored.setSelectionRange(activeCursor, activeCursor); } catch(e){}
@@ -12497,7 +13353,7 @@ function _handleQrDeepLink() {
   };
 
   window.openDrill = function(chartKey, label){
-    var cfg = DRILL[chartKey]; if(!cfg) return;
+    const cfg = DRILL[chartKey]; if(!cfg) return;
     _drillFilters = {};
     drillState = { key:chartKey, label, filter:()=>cfg.filter(label) };
     document.getElementById('drill-title').textContent = cfg.title;
@@ -12530,16 +13386,16 @@ function _handleQrDeepLink() {
     Object.keys(DRILL).forEach(attachClick);
   }
   // tenta repetidamente até os charts existirem (renderCharts pode rodar depois)
-  var tries=0;
-  var wireInterval = setInterval(()=>{
+  let tries=0;
+  const wireInterval = setInterval(()=>{
     wireAll(); tries++;
     if(tries>40) clearInterval(wireInterval);
   },250);
   // também re-wire quando atualiza
-  var _origUpdateAll = window.updateAll;
+  const _origUpdateAll = window.updateAll;
   if(typeof _origUpdateAll==='function'){
     window.updateAll = function(){
-      var r = _origUpdateAll.apply(this,arguments);
+      const r = _origUpdateAll.apply(this,arguments);
       setTimeout(wireAll, 50);
       setTimeout(wireAll, 300);
       setTimeout(updateTabBadges, 100);
@@ -12558,8 +13414,8 @@ function _handleQrDeepLink() {
     }catch(e){ console.warn('[updateTabBadges]', e); }
   }
   // dispara na carga inicial
-  var badgeTries=0;
-  var badgeInterval=setInterval(()=>{
+  let badgeTries=0;
+  const badgeInterval=setInterval(()=>{
     if(typeof DB!=='undefined'&&DB.length>0){ updateTabBadges(); clearInterval(badgeInterval); }
     if(++badgeTries>40) clearInterval(badgeInterval);
   },300);
@@ -12584,23 +13440,23 @@ function _handleQrDeepLink() {
   ['saveRecord','deleteRecord_real','deleteRecord','deleteInline'].forEach(installHook);
 
   // ── Z-index: edit-modal acima do drill-modal quando ambos abertos
-  var _origOpenEdit = window.openEdit;
+  const _origOpenEdit = window.openEdit;
   if(typeof _origOpenEdit==='function'){
     window.openEdit = function(){
-      var drillOpen = document.getElementById('drill-modal').classList.contains('on');
-      var r = _origOpenEdit.apply(this, arguments);
+      const drillOpen = document.getElementById('drill-modal').classList.contains('on');
+      const r = _origOpenEdit.apply(this, arguments);
       if(drillOpen){
-        var em = document.getElementById('edit-modal');
+        const em = document.getElementById('edit-modal');
         if(em) em.style.zIndex = '600';
       }
       return r;
     };
   }
-  var _origCloseModal = window.closeModal;
+  const _origCloseModal = window.closeModal;
   if(typeof _origCloseModal==='function'){
     window.closeModal = function(){
-      var r = _origCloseModal.apply(this, arguments);
-      var em = document.getElementById('edit-modal');
+      const r = _origCloseModal.apply(this, arguments);
+      const em = document.getElementById('edit-modal');
       if(em) em.style.zIndex = '';
       return r;
     };
@@ -12609,9 +13465,9 @@ function _handleQrDeepLink() {
   // ESC fecha o drill (se edit-modal não estiver aberto)
   document.addEventListener('keydown', e=>{
     if(e.key!=='Escape') return;
-    var editOpen = document.getElementById('edit-modal').classList.contains('on');
-    var drillOpen = document.getElementById('drill-modal').classList.contains('on');
-    var pdfOpen = document.getElementById('pdf-print-frame').classList.contains('on');
+    const editOpen = document.getElementById('edit-modal').classList.contains('on');
+    const drillOpen = document.getElementById('drill-modal').classList.contains('on');
+    const pdfOpen = document.getElementById('pdf-print-frame').classList.contains('on');
     if(pdfOpen) { closePdfModal(); return; }
     if(drillOpen && !editOpen) closeDrill();
   });
@@ -12621,10 +13477,10 @@ function _handleQrDeepLink() {
 // FILL HANDLE — arrastar para preencher várias células
 // ═══════════════════════════════════════════════════════
 (function(){
-  var _fd = null; // fill drag state
+  let _fd = null; // fill drag state
 
   // Ghost tooltip element
-  var ghost = document.createElement('div');
+  const ghost = document.createElement('div');
   ghost.className = 'fill-ghost';
   ghost.id = 'fill-ghost';
   document.body.appendChild(ghost);
@@ -12636,16 +13492,16 @@ function _handleQrDeepLink() {
     e.stopPropagation();
     if(_inlineActive) cancelInlineEdit();
 
-    var r = DB.find(x => x._uid === uid);
+    const r = DB.find(x => x._uid === uid);
     if(!r) return;
 
     // Build ordered row list from current filtered table (geral only)
-    var allRows = pag.eq.rows;
-    var srcIdx  = allRows.findIndex(x => x._uid === uid);
+    const allRows = pag.eq.rows;
+    const srcIdx  = allRows.findIndex(x => x._uid === uid);
     if(srcIdx < 0) return;
 
-    var srcVal   = r[k];
-    var displayV = srcVal !== null && srcVal !== undefined && srcVal !== '' ? String(srcVal) : '—';
+    const srcVal   = r[k];
+    const displayV = srcVal !== null && srcVal !== undefined && srcVal !== '' ? String(srcVal) : '—';
 
     _fd = { uid, k, srcVal, srcIdx, allRows, previewIdxs: new Set() };
 
@@ -12656,7 +13512,7 @@ function _handleQrDeepLink() {
     ghost.style.top  = (e.clientY - 14) + 'px';
 
     // Highlight source cell
-    var srcRow = document.querySelector(`tr[data-uid="${uid}"]`);
+    const srcRow = document.querySelector(`tr[data-uid="${uid}"]`);
     if(srcRow) srcRow.querySelector(`[data-col="${k}"]`)?.classList.add('fill-active');
 
     document.addEventListener('mousemove', onFillMove);
@@ -12763,8 +13619,7 @@ function _handleQrDeepLink() {
 // ═══════════════════════════════════════════════════════
 // CARD VIEW — SELEÇÃO MÚLTIPLA PARA QR EM LOTE
 // ═══════════════════════════════════════════════════════
-var _cardSelectedUIDs = new Set();
-var _cardSelectMode = false;
+const _cardSelectedUIDs = new Set();
 
 function toggleCardSelectMode() {
   _cardSelectMode = !_cardSelectMode;
@@ -12839,7 +13694,7 @@ function openQrBulkModal(source) {
   }
   if (!uids || uids.size === 0) {
     if(typeof showToast === 'function') showToast('⚠ Nenhum equipamento selecionado.', 'err');
-    else showToast(t('toast_none_selected'));
+    else showToast('None selected');
     return;
   }
   const rows = DB.filter(r => uids.has(r._uid));
@@ -12913,7 +13768,7 @@ function openQrBulkModal(source) {
   updateQrBulkLayoutInfo(rows.length);
 }
 
-var _qrBulkSize = 'mini';
+let _qrBulkSize = 'mini';
 function selectQrBulkSize(size) {
   _qrBulkSize = size;
   document.querySelectorAll('[id^="qrb-lbl-"]').forEach(el => {
@@ -12950,7 +13805,7 @@ async function printQrBulk(uids) {
   // [v38 FIX] Aceita tanto Set quanto Array para robustez
   if (Array.isArray(uids)) uids = new Set(uids);
   if (!(uids instanceof Set) || uids.size === 0) {
-    if (typeof showToast === 'function') showToast(t('toast_none_selected'), 'err');
+    if (typeof showToast === 'function') showToast('None selected', 'err');
     return;
   }
   // ⚠️ Lê TODOS os valores ANTES de remover o modal do DOM
@@ -13128,9 +13983,9 @@ ${Array.from({length: pages}, (_,pi) => {
   setTimeout(() => win.print(), 1200);
 }
 
-var _selectedUIDs = { geral: new Set(), alert: new Set(), rep: new Set() };
+const _selectedUIDs = { geral: new Set(), alert: new Set(), rep: new Set() };
 
-var BULK_FIELDS = {
+const BULK_FIELDS = {
   status:       { type:'select', options:['ATIVO','INATIVO'] },
   status_calib: { type:'select', options:['Instrumento Calibrado e aprovado','Calibração Necessária','DESCARTADO','Não encontrado'] },
   empresa:      { type:'text' },
@@ -13277,7 +14132,7 @@ function quickRefresh() {
   try { _statsCache = null; } catch(_) {}
   try { if (typeof updateKPIs === 'function') updateKPIs(); } catch(_) {}
   try { if (typeof refreshInPlace === 'function') refreshInPlace(); } catch(_) {}
-  try { showToast(t('toast_updated_ok')); } catch(_) {}
+  try { showToast('Updated successfully'); } catch(_) {}
 }
 window.quickRefresh = quickRefresh;
 
@@ -13338,7 +14193,7 @@ function clearSelection(tbl) {
 
 (function(){
   // Colunas disponíveis para impressão
-  var PDF_COLS = [
+  const PDF_COLS = [
     { k:'id',          l:'Código' },
     { k:'tipo',        l:'Tipo' },
     { k:'descricao',   l:'Descrição' },
@@ -13356,18 +14211,18 @@ function clearSelection(tbl) {
   ];
 
   // Colunas selecionadas por padrão
-  var DEFAULT_COLS = ['id','tipo','descricao','localizacao','empresa','ult_calib','prox_calib','dias_vencer','status_calib'];
+  const DEFAULT_COLS = ['id','tipo','descricao','localizacao','empresa','ult_calib','prox_calib','dias_vencer','status_calib'];
 
-  var _pdfOri = 'landscape';
-  var _pdfSz  = 10;
-  var _pdfCols = [...DEFAULT_COLS];
-  var _pdfRows = [];
-  var _pdfTitle = '';
-  var _pdfSub   = '';
+  let _pdfOri = 'landscape';
+  let _pdfSz  = 10;
+  let _pdfCols = [...DEFAULT_COLS];
+  let _pdfRows = [];
+  let _pdfTitle = '';
+  let _pdfSub   = '';
 
   window.openPdfModal = function() {
     // Captura os dados e título do drill modal aberto
-    var ds = (typeof window.__getDrillState === 'function') ? window.__getDrillState() : null;
+    const ds = (typeof window.__getDrillState === 'function') ? window.__getDrillState() : null;
     if(ds) {
       _pdfRows  = ds.filter();
       _pdfTitle = document.getElementById('drill-title')?.textContent || 'Relatório';
@@ -13408,7 +14263,7 @@ function clearSelection(tbl) {
   }
 
   window.togglePdfCol = function(k, el) {
-    var idx = _pdfCols.indexOf(k);
+    const idx = _pdfCols.indexOf(k);
     if(idx >= 0) { if(_pdfCols.length > 1) _pdfCols.splice(idx,1); }
     else _pdfCols.push(k);
     el.classList.toggle('on', _pdfCols.includes(k));
@@ -13443,23 +14298,23 @@ function clearSelection(tbl) {
 
   window.executePrint = function() {
     closePdfModal();
-    var cols = PDF_COLS.filter(c => _pdfCols.includes(c.k));
-    var rows = _pdfRows;
-    var now  = new Date().toLocaleString(_locale());
-    var colW = _pdfOri === 'landscape' ? Math.floor(260/cols.length) : Math.floor(180/cols.length);
+    const cols = PDF_COLS.filter(c => _pdfCols.includes(c.k));
+    const rows = _pdfRows;
+    const now  = new Date().toLocaleString(_locale());
+    const colW = _pdfOri === 'landscape' ? Math.floor(260/cols.length) : Math.floor(180/cols.length);
 
-    var thead = cols.map(c =>
+    const thead = cols.map(c =>
       `<th style="background:#1a1a1a !important;color:#f5f5f5;padding:7px ${_pdfSz<=8?'4px':'6px'};font-size:${_pdfSz-1}pt;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-right:1px solid #333;min-width:${colW}mm">${c.l}</th>`
     ).join('');
 
-    var tbody = rows.map((r, i) => {
-      var bg = i % 2 === 0 ? '#ffffff' : '#f8f9fc';
-      var cells = cols.map(c => {
-        var raw = r[c.k];
-        var txt = fmtVal(c.k, raw);
-        var color = c.k === 'dias_vencer' ? diasColor(raw) : 'inherit';
-        var fw = c.k === 'dias_vencer' && raw !== null && Number(raw) < 0 ? 'bold' : 'normal';
-        var ff = (c.k === 'id' || c.k === 'ult_calib' || c.k === 'prox_calib' || c.k === 'freq_dias' || c.k === 'dias_vencer')
+    const tbody = rows.map((r, i) => {
+      const bg = i % 2 === 0 ? '#ffffff' : '#f8f9fc';
+      const cells = cols.map(c => {
+        const raw = r[c.k];
+        const txt = fmtVal(c.k, raw);
+        const color = c.k === 'dias_vencer' ? diasColor(raw) : 'inherit';
+        const fw = c.k === 'dias_vencer' && raw !== null && Number(raw) < 0 ? 'bold' : 'normal';
+        const ff = (c.k === 'id' || c.k === 'ult_calib' || c.k === 'prox_calib' || c.k === 'freq_dias' || c.k === 'dias_vencer')
           ? 'font-family:monospace;font-size:' + (_pdfSz-1) + 'pt'
           : 'font-size:' + _pdfSz + 'pt';
         return `<td style="${ff};padding:5px ${_pdfSz<=8?'3px':'5px'};border-right:1px solid #e8eaf0;color:${color};font-weight:${fw};max-width:${colW+5}mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${txt}</td>`;
@@ -13467,12 +14322,12 @@ function clearSelection(tbl) {
       return `<tr style="background:${bg};border-bottom:1px solid #e8eaf0">${cells}</tr>`;
     }).join('');
 
-    var logoB64 = document.querySelector('.hdr img')?.src || '';
-    var totalRows = rows.length;
-    var vencidos  = rows.filter(r => r.dias_vencer !== null && r.dias_vencer < 0).length;
-    var ok        = rows.filter(r => r.dias_vencer !== null && r.dias_vencer > 90).length;
+    const logoB64 = document.querySelector('.hdr img')?.src || '';
+    const totalRows = rows.length;
+    const vencidos  = rows.filter(r => r.dias_vencer !== null && r.dias_vencer < 0).length;
+    const ok        = rows.filter(r => r.dias_vencer !== null && r.dias_vencer > 90).length;
 
-    var html = `<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -13569,7 +14424,7 @@ function clearSelection(tbl) {
 </body>
 </html>`;
 
-    var win = window.open('', '_blank', 'width=1200,height=850');
+    const win = window.open('', '_blank', 'width=1200,height=850');
     if(!win) { alert('Permita popups para gerar o PDF.'); return; }
     win.document.write(html);
     win.document.close();
@@ -13716,9 +14571,9 @@ function clearSelection(tbl) {
 // ═══════════════════════════════════════════════════════
 // EQUIPMENT DETAIL VIEW
 // ═══════════════════════════════════════════════════════
-var _viewUID  = null;
-var _viewList = [];  // list of UIDs for navigation (current table rows)
-var _viewIdx  = 0;
+let _viewUID  = null;
+let _viewList = [];  // list of UIDs for navigation (current table rows)
+let _viewIdx  = 0;
 
 function openEquipView(uid) {
   // Build nav list from current active table rows
@@ -13999,7 +14854,7 @@ ${(r.observacoes||r.notes)?`<div class="sec"><div class="sec-title">Observaçõe
 // [v30] PDF da aba Equipamentos — imprime os registros atualmente filtrados/visíveis
 window.openPdfEquipamentos = function() {
   var rows = (typeof pag !== 'undefined' && pag.eq && pag.eq.rows) ? pag.eq.rows : (window.DB || []);
-  if (!rows.length) { showToast && showToast(t('toast_none_visible'), 'err'); return; }
+  if (!rows.length) { showToast && showToast('None visible', 'err'); return; }
   // Injeta no estado do drilldown para o openPdfModal reutilizar
   window.__getDrillState = function() { return { filter: function() { return rows; } }; };
   var titleEl = document.getElementById('drill-title');
@@ -14010,16 +14865,16 @@ window.openPdfEquipamentos = function() {
 };
 
 window.openPdfModalBulk = function(tbl) {
-  var uids = _selectedUIDs[tbl];
+  const uids = _selectedUIDs[tbl];
   if(!uids || uids.size === 0) return;
   // Store selected rows in drill state and open PDF modal
-  var rows = DB.filter(r => uids.has(r._uid));
+  const rows = DB.filter(r => uids.has(r._uid));
   window.__getDrillState = () => ({
     filter: () => rows
   });
   // Update desc in pdf modal
-  var titleEl = document.getElementById('drill-title');
-  var subEl   = document.getElementById('drill-sub');
+  const titleEl = document.getElementById('drill-title');
+  const subEl   = document.getElementById('drill-sub');
   if(titleEl) titleEl.textContent = `🖨️ Seleção — ${rows.length} equipamento(s)`;
   if(subEl)   subEl.textContent   = rows.map(r=>r.id||r.descricao).join(', ').slice(0,80) + (rows.length>5?'…':'');
   openPdfModal();
@@ -14051,8 +14906,8 @@ function _buildQrPayload(r) {
     return BASE_URL + '?view=' + id + '&v=' + v;
 }
 
-var _qrUID = null;
-var _qrInstance = null;
+let _qrUID = null;
+let _qrInstance = null;
 
 function openQrModal(uid) {
   _qrUID = uid;
@@ -14063,7 +14918,7 @@ function openQrModal(uid) {
   // Busca dados FRESCOS do DB antes de qualquer operação
   const r = DB.find(x => x._uid === uid);
   if (!r) { 
-    if(typeof showToast === 'function') showToast(t('toast_not_found'), 'err');
+    if(typeof showToast === 'function') showToast('Not found', 'err');
     else showToast(t('toast_instr_not_found'));
     return; 
   }
@@ -14217,7 +15072,7 @@ function _qrModalHTML() {
 </div>`;
 }
 
-var _qrSelectedSize = 'mini';
+let _qrSelectedSize = 'mini';
 
 function selectQrSize(size, btn) {
   _qrSelectedSize = size;
@@ -14231,7 +15086,7 @@ function printQrLabel() {
   // ✅ CRÍTICO: Busca dados FRESCOS do DB ANTES de imprimir
   const r = DB.find(x => x._uid === _qrUID);
   if (!r) { 
-    if(typeof showToast === 'function') showToast(t('toast_not_found'), 'err');
+    if(typeof showToast === 'function') showToast('Not found', 'err');
     closeQrModal();
     return; 
   }
@@ -14440,7 +15295,7 @@ function printQrLabel() {
 // Keyboard nav for equip-view modal + fechar QR modal com Escape
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    var qrOv = document.getElementById('qr-modal-ov');
+    const qrOv = document.getElementById('qr-modal-ov');
     if (qrOv && qrOv.classList.contains('on')) { closeQrModal(); return; }
   }
   if(!document.getElementById('equip-view-ov')?.classList.contains('on')) return;
@@ -14460,7 +15315,7 @@ document.addEventListener('keydown', e => {
 'use strict';
 
 // ── STATE ──────────────────────────────────────────────────────
-var BB = {
+const BB = {
   density:   { geral: 'default', alert: 'default', rep: 'default' },
   rowNums:   { geral: false, alert: false, rep: false },
   heatBars:  { geral: true,  alert: true,  rep: false },
@@ -14473,12 +15328,12 @@ var BB = {
 // ── DENSITY ────────────────────────────────────────────────────
 window.setDensity = function(tbl, d, btn) {
   BB.density[tbl] = d;
-  var wrap = document.getElementById(tbl === 'geral' ? 'eq-wrap' : tbl === 'alert' ? 'alert-wrap' : 'rep-wrap');
+  const wrap = document.getElementById(tbl === 'geral' ? 'eq-wrap' : tbl === 'alert' ? 'alert-wrap' : 'rep-wrap');
   if (!wrap) return;
   wrap.classList.remove('density-compact','density-default','density-comfortable');
   wrap.classList.add('density-' + d);
   // Update buttons
-  var group = document.getElementById('density-' + tbl);
+  const group = document.getElementById('density-' + tbl);
   if (group) group.querySelectorAll('.density-btn').forEach(b => b.classList.toggle('on', b.dataset.d === d));
 };
 
@@ -14493,7 +15348,7 @@ window.toggleRowNumbers = function(tbl, btn) {
 window.toggleStripe = function(tbl, btn) {
   BB.stripe[tbl] = !BB.stripe[tbl];
   if (btn) btn.classList.toggle('on', BB.stripe[tbl]);
-  var wrap = document.getElementById(tbl === 'geral' ? 'eq-wrap' : 'alert-wrap');
+  const wrap = document.getElementById(tbl === 'geral' ? 'eq-wrap' : 'alert-wrap');
   if (wrap) wrap.classList.toggle('stripe-mode', BB.stripe[tbl]);
 };
 
@@ -14725,7 +15580,7 @@ function _updateStatusBar(tbl) {
 }
 
 // ── COLUMN HEADER CONTEXT MENU ──────────────────────────────────
-var _ctxMenu = null;
+let _ctxMenu = null;
 function _showColContextMenu(e, tbl, colKey, th) {
   _hideColContextMenu();
   const menu = document.createElement('div');
@@ -14876,16 +15731,16 @@ function _rerenderBBTable(tbl) {
 
 // ── COL TOOLTIP for resize ──────────────────────────────────────
 (function() {
-  var tip = document.createElement('div');
+  const tip = document.createElement('div');
   tip.className = 'col-width-tip';
   tip.id = 'col-width-tip';
   document.body.appendChild(tip);
   document.addEventListener('mousemove', e => {
-    var resizer = e.target.closest && e.target.closest('.resizer');
+    const resizer = e.target.closest && e.target.closest('.resizer');
     if (resizer) {
-      var th = resizer.closest('th');
+      const th = resizer.closest('th');
       if (th) {
-        var w = Math.round(th.getBoundingClientRect().width);
+        const w = Math.round(th.getBoundingClientRect().width);
         tip.textContent = w + 'px';
         tip.style.display = 'block';
         tip.style.left = (e.clientX + 12) + 'px';
@@ -14899,20 +15754,20 @@ function _rerenderBBTable(tbl) {
 
 // ── KEYBOARD SHORTCUT: Alt+H = toggle heat bars ─────────────────
 document.addEventListener('keydown', e => {
-  var tag = (e.target.tagName || '').toLowerCase();
+  const tag = (e.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
   if (e.altKey && e.key === 'h') {
-    var btn = document.getElementById('btn-heatbar-geral');
+    const btn = document.getElementById('btn-heatbar-geral');
     toggleHeatBars('geral', btn);
     showToast && showToast('🎨 Heat Bars: ' + (BB.heatBars.geral ? 'ON' : 'OFF'));
   }
   if (e.altKey && e.key === 't') {
-    var btn = document.getElementById('btn-totals-geral');
+    const btn = document.getElementById('btn-totals-geral');
     toggleTotalsRow('geral', btn);
     showToast && showToast('∑ Linha de Totais: ' + (BB.totals.geral ? 'ON' : 'OFF'));
   }
   if (e.altKey && e.key === 'g') {
-    var sel = document.getElementById('group-by-geral');
+    const sel = document.getElementById('group-by-geral');
     if (sel) { sel.focus(); }
   }
   // [v19 MELHORIA 3] Cmd+K / Ctrl+K = spotlight search
@@ -14922,20 +15777,20 @@ document.addEventListener('keydown', e => {
   }
   // [v19] Esc fecha spotlight
   if (e.key === 'Escape') {
-    var sp = document.getElementById('spotlight-ov');
+    const sp = document.getElementById('spotlight-ov');
     if (sp && sp.classList.contains('on')) { sp.classList.remove('on'); }
   }
 });
 
 // ── INIT: run after DB loads ─────────────────────────────────────
-var _bbInitTries = 0;
-var _bbInitInterval = setInterval(() => {
+let _bbInitTries = 0;
+const _bbInitInterval = setInterval(() => {
   _bbInitTries++;
   if (typeof DB !== 'undefined' && DB && DB.length > 0) {
     clearInterval(_bbInitInterval);
     // Apply initial wrap classes
     ['eq-wrap'].forEach(id => {
-      var el = document.getElementById(id);
+      const el = document.getElementById(id);
       if (el) { el.classList.add('density-default', 'stripe-mode'); }
     });
     // First render pass
@@ -15148,7 +16003,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var dy = Math.abs(e.touches[0].clientY - startY);
       // If horizontal scroll detected, prevent page scroll
       if (dx > dy && dx > 5) {
-        // Horizontal table scroll - var it bubble but don't stop
+        // Horizontal table scroll - let it bubble but don't stop
       }
     }, { passive: true });
   });
@@ -15275,8 +16130,8 @@ document.addEventListener('DOMContentLoaded', function() {
 (function() {
 
   // Guarda snapshot do DB antes de qualquer edição na sessão de edição atual
-  var _snapshotDB = null;       // JSON snapshot para descartar
-  var _pendingEdits = [];       // [{ uid, k, oldVal, newVal }]
+  let _snapshotDB = null;       // JSON snapshot para descartar
+  let _pendingEdits = [];       // [{ uid, k, oldVal, newVal }]
 
   function sebShow() {
     const bar = document.getElementById('save-edits-bar');
@@ -15293,18 +16148,18 @@ document.addEventListener('DOMContentLoaded', function() {
   // ── Patch: commitInlineEdit ──
   // Salva localmente e re-renderiza imediatamente,
   // mas só envia ao Supabase quando o usuário confirmar.
-  // NOTA: _inlineActive, DB e _statsCache são declarados com let/var no escopo
+  // NOTA: _inlineActive, DB e _statsCache são declarados com let/const no escopo
   // global e NÃO ficam em window — por isso usamos as variáveis diretamente.
   window.commitInlineEdit = function(silent) {
     if(!_inlineActive) return;
     const { uid, k, td } = _inlineActive;
-    var input = td.querySelector('input,select');
+    const input = td.querySelector('input,select');
     if(!input) { _inlineActive = null; return; }
 
-    var newVal = k === 'freq_dias'
+    const newVal = k === 'freq_dias'
       ? (parseInt(input.value) || null)
       : input.value.trim();
-    var r = DB && DB.find(x => x._uid === uid);
+    const r = DB && DB.find(x => x._uid === uid);
 
     // Normaliza datas para comparação (garante formato YYYY-MM-DD dos dois lados)
     function normDate(v) {
@@ -15328,7 +16183,7 @@ document.addEventListener('DOMContentLoaded', function() {
         _snapshotDB = JSON.stringify(DB);
       }
       // Registra edição pendente (merge se mesmo uid+k)
-      var existing = _pendingEdits.findIndex(e => e.uid === uid && e.k === k);
+      const existing = _pendingEdits.findIndex(e => e.uid === uid && e.k === k);
       if(existing >= 0) {
         _pendingEdits[existing].newVal = finalVal;
       } else {
@@ -15368,7 +16223,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // ── Confirmar todas as edições → salva Supabase ──
   window.commitAllPendingEdits = function() {
     if(!_pendingEdits.length) { sebHide(); return; }
-    var n = _pendingEdits.length;
+    const n = _pendingEdits.length;
     _pendingEdits = [];
     _snapshotDB = null;
     // Salva localmente e no Supabase
@@ -15386,7 +16241,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window.discardAllPendingEdits = function() {
     if(!_snapshotDB) { sebHide(); return; }
     try {
-      var restored = JSON.parse(_snapshotDB);
+      const restored = JSON.parse(_snapshotDB);
       // Restaura DB preservando referência do array
       DB.length = 0;
       restored.forEach(r => DB.push(r));
@@ -15397,7 +16252,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.refreshInPlace && window.refreshInPlace();
     window.updateKPIs && window.updateKPIs();
     sebHide();
-    window.showToast && window.showToast(t('toast_changes_discarded'), 'warn');
+    window.showToast && window.showToast('Changes discarded', 'warn');
   };
 
 })();
@@ -16405,7 +17260,7 @@ function toggleColFilterDd(tbl, col, event) {
     var empty  = document.getElementById('audit-empty');
     var badge  = document.getElementById('audit-count-badge');
     if (!tbody) return;
-    if (badge) badge.textContent = logs.length + ' log(s) guardado(s)';
+    if (badge) badge.textContent = logs.length + ' ' + (t('audit_log_count_suffix') || 'log(s)');
     if (!logs.length) {
       if (tbl)   tbl.style.display   = 'none';
       if (empty) empty.style.display = 'block';
@@ -16576,11 +17431,11 @@ function toggleColFilterDd(tbl, col, event) {
   function _processFile(file) {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
-      if (typeof showToast === 'function') showToast(t('toast_file_too_big'), 'err');
+      if (typeof showToast === 'function') showToast('File too big', 'err');
       return;
     }
     if (!file.name.match(/\.json$/i)) {
-      if (typeof showToast === 'function') showToast(t('toast_json_only'), 'err');
+      if (typeof showToast === 'function') showToast('JSON only', 'err');
       return;
     }
     var reader = new FileReader();
@@ -16851,7 +17706,7 @@ window.v12ConfirmImport = function() {
     }
     warnMsg += '\n\nDeseja continuar mesmo assim?';
     if (!confirm(warnMsg)) {
-      if (typeof showToast === 'function') showToast(t('toast_import_cancel'), 'info');
+      if (typeof showToast === 'function') showToast('Import cancelled', 'info');
       return;
     }
   }
@@ -16948,7 +17803,7 @@ window.v12ConfirmImport = function() {
     window._v12Pending = null; // [v30 FIX]
     var modal = document.getElementById('v12-import-preview');
     if (modal) modal.classList.remove('on');
-    if (typeof showToast === 'function') showToast(t('toast_import_cancel'));
+    if (typeof showToast === 'function') showToast('Import cancelled');
   };
 
   // Fechar preview ao clicar fora
@@ -16990,7 +17845,7 @@ window.v12ConfirmImport = function() {
     v12DismissBackupBanner();
     // Audit log
     v12AuditLog('export', '—', 'Exportação de backup JSON: ' + DB.length + ' registo(s).');
-    if (typeof showToast === 'function') showToast(t('toast_backup_ok'));
+    if (typeof showToast === 'function') showToast('Backup created');
   };
 
   // ── Verifica se é necessário exibir o banner de backup ──────────────
@@ -17052,7 +17907,7 @@ window.v12ConfirmImport = function() {
     // 1. Render initial audit table (in case reports tab is open on load)
     setTimeout(v12RenderAuditTable, 800);
 
-    // 2. Check backup banner after a short delay (var DB load first)
+    // 2. Check backup banner after a short delay (let DB load first)
     setTimeout(_checkBackupBanner, 1500);
 
     // 3. Hook exportData (original) para também fazer backup tracking
@@ -17155,7 +18010,7 @@ function cadReset(){
   if(btn){ btn.disabled=false; btn.textContent='💾 Salvar Equipamento'; }
 }
 
-function cadSubmit(evt){
+window.cadSubmit = function(evt){
   evt.preventDefault();
   var g=_cadG;
   var idVal  =(g('cad-id')   &&g('cad-id').value   ||'').trim();
@@ -17164,7 +18019,7 @@ function cadSubmit(evt){
   var local  =(g('cad-local')&&g('cad-local').value ||'').trim();
 
   if(!idVal||!tipo||!desc||!local){
-    if(typeof showToast==='function') showToast(t('toast_fill_required'),'err');
+    if(typeof showToast==='function') showToast('Fill all required fields','err');
     return;
   }
   if(DB.some(function(r){ return r.id===idVal; })){
@@ -17226,7 +18081,7 @@ function cadRenderRecent(){
   if(!tbody) return;
   if(cnt) cnt.textContent=_cadRecentSession.length;
   if(!_cadRecentSession.length){
-    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--tx3);padding:24px;font-size:11px">Nenhum equipamento cadastrado nesta sessão.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--tx3);padding:24px;font-size:11px">'+t('audit_session_empty')+'</td></tr>';
     return;
   }
   var rows=_cadRecentSession.slice(0,20).map(function(r){
@@ -17280,7 +18135,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var uidsArr = JSON.parse(ov.dataset.uids || '[]');
       var uidsSet = new Set(uidsArr);
       if (uidsSet.size === 0) {
-        if (typeof showToast === 'function') showToast(t('toast_none_selected'), 'err');
+        if (typeof showToast === 'function') showToast('None selected', 'err');
         return;
       }
       if (typeof printQrBulk === 'function') printQrBulk(uidsSet);
@@ -17540,7 +18395,7 @@ window.renderAuditLog = function() {
     ].join('');
   }).join('');
   var pi = document.getElementById('audit-pinfo');
-  if (pi) pi.textContent = rows.length + ' evento(s) exibido(s)';
+  if (pi) pi.textContent = t('audit_events_count').replace('{n}', rows.length);
   _updateAuditKPIs();
 };
 
@@ -18025,9 +18880,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="5" style="padding:32px;text-align:center;color:var(--tx3);font-size:12px">📄 Nenhum evento registrado ainda. Realize ações (adicionar, editar, excluir, importar) para gerar logs.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="padding:32px;text-align:center;color:var(--tx3);font-size:12px">' + t('audit_no_events') + '</td></tr>';
       var pi = document.getElementById('audit-pinfo');
-      if (pi) pi.textContent = '0 evento(s)';
+      if (pi) pi.textContent = t('audit_events_zero');
       _updateAuditKPIsFromLogs(logs);
       return;
     }
@@ -18055,7 +18910,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }).join('');
 
     var pi = document.getElementById('audit-pinfo');
-    if (pi) pi.textContent = rows.length + ' evento(s) exibido(s)';
+    if (pi) pi.textContent = t('audit_events_count').replace('{n}', rows.length);
     _updateAuditKPIsFromLogs(logs);
   };
 
@@ -18196,11 +19051,11 @@ document.addEventListener('DOMContentLoaded', function() {
   /* ── Abre o modal e inicia a câmera ─────────────────────────────── */
   window.openQrScannerModal = function () {
     var ov = document.getElementById('qr-scanner-ov');
-    if (!ov) { showToast && showToast(t('toast_scan_unavail'), 'error'); return; }
+    if (!ov) { showToast && showToast('Scanner unavailable', 'error'); return; }
 
     // Checa suporte a getUserMedia
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      showToast && showToast(t('toast_cam_unsupported'), 'error');
+      showToast && showToast('Camera unsupported', 'error');
       return;
     }
 
