@@ -15,7 +15,7 @@
 <!-- 🍎 iOS Specific: Evita timeout em Safari -->
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-<title>Röchling Automotive — Controle de Equipamentos de Medição (v49.9)</title>
+<title>Röchling Automotive — Controle de Equipamentos de Medição (v49.10.1)</title>
 <meta name="description" content="Sistema interno Röchling Automotive para controle de calibração e equipamentos de medição - v36 Premium com melhorias avançadas.">
 
 
@@ -9086,15 +9086,18 @@ async function sbPull() {
       // Se ausente, deriva do campo 'id' via hash numérico estável — evita colisão entre
       // registros processados no mesmo milissegundo (ex: L2015057 e L2015057 DISP recebiam
       // o mesmo Date.now()*1000 e o filter por _uid excluía ambos ao deletar um deles).
-      let _uidCounter = 0;
+      // [v49.10 FIX] _uid puramente determinístico pelo hash do campo id — sem contador de posição.
+      // O contador anterior (+_uidCounter) tornava o _uid dependente da ordem do resultado do Supabase:
+      // após re-sort, CAL-022 recebia um _uid diferente do que estava gravado nos botões do HTML,
+      // fazendo openEdit/deleteInline operar no registro errado (ex: mostrar "CAL-020" ao clicar em CAL-022).
       DB = recalcDias(data.map(r => {
         let uid = r._uid || r.id_interno;
         if (!uid) {
-          // Hash numérico estável a partir do campo id (string → número único)
+          // Hash numérico estável a partir do campo id (string → número único, independente de ordem)
           const s = String(r.id || '').trim();
           let h = 5381;
           for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
-          uid = (Math.abs(h) * 1000) + (++_uidCounter);
+          uid = Math.abs(h) || 1; // garante não-zero
         }
         return { ...r, _uid: uid };
       }));
@@ -9274,15 +9277,15 @@ function fbStartListen() {
         }
         return;
       }
-      // [v49.9 FIX] _uid determinístico no polling — mesma lógica do sbPull para evitar colisão
-      let _pollUidCtr = 0;
+      // [v49.10 FIX] _uid puramente determinístico no polling — sem contador de posição.
+      // Mantém consistência com sbPull: mesmo id sempre gera mesmo _uid, independente de ordem.
       const newDB = recalcDias(_rtAll.map(r => {
         let uid = r._uid || r.id_interno;
         if (!uid) {
           const s = String(r.id || '').trim();
           let h = 5381;
           for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
-          uid = (Math.abs(h) * 1000) + (++_pollUidCtr);
+          uid = Math.abs(h) || 1; // garante não-zero
         }
         return { ...r, _uid: uid };
       }));
@@ -11061,11 +11064,11 @@ function commitInlineEdit(silent) {
       sbSchedulePush();
       showToast(t('toast_saved_inline'));
     }
-    // ── Only re-render the ONE affected row — do NOT re-apply filters ──
-    rerenderRow(uid, 'geral');
-    // Mark that a deferred filter refresh is pending
-    _pendingFilterRefresh = true;
+    // [v49.10 FIX] Aplica filtros automaticamente após edição inline — elimina necessidade
+    // de clicar em "Atualizar" para ver o resultado correto na tabela filtrada.
+    _pendingFilterRefresh = false;
     updateApplyFilterBtn();
+    applyF();
   } else {
     // [v49.9 FIX] Removido _inlineActive = null duplicado (era definido 2x causando estado inconsistente)
     rerenderRow(uid, 'geral');
@@ -12349,11 +12352,10 @@ function deleteRecord(){
     pushUndo();
     v12AuditLog('del', r.id || editUID, `Equipamento eliminado: ${r.descricao||r.tipo||name}`);
     const deletedId = r.id;
-    // [v49.9 FIX] Filtra por _uid E por id.trim() para garantir exclusão correta mesmo
-    // quando _uid for regenerado por instabilidade de sincronização.
-    // O trim() evita que espaços invisíveis façam 'L2015057 DISP' ser excluído junto com 'L2015057'.
-    const _deletedIdTrimmed = String(deletedId || '').trim();
-    DB = DB.filter(x => x._uid !== editUID && String(x.id || '').trim() !== _deletedIdTrimmed);
+    // [v49.10 FIX] Filtra SOMENTE pelo _uid — chave primária interna estável.
+    // A versão anterior filtrava também por id.trim(), o que apagava registros distintos
+    // (ex: mesma numeração em outra planta) quando o _uid gerado por hash coincidia por colisão.
+    DB = DB.filter(x => x._uid !== editUID);
     closeModal();
     updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
     refreshInPlace();
@@ -12382,9 +12384,8 @@ function deleteInline(uid){
   _safeConfirm(t('confirm_delete').replace('{name}', name), function() {
     pushUndo();
     const deletedId = r.id;
-    // [v49.9 FIX] Filtra por _uid E id.trim() — evita exclusão acidental de registros com prefixo igual
-    const _deletedIdTrimmed = String(deletedId || '').trim();
-    DB = DB.filter(x => x._uid !== uid && String(x.id || '').trim() !== _deletedIdTrimmed);
+    // [v49.10 FIX] Filtra SOMENTE pelo _uid — elimina apenas o registro clicado.
+    DB = DB.filter(x => x._uid !== uid);
     updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
     refreshInPlace();
     // [v49.9 FIX] Aguarda sbDeleteRecord antes do sbSchedulePush (anti race condition)
@@ -12399,8 +12400,14 @@ function deleteInline(uid){
 
 // ── Duplicar linha (como arrastar no Excel para copiar) ─────────────────────
 function duplicateRow(uid) {
+  // [v49.10 FIX] Lock de debounce — impede duplicação múltipla por cliques rápidos
+  // ou por re-render do botão durante o evento de clique.
+  if (window._duplicating) return;
+  window._duplicating = true;
+  setTimeout(function() { window._duplicating = false; }, 800);
+
   const src = DB.find(x => x._uid === uid);
-  if (!src) return;
+  if (!src) { window._duplicating = false; return; }
   pushUndo();
   // Cria cópia profunda, apaga id (usuário deve preencher) e gera novo _uid
   const newUid = Date.now() * 1000 + Math.floor(Math.random() * 999) + 1; // [v49.9 FIX] garante _uid único e não-zero
@@ -13611,8 +13618,10 @@ function _handleQrDeepLink() {
         const r2 = allRows[idx];
         if(r2) rerenderRow(r2._uid, 'geral');
       });
-      _pendingFilterRefresh = true;
+      // [v49.10 FIX] Auto-aplica filtros após fill-drag
+      _pendingFilterRefresh = false;
       updateApplyFilterBtn();
+      applyF();
     }
   }
 })();
