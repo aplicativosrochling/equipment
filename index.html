@@ -9296,7 +9296,10 @@ function fbStartListen() {
         DB = newDB;
         saveLS(true);
         updateKPIs(); buildAllCharts(); populateFilters(); renderAlerts();
-        if (typeof refreshInPlace === 'function') refreshInPlace();
+        // [v49.10.1 FIX] Usa applyF() em vez de refreshInPlace() para garantir que
+        // filtros ativos (tipo, cliente, status, etc.) sejam reaplicados corretamente
+        // após cada polling — sem isso, o usuário precisava clicar "Atualizar" manualmente.
+        if (typeof applyF === 'function') applyF(); else if (typeof refreshInPlace === 'function') refreshInPlace();
         setSyncInd('☁ Atualizado ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
         console.log('[v45 polling] dados atualizados');
       }
@@ -11103,6 +11106,7 @@ function rerenderRow(uid, tbl) {
 // [Already declared early at line 194]
 
 function updateApplyFilterBtn() {
+  var btn = document.getElementById('btn-apply-filters');
   if(!btn) return;
   if(_pendingFilterRefresh) {
     btn.classList.add('pending');
@@ -14139,9 +14143,13 @@ function applyBulkEdit(tbl) {
 // [v49.9] Quick refresh: re-apply filters + render without leaving the page
 function quickRefresh() {
   try { _statsCache = null; } catch(_) {}
+  // [v49.10.1 FIX] Chama applyF() em vez de só refreshInPlace() para garantir que
+  // filtros ativos (tipo, status, cliente, etc.) sejam respeitados imediatamente,
+  // sem precisar clicar em "Atualizar" após selecionar um filtro.
+  try { if (typeof applyF === 'function') applyF(); else if (typeof refreshInPlace === 'function') refreshInPlace(); } catch(_) {}
   try { if (typeof updateKPIs === 'function') updateKPIs(); } catch(_) {}
-  try { if (typeof refreshInPlace === 'function') refreshInPlace(); } catch(_) {}
-  try { showToast('Updated successfully'); } catch(_) {}
+  try { if (typeof buildAllCharts === 'function') buildAllCharts(); } catch(_) {}
+  try { showToast(typeof t === 'function' ? t('lbl_updated') : 'Atualizado'); } catch(_) {}
 }
 window.quickRefresh = quickRefresh;
 
