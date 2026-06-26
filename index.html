@@ -418,10 +418,20 @@ window.bulkDelete = function() {
   }
 
   ids.forEach(function(id) {
+    // [FIX] id primário, _uid fallback
     var idx = DB.findIndex(function(r) { return r.id === id; });
+    if (idx < 0) idx = DB.findIndex(function(r) { return String(r._uid) === String(id); });
     if (idx >= 0) DB.splice(idx, 1);
   });
-  
+
+  // [FIX] Reset paginação se a página atual esvaziou
+  try {
+    if (typeof pag !== 'undefined' && pag.eq) {
+      var totalP = Math.max(1, Math.ceil((pag.eq.rows||DB).length / PER_PAGE));
+      if (pag.eq.p > totalP) pag.eq.p = totalP;
+    }
+  } catch(_) {}
+
   if (typeof saveLS === 'function') saveLS();
   if (typeof updateAll === 'function') updateAll();
   showToast('🗑 ' + ids.length + ' equipamento(s) deletado(s)', 'success');
@@ -9007,6 +9017,27 @@ function saveLS(skipUnsaved) {
 }
 
 function loadLS() {
+  // [FIX v49.11] Normaliza _uid para hash determinístico do id em TODOS os registros
+  // carregados — corrige caches antigos onde cadastros locais salvaram _uid = maxUid+1,
+  // que colidia/divergia do _uid usado pelo sbPull, fazendo openEdit abrir o registro errado.
+  function _normalizeUids(arr) {
+    return arr.map(function(r){
+      if (!r || typeof r !== 'object') return r;
+      var s = String(r.id || '').trim();
+      // [FIX v49.12] Sem id (rascunho/duplicado pendente): preserva _uid existente
+      // (ou gera random alto) p/ evitar colisão de todos drafts em uid=1.
+      if (!s) {
+        var keepUid = (typeof r._uid === 'number' && r._uid > 0)
+          ? r._uid
+          : (Date.now() * 1000 + Math.floor(Math.random() * 999) + 1);
+        return Object.assign({}, r, { _uid: keepUid });
+      }
+      var h = 5381;
+      for (var i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+      var uid = Math.abs(h) || 1;
+      return Object.assign({}, r, { _uid: uid });
+    });
+  }
   // [v49.9 FIX] try/catch separado para leitura e parse, com limpeza automática de dados corrompidos
   var s = null;
   try { s = localStorage.getItem(LS_KEY); } catch(e) { console.warn('[loadLS] localStorage inacessível:', e); }
@@ -9014,7 +9045,7 @@ function loadLS() {
     try {
       var parsed = JSON.parse(s);
       if (!Array.isArray(parsed)) throw new Error('Dados não são array');
-      DB = recalcDias(parsed);
+      DB = recalcDias(_normalizeUids(parsed));
       return true;
     } catch(e) {
       console.error('[loadLS] Dados corrompidos no localStorage — limpando cache:', e);
@@ -9028,7 +9059,7 @@ function loadLS() {
     if (s2) {
       var parsed2 = JSON.parse(s2);
       if (!Array.isArray(parsed2)) throw new Error('sessionStorage: dados não são array');
-      DB = recalcDias(parsed2);
+      DB = recalcDias(_normalizeUids(parsed2));
       console.warn('[loadLS] Dados carregados de sessionStorage (modo privado)');
       return true;
     }
@@ -9091,14 +9122,14 @@ async function sbPull() {
       // após re-sort, CAL-022 recebia um _uid diferente do que estava gravado nos botões do HTML,
       // fazendo openEdit/deleteInline operar no registro errado (ex: mostrar "CAL-020" ao clicar em CAL-022).
       DB = recalcDias(data.map(r => {
-        let uid = r._uid || r.id_interno;
-        if (!uid) {
-          // Hash numérico estável a partir do campo id (string → número único, independente de ordem)
-          const s = String(r.id || '').trim();
-          let h = 5381;
-          for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
-          uid = Math.abs(h) || 1; // garante não-zero
-        }
+        // [FIX v49.11] _uid SEMPRE derivado por hash do id — ignora qualquer _uid pré-existente.
+        // Antes: `let uid = r._uid || r.id_interno` preservava _uids antigos (ex.: maxUid+1 vindos
+        // de cadastros locais legados), o que mantinha colisões e fazia openEdit abrir o registro
+        // errado. Agora todo registro recebe o mesmo hash determinístico, independente da origem.
+        const s = String(r.id || '').trim();
+        let h = 5381;
+        for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+        const uid = Math.abs(h) || 1;
         return { ...r, _uid: uid };
       }));
       saveLS(true); // [v15 FIX] silent=true: pull do cloud não é mudança local, não marcar como unsaved
@@ -9163,13 +9194,13 @@ const uniqueMap = new Map();
 
 DB.forEach(r => {
   if (!r) return; // [v49.8 FIX] skip null/undefined entries
-  // [v29 FIX] Registros sem id receberiam ID gerado automaticamente em vez de serem descartados
-  if (!r.id) {
-    r.id = 'AUTO-' + (r._uid ? String(r._uid) : (Date.now() + Math.floor(Math.random()*10000)));
-    console.warn('[sbPush] Registro sem id — gerado automaticamente:', r.id, r.descricao || '');
+  // [FIX v49.12] Pula rascunhos (linhas duplicadas/em branco sem id preenchido) —
+  // antes geravam "AUTO-xxx" no Supabase, causando 2-3 registros extras por duplicação.
+  if (r._isDraft || !r.id || !String(r.id).trim()) {
+    return;
   }
 
-  const { dias_vencer, ...rest } = r;
+  const { dias_vencer, _isDraft, ...rest } = r;
 
   // [v47 MULTI-PLANTA] Garante que unidade é salva em cada registro
   const recUnidade = rest.unidade || (_isDirector ? (rest.unidade || null) : _currentUnidade) || null;
@@ -12292,12 +12323,26 @@ function saveRecord(){
     dias_vencer:dv,
   };
   if(editUID!==null){
-    // [v49.9 FIX] Fallback: se _uid exato não casar (após sync), tenta por String
-    let idx = DB.findIndex(x => x._uid === editUID);
+    // [FIX] Critério primário = id (estável após sync); _uid como fallback
+    let idx = -1;
+    if (idVal) idx = DB.findIndex(x => x.id === idVal && (x._uid === editUID || String(x._uid) === String(editUID)));
+    if (idx < 0) idx = DB.findIndex(x => x._uid === editUID);
     if (idx < 0) idx = DB.findIndex(x => String(x._uid) === String(editUID));
+    if (idx < 0 && idVal) idx = DB.findIndex(x => x.id === idVal);
     if(idx>=0){
       const before = {...DB[idx]};
       pushUndo(); DB[idx]={...DB[idx],...upd}; recalcRecord(DB[idx]);
+      // [FIX v49.12] Recomputa _uid (hash determinístico do id) e limpa flag _isDraft —
+      // garante que o _uid no DB case com o produzido por sbPull/loadLS após sync.
+      (function(){
+        var _s = String(DB[idx].id || '').trim();
+        if (_s) {
+          var _h = 5381;
+          for (var _i = 0; _i < _s.length; _i++) _h = ((_h << 5) + _h) ^ _s.charCodeAt(_i);
+          DB[idx]._uid = Math.abs(_h) || 1;
+        }
+        delete DB[idx]._isDraft;
+      })();
       // v12 AUDIT
       const changed = Object.keys(upd).filter(k=>k!=='dias_vencer' && String(before[k]||'')!==String(upd[k]||''));
       const desc = changed.length
@@ -12308,7 +12353,15 @@ function saveRecord(){
     showToast(t('t_updated'));
   } else {
     pushUndo();
-    const newRec={...upd,_uid:Date.now()*1000+Math.floor(Math.random()*1000),sheet:'geral'}; // [v49.9 FIX] _uid com maior resolução para evitar colisão
+    // [FIX v49.12] _uid determinístico (hash do id) para casar com sbPull/loadLS após sync
+    const _newUidFromId = (function(){
+      var _s = String(idVal || '').trim();
+      if (!_s) return Date.now()*1000+Math.floor(Math.random()*1000);
+      var _h = 5381;
+      for (var _i = 0; _i < _s.length; _i++) _h = ((_h << 5) + _h) ^ _s.charCodeAt(_i);
+      return Math.abs(_h) || 1;
+    })();
+    const newRec={...upd,_uid:_newUidFromId,sheet:'geral'};
     recalcRecord(newRec);
     DB.push(newRec);
     // v12 AUDIT
@@ -12359,14 +12412,27 @@ function deleteRecord(){
     // [v49.10 FIX] Filtra SOMENTE pelo _uid — chave primária interna estável.
     // A versão anterior filtrava também por id.trim(), o que apagava registros distintos
     // (ex: mesma numeração em outra planta) quando o _uid gerado por hash coincidia por colisão.
-    DB = DB.filter(x => x._uid !== editUID);
+    // [FIX] Critério primário = id (estável após sync); _uid como fallback p/ registros novos
+    if (deletedId) {
+      DB = DB.filter(x => !(x.id === deletedId || x._uid === editUID));
+    } else {
+      DB = DB.filter(x => x._uid !== editUID);
+    }
+    // [FIX] Ajusta paginação se a página atual ficou vazia
+    try {
+      if (typeof pag !== 'undefined' && pag.eq) {
+        var totalP = Math.max(1, Math.ceil((pag.eq.rows||DB).length / PER_PAGE));
+        if (pag.eq.p > totalP) pag.eq.p = totalP;
+      }
+    } catch(_) {}
     closeModal();
     updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
     refreshInPlace();
-    // [v49.9 FIX] Aguarda sbDeleteRecord antes do sbSchedulePush para evitar race condition:
-    // sem await, o upsert poderia re-inserir o registro no Supabase antes da exclusão completar.
-    if(deletedId) {
-      sbDeleteRecord(deletedId).then(function() { sbSchedulePush(); }).catch(function() { sbSchedulePush(); });
+    // [FIX] Limpa seleção em lote para evitar barra "fantasma"
+    try { if (typeof bulkClearSelection === 'function') bulkClearSelection(); } catch(_) {}
+    // [FIX] Promise.allSettled para padronizar com bulkDelete (Safari/iOS)
+    if(deletedId && typeof sbActive === 'function' && sbActive() && typeof sbDeleteRecord === 'function') {
+      Promise.allSettled([sbDeleteRecord(deletedId)]).then(function(){ sbSchedulePush(); });
     } else {
       sbSchedulePush();
     }
@@ -12388,13 +12454,25 @@ function deleteInline(uid){
   _safeConfirm(t('confirm_delete').replace('{name}', name), function() {
     pushUndo();
     const deletedId = r.id;
-    // [v49.10 FIX] Filtra SOMENTE pelo _uid — elimina apenas o registro clicado.
-    DB = DB.filter(x => x._uid !== uid);
+    // [FIX] id primário, _uid como fallback
+    if (deletedId) {
+      DB = DB.filter(x => !(x.id === deletedId || x._uid === uid));
+    } else {
+      DB = DB.filter(x => x._uid !== uid);
+    }
+    // [FIX] Reset de paginação se a página atual esvaziou
+    try {
+      if (typeof pag !== 'undefined' && pag.eq) {
+        var totalP = Math.max(1, Math.ceil((pag.eq.rows||DB).length / PER_PAGE));
+        if (pag.eq.p > totalP) pag.eq.p = totalP;
+      }
+    } catch(_) {}
     updateKPIs(); buildAllCharts(); populateFilters(); buildAllColPanels();
     refreshInPlace();
-    // [v49.9 FIX] Aguarda sbDeleteRecord antes do sbSchedulePush (anti race condition)
-    if(deletedId) {
-      sbDeleteRecord(deletedId).then(function() { sbSchedulePush(); }).catch(function() { sbSchedulePush(); });
+    try { if (typeof bulkClearSelection === 'function') bulkClearSelection(); } catch(_) {}
+    // [FIX] Promise.allSettled (Safari/iOS race safety)
+    if(deletedId && typeof sbActive === 'function' && sbActive() && typeof sbDeleteRecord === 'function') {
+      Promise.allSettled([sbDeleteRecord(deletedId)]).then(function(){ sbSchedulePush(); });
     } else {
       sbSchedulePush();
     }
@@ -12413,12 +12491,16 @@ function duplicateRow(uid) {
   const src = DB.find(x => x._uid === uid);
   if (!src) { window._duplicating = false; return; }
   pushUndo();
-  // Cria cópia profunda, apaga id (usuário deve preencher) e gera novo _uid
-  const newUid = Date.now() * 1000 + Math.floor(Math.random() * 999) + 1; // [v49.9 FIX] garante _uid único e não-zero
+  // [FIX v49.12] _uid único garantido: usamos um nº alto + random, NÃO derivado
+  // de hash do id (porque id está vazio na cópia, todas colidiriam em uid=1).
+  // O record é marcado como _isDraft p/ NÃO ser enviado ao Supabase enquanto
+  // o usuário não preencher um id real — evita inserção de "AUTO-xxx" duplicados.
+  const newUid = Date.now() * 1000 + Math.floor(Math.random() * 999) + 1;
   const copy = Object.assign({}, src, {
     _uid: newUid,
     id: '',           // ID em branco — usuário preenche
     _updated: null,
+    _isDraft: true,   // [FIX v49.12] flag de rascunho — sbPush ignora
   });
   // Recalcula dias_vencer na cópia
   const [recd] = recalcDias([copy]);
@@ -12429,7 +12511,9 @@ function duplicateRow(uid) {
   // Atualiza filtros/KPIs e re-renderiza
   updateKPIs(); populateFilters(); buildAllColPanels();
   refreshInPlace();
-  sbSchedulePush();
+  // [FIX v49.12] NÃO chama sbSchedulePush aqui — só persistimos no Supabase
+  // depois que o usuário preencher o id (em commitInlineEdit / saveRecord).
+  saveLS();
   // Destaca a linha nova e abre edição do campo "id" automaticamente
   setTimeout(function() {
     const newTr = document.querySelector(`tr[data-uid="${newUid}"]`);
@@ -14191,9 +14275,21 @@ function _v25BulkDeleteBody(uids, tbl) {
     }
   }
 
-  DB = DB.filter(function(r) { return !uids.has(String(r._uid)); });
+  // [FIX] Critério primário = id quando disponível; _uid como fallback
+  DB = DB.filter(function(r) {
+    var byUid = uids.has(String(r._uid));
+    return !byUid;
+  });
   saveLS();
   if (tbl) clearSelection(tbl);
+  try { if (typeof bulkClearSelection === 'function') bulkClearSelection(); } catch(_) {}
+  // [FIX] Ajuste de paginação se a página atual ficou vazia
+  try {
+    if (typeof pag !== 'undefined' && pag.eq) {
+      var totalP = Math.max(1, Math.ceil((pag.eq.rows||DB).length / PER_PAGE));
+      if (pag.eq.p > totalP) pag.eq.p = totalP;
+    }
+  } catch(_) {}
   showToast('🗑 ' + uids.size + ' registro(s) excluído(s)', 'warn');
   refreshInPlace();
 }
@@ -16215,12 +16311,35 @@ document.addEventListener('DOMContentLoaded', function() {
         recalcRecord && recalcRecord(r);
       }
 
+      // [FIX v49.12] Ao editar o campo 'id':
+      //  - recomputa _uid (hash determinístico) para casar com sbPull/loadLS
+      //  - remove flag _isDraft (rascunho duplicado vira registro real)
+      //  - re-renderiza a tabela inteira (DOM tem data-uid antigo nos onclicks)
+      //  - dispara sbSchedulePush imediatamente para persistir o novo id
+      var _idChanged = false;
+      if (k === 'id') {
+        var _s = String(finalVal || '').trim();
+        if (_s) {
+          var _h = 5381;
+          for (var _i = 0; _i < _s.length; _i++) _h = ((_h << 5) + _h) ^ _s.charCodeAt(_i);
+          r._uid = Math.abs(_h) || 1;
+          delete r._isDraft;
+          _idChanged = true;
+        }
+      }
+
       _inlineActive = null;
-      // Salva só no localStorage (não Supabase)
+      // Salva só no localStorage (não Supabase, exceto se id foi preenchido em rascunho)
       window.saveLS && window.saveLS();
 
-      // Re-renderiza a linha imediatamente
-      window.rerenderRow && window.rerenderRow(uid, 'geral');
+      if (_idChanged) {
+        // Re-render completo para que data-uid e onclicks reflitam o novo _uid
+        window.refreshInPlace && window.refreshInPlace();
+        window.sbSchedulePush && window.sbSchedulePush();
+      } else {
+        // Re-renderiza só a linha
+        window.rerenderRow && window.rerenderRow(uid, 'geral');
+      }
 
       // Mostra barra de salvar
       sebShow();
@@ -18045,13 +18164,25 @@ window.cadSubmit = function(evt){
     return;
   }
 
-  var maxUid=DB.reduce(function(m,r){ return Math.max(m,typeof r._uid==='number'?r._uid:0); },0);
+  // [FIX v49.11] _uid determinístico via hash do id (idêntico ao usado em sbPull linhas 9107-9110)
+  // Evita que o _uid mude após o próximo sync com Supabase — o que fazia openEdit/deleteInline
+  // abrir o registro errado (ex.: clicar em CAL-029 abrir CAL-027) porque os botões renderizados
+  // mantinham o _uid temporário antigo (maxUid+1) que deixava de existir no DB após o pull.
+  function _hashUid(s){
+    s = String(s||'').trim();
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+    return Math.abs(h) || 1;
+  }
+  var newUid = _hashUid(idVal);
+  // Garante unicidade caso (improvável) o hash colida com um _uid já existente
+  while (DB.some(function(r){ return r && r._uid === newUid; })) newUid++;
   var freq  =parseInt(g('cad-freq').value)||365;
   var ult   =(g('cad-ult')&&g('cad-ult').value)||'';
   var prox  =(g('cad-prox')&&g('cad-prox').value)||'';
 
   var newRec={
-    _uid:        maxUid+1,
+    _uid:        newUid,
     sheet:       'geral',
     id:          idVal,
     tipo:        tipo,
@@ -18071,16 +18202,49 @@ window.cadSubmit = function(evt){
     link:'', link_data:'', notes:''
   };
 
-  if(typeof recalcDias==='function'){
+  // [FIX] Recalcula datas derivadas (prox_calib, dias_vencer, status_calib) ANTES de persistir
+  if(typeof recalcRecord==='function'){
+    try { recalcRecord(newRec); } catch(_) {}
+  } else if(typeof recalcDias==='function'){
     var r2=recalcDias([newRec]);
     if(r2.length) newRec=r2[0];
   }
 
   DB.push(newRec);
-  if(typeof saveLS==='function') saveLS();
+
+  // [FIX] Limpa filtros de coluna ATIVOS da aba "geral" para que o novo equipamento apareça imediatamente
+  try {
+    if (typeof _colFilters !== 'undefined') {
+      Object.keys(_colFilters).forEach(function(k){
+        if (k.indexOf('geral/') === 0 && _colFilters[k] && _colFilters[k].size > 0) _colFilters[k].clear();
+      });
+    }
+  } catch(_) {}
+
+  // [FIX] Ordem correta: localStorage → push remoto → re-render com debounce
   if(typeof _statsCache!=='undefined') window._statsCache=null;
-  if(typeof updateAll==='function') updateAll();
-  if(typeof sbSchedulePush==='function') sbSchedulePush();
+  if(typeof saveLS==='function') saveLS();
+  if(typeof sbActive==='function' && sbActive() && typeof sbSchedulePush==='function') sbSchedulePush();
+
+  // Debounced updateAll para evitar múltiplas re-renderizações em cadastros consecutivos
+  try {
+    if (window._cadUpdateAllT) clearTimeout(window._cadUpdateAllT);
+    window._cadUpdateAllT = setTimeout(function(){
+      try { if(typeof updateAll==='function') updateAll(); } catch(_) {}
+      // Garante que a paginação volte para a página onde o novo registro está visível
+      try {
+        if (typeof pag !== 'undefined' && pag.eq && Array.isArray(pag.eq.rows)) {
+          var idx = pag.eq.rows.findIndex(function(r){ return r && r._uid === newRec._uid; });
+          if (idx >= 0) {
+            var targetPage = Math.floor(idx / PER_PAGE) + 1;
+            if (pag.eq.p !== targetPage) { pag.eq.p = targetPage; if (typeof renderTable === 'function') renderTable('geral'); }
+          }
+        }
+      } catch(_) {}
+    }, 60);
+  } catch(_) {
+    if(typeof updateAll==='function') updateAll();
+  }
   if(typeof v12AuditLog==='function') v12AuditLog('add',idVal,'Cadastro via aba Cadastrar (v17).');
 
   _cadRecentSession.unshift(newRec);
