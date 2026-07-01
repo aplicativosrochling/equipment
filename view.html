@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Röchling Automotive — Ficha de Equipamento</title>
+<meta name="robots" content="noindex, nofollow">
+<!-- [v1] Página pública leve para leitura de QR Code via câmera nativa (iOS/Android).
+     Publicar este arquivo em: equipment/index.html no repositório GitHub Pages.
+     O QR gerado por INSTRUMENTOS.html já aponta para <origem>/equipment/?view=ID — 
+     este arquivo responde exatamente nesse caminho, sem exigir nenhuma alteração
+     no INSTRUMENTOS.html. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #f4f5f9;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  #root {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  @keyframes pulse-dot { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+  .dots { display:flex; gap:6px; align-items:center; justify-content:center; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#0064b3; animation:pulse-dot 1.2s infinite; }
+  .dot:nth-child(2){ animation-delay:.2s } .dot:nth-child(3){ animation-delay:.4s }
+  .card {
+    background:#fff; border-radius:16px; width:min(560px,100%);
+    box-shadow:0 8px 40px rgba(0,0,0,.12); overflow:hidden; border:1px solid #e8eaf0;
+  }
+  .btn {
+    background:#0064b3; color:#fff; border:none; padding:10px 22px; border-radius:8px;
+    font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;
+  }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="dots" id="loading-dots">
+    <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Credenciais Supabase (leitura pública — mesmas do INSTRUMENTOS.html) ──
+  const SB_URL = 'https://jtnsvsxhrtixcvhqqjrm.supabase.co';
+  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnN2c3hocnRpeGN2aHFxanJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MjA4MjcsImV4cCI6MjA5NTI5NjgyN30.fnt1wqD4_gwYL9iyD-Y7OTul01HMoRtOFJFoxVLBnIw';
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const TIMEOUT_MS = isIOS ? 20000 : 12000;
+
+  const root = document.getElementById('root');
+  const params = new URLSearchParams(window.location.search);
+  const rawViewId = (params.get('view') || '').trim();
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/`/g,'&#96;');
+  }
+  function safeColor(c) {
+    return /^#[0-9a-f]{3,8}$|^rgba?\([\d,\s.]+\)$/i.test(String(c||'')) ? c : '#6b7280';
+  }
+  function fmtDate(v) {
+    if (!v) return '—';
+    try {
+      const d = new Date(v);
+      if (isNaN(d.getTime())) return String(v);
+      return d.toLocaleDateString('pt-BR');
+    } catch(e) { return String(v); }
+  }
+  function unique(arr) {
+    const seen = {};
+    return arr.filter(v => {
+      v = String(v == null ? '' : v).trim();
+      if (!v || seen[v]) return false;
+      seen[v] = true;
+      return true;
+    });
+  }
+  function cacheKey(id) { return 'rochling_qr_cache_' + encodeURIComponent(id); }
+  function loadCached(id) {
+    try {
+      const c = JSON.parse(localStorage.getItem(cacheKey(id)) || 'null');
+      if (c && c.record) return c.record;
+    } catch(e) {}
+    return null;
+  }
+  function saveCached(id, record) {
+    try { localStorage.setItem(cacheKey(id), JSON.stringify({ ts: Date.now(), record })); } catch(e) {}
+  }
+
+  function showLoading(status) {
+    root.innerHTML =
+      '<div style="display:flex;flex-direction:column;gap:12px;align-items:center">' +
+        '<div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>' +
+        '<div style="font-size:14px;font-weight:600;color:#1a1a1a">Carregando equipamento...</div>' +
+        '<div style="font-size:11px;color:#9ca3bc;max-width:280px;text-align:center">' + esc(status || '') + '</div>' +
+      '</div>';
+  }
+
+  function showError(opts) {
+    // opts: { icon, title, detail, showRetry }
+    root.innerHTML =
+      '<div style="display:flex;flex-direction:column;gap:6px;align-items:center;padding:24px;text-align:center;max-width:340px">' +
+        '<div style="font-size:36px">' + (opts.icon || '🔍') + '</div>' +
+        '<div style="font-size:16px;font-weight:700;color:#1a1a1a">' + esc(opts.title || '') + '</div>' +
+        (opts.detail ? '<div style="font-size:12px;color:#6b7280">' + opts.detail + '</div>' : '') +
+        (opts.showRetry ? '<div style="margin-top:14px"><button class="btn" onclick="location.reload()">↺ Tentar novamente</button></div>' : '') +
+      '</div>';
+  }
+
+  function buildPublicView(r) {
+    const d = (r.dias_vencer === null || r.dias_vencer === undefined) ? null : Number(r.dias_vencer);
+    const statusColor = safeColor(d === null ? '#6b7280' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : '#16a34a');
+    const statusText  = d === null ? '—' : d < 0 ? ('⛔ Vencido há ' + Math.abs(d|0) + ' dias') : d === 0 ? '🔴 Vence HOJE' : d <= 30 ? ('⚠️ Vence em ' + (d|0) + ' dias') : ('✓ Em dia (+' + (d|0) + ' dias)');
+    const pct = r.freq_dias && d !== null ? Math.max(0, Math.min(100, Math.round(d / r.freq_dias * 100))) : 0;
+    const barColor = safeColor(d === null ? '#9ca3bc' : d < 0 ? '#dc2626' : d <= 30 ? '#ea580c' : d <= 90 ? '#f59e0b' : '#16a34a');
+
+    const timelineItems = [
+      ['📅','Últ. Calibração', fmtDate(r.ult_calib)],
+      ['🔁','Frequência', r.freq_dias ? r.freq_dias + 'd' : '—'],
+      ['📆','Próx. Calibração', fmtDate(r.prox_calib)],
+    ];
+    const fieldItems = [
+      ['Tipo', r.tipo],
+      ['Fabricante', r.fabricante],
+      ['Localização', r.localizacao],
+      ['Responsável', r.responsavel],
+      ['Status Operacional', r.status],
+      ['Empresa Executante', r.empresa],
+      ['Status Calibração', r.status_calib],
+      ['Nº de Série', r.cod_lab],
+    ];
+
+    const html =
+      '<div class="card">' +
+        '<div style="background:linear-gradient(135deg,#f0f6ff,#fff);border-bottom:1px solid #e8eaf0;padding:20px 24px 16px;border-top:4px solid #0064b3">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">' +
+            '<div>' +
+              '<svg height="28" viewBox="0 0 260 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;margin-bottom:10px">' +
+                '<text x="0" y="26" font-family="Arial Black,Arial,sans-serif" font-size="26" font-weight="900" fill="#0064b3" letter-spacing="-0.5">Röchling</text>' +
+                '<line x1="0" y1="31" x2="155" y2="31" stroke="#0064b3" stroke-width="1.5" opacity="0.35"/>' +
+                '<text x="1" y="41" font-family="Arial,sans-serif" font-size="8.5" font-weight="600" fill="#0064b3" letter-spacing="3.2">AUTOMOTIVE</text>' +
+              '</svg>' +
+              '<div style="font-size:10px;color:#6b7280;font-family:monospace;letter-spacing:.5px;margin-bottom:4px">' + esc(r.id || '—') + '</div>' +
+              '<div style="font-size:20px;font-weight:800;color:#1a1a1a;line-height:1.2">' + esc(r.descricao || r.tipo || '—') + '</div>' +
+              '<div style="font-size:12px;color:#6b7280;margin-top:3px">' + esc([r.tipo, r.fabricante].filter(Boolean).join(' · ') || '—') + '</div>' +
+            '</div>' +
+            '<div style="display:inline-flex;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:800;border:1.5px solid ' + statusColor + ';background:' + statusColor + '14;color:' + statusColor + ';white-space:nowrap;flex-shrink:0">' + esc(statusText) + '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div style="padding:14px 24px 0">' +
+          '<div style="display:flex;justify-content:space-between;font-size:10px;color:#6b7280;margin-bottom:4px">' +
+            '<span style="font-weight:700;text-transform:uppercase;letter-spacing:.6px">Validade da Calibração</span>' +
+            '<span style="font-weight:800;color:' + barColor + '">' + pct + '%</span>' +
+          '</div>' +
+          '<div style="height:9px;background:#f3f4f6;border-radius:10px;overflow:hidden">' +
+            '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:10px"></div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid #e8eaf0;margin-top:14px">' +
+          timelineItems.map((item, i) =>
+            '<div style="padding:12px 14px;text-align:center;' + (i < 2 ? 'border-right:1px solid #e8eaf0' : '') + '">' +
+              '<div style="font-size:18px;margin-bottom:3px">' + item[0] + '</div>' +
+              '<div style="font-size:8.5px;font-weight:700;color:#9ca3bc;text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px">' + esc(item[1]) + '</div>' +
+              '<div style="font-family:monospace;font-size:12px;font-weight:700;color:#1a1a1a">' + esc(item[2]) + '</div>' +
+            '</div>'
+          ).join('') +
+        '</div>' +
+
+        '<div style="padding:16px 24px;display:grid;grid-template-columns:1fr 1fr;gap:14px">' +
+          fieldItems.map(([lbl, val]) =>
+            '<div>' +
+              '<div style="font-size:9px;font-weight:700;color:#9ca3bc;text-transform:uppercase;letter-spacing:.7px;margin-bottom:2px">' + esc(lbl) + '</div>' +
+              '<div style="font-size:12.5px;font-weight:500;color:#1a1a1a">' + esc(val || '—') + '</div>' +
+            '</div>'
+          ).join('') +
+        '</div>' +
+
+        ((r.observacoes || r.notes) ?
+          '<div style="margin:0 24px 16px;padding:10px 14px;background:#f8f9fc;border:1px solid #e8eaf0;border-radius:8px;font-size:11.5px;color:#374151;line-height:1.6;white-space:pre-wrap">' + esc(r.observacoes || r.notes) + '</div>'
+          : '') +
+
+        '<div style="padding:12px 24px;border-top:1px solid #e8eaf0;text-align:center;font-size:10px;color:#9ca3bc">' +
+          'Röchling Automotive — Controle de Equipamentos de Medição&nbsp;·&nbsp;Acesso via QR Code' +
+        '</div>' +
+      '</div>';
+
+    root.innerHTML = html;
+  }
+
+  // ── Busca no Supabase (id ou cod_lab, com variações de caixa) ──
+  async function fetchRecord(id) {
+    if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient !== 'function') {
+      throw new Error('SDK Supabase não carregou (CDN bloqueada ou sem rede).');
+    }
+    const client = window.supabase.createClient(SB_URL, SB_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, storageKey: 'sb-qr-pub-view' }
+    });
+
+    const values = unique([id, id.toUpperCase(), id.toLowerCase()]);
+    const columns = ['id', 'cod_lab'];
+    let lastError = null;
+
+    for (const value of values) {
+      for (const column of columns) {
+        try {
+          const { data, error } = await Promise.race([
+            client.from('equipamentos').select('*').eq(column, value).limit(1),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado na consulta')), TIMEOUT_MS))
+          ]);
+          if (error) { lastError = error; continue; }
+          if (data && data.length > 0) return data[0];
+        } catch (e) {
+          lastError = e;
+        }
+      }
+    }
+    if (lastError) throw lastError;
+    return null;
+  }
+
+  async function run() {
+    if (!rawViewId) {
+      showError({
+        icon: '📷',
+        title: 'Nenhum código informado',
+        detail: 'Abra esta página a partir de um QR Code válido do sistema.'
+      });
+      return;
+    }
+
+    showLoading(isIOS ? 'Conectando ao servidor (iOS · até 20s)' : 'Conectando ao servidor (até 12s)');
+
+    try {
+      const record = await fetchRecord(rawViewId);
+      if (record) {
+        saveCached(rawViewId, record);
+        buildPublicView(record);
+        return;
+      }
+      // Sem hit — tenta cache local antes de desistir
+      const cached = loadCached(rawViewId);
+      if (cached) {
+        buildPublicView(cached);
+        return;
+      }
+      showError({
+        icon: '🔍',
+        title: 'Equipamento não encontrado',
+        detail: 'ID buscado: <b style="font-family:monospace">' + esc(rawViewId) + '</b>'
+      });
+    } catch (e) {
+      const cached = loadCached(rawViewId);
+      if (cached) {
+        buildPublicView(cached);
+        return;
+      }
+      const msg = String((e && e.message) || e || '');
+      showError({
+        icon: '📡',
+        title: 'Falha ao carregar dados',
+        detail: '⚠️ ' + esc(msg.slice(0, 160)) +
+          '<div style="font-size:10.5px;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:8px 10px;margin-top:10px;text-align:left">' +
+            '💡 <b>Possíveis causas:</b><br>' +
+            '• Projeto Supabase pausado (plano gratuito pausa após inatividade)<br>' +
+            '• Sem conexão à internet<br>' +
+            '• Servidor temporariamente indisponível' +
+          '</div>',
+        showRetry: true
+      });
+    }
+  }
+
+  run();
+})();
+</script>
+</body>
+</html>
