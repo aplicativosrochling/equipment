@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Röchling Automotive — Ficha de Equipamento</title>
 <meta name="robots" content="noindex, nofollow">
-<!-- [v1] Página pública leve para leitura de QR Code via câmera nativa (iOS/Android).
+<!-- [v2] Página pública leve para leitura de QR Code via câmera nativa (iOS/Android).
+     [v2 iOS FIX] Adicionada cadeia de fallback SDK -> fetch -> XHR para contornar
+     falhas do fetch() no Safari/WebKit ao abrir a página a partir do app Câmera.
      Publicar este arquivo em: equipment/index.html no repositório GitHub Pages.
      O QR gerado por INSTRUMENTOS.html já aponta para <origem>/equipment/?view=ID — 
      este arquivo responde exatamente nesse caminho, sem exigir nenhuma alteração
@@ -201,15 +203,90 @@
     root.innerHTML = html;
   }
 
-  // ── Busca no Supabase (id ou cod_lab, com variações de caixa) ──
-  async function fetchRecord(id) {
-    if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient !== 'function') {
-      throw new Error('SDK Supabase não carregou (CDN bloqueada ou sem rede).');
-    }
-    const client = window.supabase.createClient(SB_URL, SB_KEY, {
+  // ── XHR (último recurso — funciona mesmo quando fetch() falha no Safari/iOS) ──
+  function xhrGet(url) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      let done = false;
+      const timer = setTimeout(() => {
+        if (done) return; done = true; xhr.abort();
+        reject(new Error('XHR timeout'));
+      }, TIMEOUT_MS);
+      xhr.open('GET', url, true);
+      try { xhr.setRequestHeader('apikey', SB_KEY); } catch(e) {}
+      try { xhr.setRequestHeader('Authorization', 'Bearer ' + SB_KEY); } catch(e) {}
+      try { xhr.setRequestHeader('Accept', 'application/json'); } catch(e) {}
+      xhr.onload = () => {
+        if (done) return; done = true; clearTimeout(timer);
+        try {
+          const json = JSON.parse(xhr.responseText || '[]');
+          if (xhr.status >= 400) reject(new Error('HTTP ' + xhr.status + ': ' + (json.message || '')));
+          else resolve(Array.isArray(json) ? json : []);
+        } catch(e) { reject(new Error('Erro ao interpretar resposta JSON')); }
+      };
+      xhr.onerror = () => {
+        if (done) return; done = true; clearTimeout(timer);
+        reject(new Error('XHR network error'));
+      };
+      xhr.send();
+    });
+  }
+
+  // Cliente Supabase reutilizável (evita recriar a cada chamada)
+  let _sbClient = null;
+  function getClient() {
+    if (_sbClient) return _sbClient;
+    if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient !== 'function') return null;
+    _sbClient = window.supabase.createClient(SB_URL, SB_KEY, {
       auth: { persistSession: false, autoRefreshToken: false, storageKey: 'sb-qr-pub-view' }
     });
+    return _sbClient;
+  }
 
+  // ── Busca uma combinação coluna/valor usando 3 métodos em cascata ──
+  // [iOS FIX] O Safari/WebKit, especialmente quando a página é aberta a partir do
+  // app Câmera, pode falhar silenciosamente no fetch() interno do SDK ("Load failed").
+  // Por isso replicamos aqui a mesma cadeia de fallback do sistema principal:
+  // 1) SDK do Supabase  2) fetch() com headers explícitos  3) XHR puro.
+  async function restFetch(column, value) {
+    // Método 1: SDK
+    const client = getClient();
+    if (client) {
+      try {
+        const result = await Promise.race([
+          client.from('equipamentos').select('*').eq(column, value).limit(1),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('SDK timeout')), TIMEOUT_MS))
+        ]);
+        if (!result.error) return Array.isArray(result.data) ? result.data : [];
+      } catch (e) { /* cai no método 2 */ }
+    }
+
+    // Método 2: fetch() com headers explícitos
+    const url = SB_URL.replace(/\/+$/, '') + '/rest/v1/equipamentos?select=*'
+      + '&' + column + '=eq.' + encodeURIComponent(value) + '&limit=1';
+    try {
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = setTimeout(() => { try { if (ctrl) ctrl.abort(); } catch(e) {} }, TIMEOUT_MS);
+      try {
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, Accept: 'application/json' },
+          signal: ctrl ? ctrl.signal : undefined
+        });
+        const text = await res.text();
+        let json = [];
+        try { json = text ? JSON.parse(text) : []; } catch(e) {}
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return Array.isArray(json) ? json : [];
+      } finally { clearTimeout(timer); }
+    } catch (fetchErr) {
+      // Método 3: XHR puro (contorna bugs de fetch()/AbortController no WebKit)
+      return xhrGet(url);
+    }
+  }
+
+  // ── Busca no Supabase (id ou cod_lab, com variações de caixa) ──
+  async function fetchRecord(id) {
     const values = unique([id, id.toUpperCase(), id.toLowerCase()]);
     const columns = ['id', 'cod_lab'];
     let lastError = null;
@@ -217,11 +294,7 @@
     for (const value of values) {
       for (const column of columns) {
         try {
-          const { data, error } = await Promise.race([
-            client.from('equipamentos').select('*').eq(column, value).limit(1),
-            new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado na consulta')), TIMEOUT_MS))
-          ]);
-          if (error) { lastError = error; continue; }
+          const data = await restFetch(column, value);
           if (data && data.length > 0) return data[0];
         } catch (e) {
           lastError = e;
