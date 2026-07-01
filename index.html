@@ -15006,14 +15006,13 @@ function _buildQrPayload(r) {
       const loc = window.location;
       // Se estiver rodando em http(s) hospedado (não file://), usa origem dinâmica preservando o path /equipment/
       if (loc && loc.origin && /^https?:/.test(loc.protocol)) {
-        // Mantém /equipment/ como subpath padrão do projeto
-        BASE_URL = loc.origin + '/equipment/';
-      } else {
-        BASE_URL = 'https://aplicativosrochling.github.io/equipment/';
-      }
-    } catch (e) {
-      BASE_URL = 'https://aplicativosrochling.github.io/equipment/';
-    }
+  BASE_URL = loc.origin + '/equipment/view.html';
+} else {
+  BASE_URL = 'https://aplicativosrochling.github.io/equipment/view.html';
+}
+} catch (e) {
+  BASE_URL = 'https://aplicativosrochling.github.io/equipment/view.html';
+}
     // [v43] Cache-busting timestamp (a cada 1h) para evitar JS antigo em CDN do GitHub Pages
     const v = 'v43_' + Math.floor(Date.now() / 3600000);
     return BASE_URL + '?view=' + id + '&v=' + v;
