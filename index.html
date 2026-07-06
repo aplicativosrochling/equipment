@@ -4282,6 +4282,7 @@ const T = {
     f_all:          'Todos',
     f_all_f:        'Todas',
     f_calib_ok:     'OK',
+    chart_overdue_acc: 'Vencidos acum.',
     f_calib_exp:    'Vencido',
     f_calib_need:   'Necessária',
     tbl_equip_title:'Equipamentos de Medição',
@@ -4715,6 +4716,7 @@ const T = {
     f_all:          'All',
     f_all_f:        'All',
     f_calib_ok:     'OK',
+    chart_overdue_acc: 'Overdue (acc.)',
     f_calib_exp:    'Expired',
     f_calib_need:   'Required',
     tbl_equip_title:'Measurement Equipment',
@@ -5123,6 +5125,7 @@ const T = {
     f_all:          'Todos',
     f_all_f:        'Todas',
     f_calib_ok:     'OK',
+    chart_overdue_acc: 'Vencidos (acum.)',
     f_calib_exp:    'Vencido',
     f_calib_need:   'Requerida',
     tbl_equip_title:'Equipos de Medición',
@@ -5463,6 +5466,7 @@ const T = {
     f_all:          'Alle',
     f_all_f:        'Alle',
     f_calib_ok:     'OK',
+    chart_overdue_acc: 'Überfällig (kum.)',
     f_calib_exp:    'Abgelaufen',
     f_calib_need:   'Erforderlich',
     tbl_equip_title:'Messgeräte',
@@ -5802,6 +5806,7 @@ const T = {
     f_all:          'Tous',
     f_all_f:        'Toutes',
     f_calib_ok:     'OK',
+    chart_overdue_acc: 'En retard (cum.)',
     f_calib_exp:    'Expiré',
     f_calib_need:   'Requis',
     tbl_equip_title:'Équipements de Mesure',
@@ -6141,6 +6146,7 @@ const T = {
     f_all:          'Tutti',
     f_all_f:        'Tutte',
     f_calib_ok:     'OK',
+    chart_overdue_acc: 'Scaduti (cum.)',
     f_calib_exp:    'Scaduto',
     f_calib_need:   'Richiesta',
     tbl_equip_title:'Strumenti di Misura',
@@ -6480,6 +6486,7 @@ const T = {
     f_all:          'Wszystkie',
     f_all_f:        'Wszystkie',
     f_calib_ok:     'OK',
+    chart_overdue_acc: 'Zaległe (skum.)',
     f_calib_exp:    'Wygasłe',
     f_calib_need:   'Wymagana',
     tbl_equip_title:'Przyrządy Pomiarowe',
@@ -12086,7 +12093,7 @@ function buildRelatorios() {
     a90.push(DB.filter(r=>{if(!r.prox_calib)return false;const diff=Math.round((new Date(r.prox_calib+'T00:00:00')-ref)/86400000);return diff>30&&diff<=90;}).length);
   }
   if(document.getElementById('ch-evolucao'))
-    charts.evolucao=new Chart(document.getElementById('ch-evolucao'),{type:'line',data:{labels:le,datasets:[{label:'Vencidos acum.',data:ve,borderColor:'#da3633',backgroundColor:'rgba(218,54,51,.12)',fill:true,tension:.3,pointRadius:4,borderWidth:2},{label:'30d',data:a30,borderColor:'#d29922',fill:false,tension:.3,pointRadius:4,borderWidth:2},{label:'90d',data:a90,borderColor:'#4da6ff',fill:false,tension:.3,pointRadius:4,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:tc(),font:{size:10},boxWidth:9,padding:9}}},scales:{x:{ticks:{color:tc(),font:{size:10}},grid:{color:gc()}},y:{ticks:{color:tc(),font:{size:10}},grid:{color:gc()}}}}});
+    charts.evolucao=new Chart(document.getElementById('ch-evolucao'),{type:'line',data:{labels:le,datasets:[{label:t('chart_overdue_acc'),data:ve,borderColor:'#da3633',backgroundColor:'rgba(218,54,51,.12)',fill:true,tension:.3,pointRadius:4,borderWidth:2},{label:'30d',data:a30,borderColor:'#d29922',fill:false,tension:.3,pointRadius:4,borderWidth:2},{label:'90d',data:a90,borderColor:'#4da6ff',fill:false,tension:.3,pointRadius:4,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:tc(),font:{size:10},boxWidth:9,padding:9}}},scales:{x:{ticks:{color:tc(),font:{size:10}},grid:{color:gc()}},y:{ticks:{color:tc(),font:{size:10}},grid:{color:gc()}}}}});
 
   dc('resp');
   const rm={}; DB.forEach(r=>{if(r.responsavel)rm[r.responsavel]=(rm[r.responsavel]||0)+1;});
@@ -20180,18 +20187,43 @@ document.addEventListener('DOMContentLoaded', function() {
   window._COUNTRY_LANG = COUNTRY_LANG;
 
   // Núcleo de tradução de texto
+  // [FIX-i18n-partial] Cache de chaves ordenadas por tamanho (maior primeiro) por idioma,
+  // para permitir substituição PARCIAL dentro de textos mistos (ex.: "42 registros",
+  // "Total: 15"), não só quando o texto inteiro bate 100% com uma frase do dicionário.
+  var _sortedKeysCache = {};
+  function _sortedKeys(lang){
+    if (_sortedKeysCache[lang]) return _sortedKeysCache[lang];
+    var d = DICT[lang] || {};
+    var keys = Object.keys(d).sort(function(a,b){ return b.length - a.length; });
+    _sortedKeysCache[lang] = keys;
+    return keys;
+  }
+  function _escapeRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  var _reCache = {};
   function tr(txt){
     var lang = (typeof LANG !== 'undefined' && LANG) ? LANG : 'pt';
     if (lang === 'pt') return txt; // origem é PT, sem mudança
     var d = DICT[lang]; if (!d) return txt;
     var key = txt.trim();
     if (!key) return txt;
-    // tenta direto
+    // tenta direto (texto inteiro bate com uma frase do dicionário)
     if (d[key]) return txt.replace(key, d[key]);
     // tenta sem emoji inicial (👍 Texto)
     var m = key.match(/^([\p{Emoji_Presentation}\p{Extended_Pictographic}\u{1F300}-\u{1FAFF}\u2600-\u27BF✕＋🔄🔑✉🏭🌎🌐⏳📥📤✏️🗑💾✅⚠️❌🔍📷]+\s*)(.+)$/u);
     if (m && d[m[2].trim()]) return txt.replace(m[2].trim(), d[m[2].trim()]);
-    return txt;
+    // [FIX-i18n-partial] Nenhum match exato — tenta trocar SUBSTRINGS conhecidas
+    // dentro do texto (cobre casos como "128 registros", "Total: 42 vencidos").
+    var out = txt;
+    var keys = _sortedKeys(lang);
+    var cacheBucket = _reCache[lang] || (_reCache[lang] = {});
+    for (var i=0; i<keys.length; i++){
+      var k = keys[i];
+      if (k.length < 3) continue; // evita trocar fragmentos curtos demais (ruído)
+      if (out.indexOf(k) === -1) continue;
+      var re = cacheBucket[k] || (cacheBucket[k] = new RegExp(_escapeRe(k), 'g'));
+      out = out.replace(re, d[k]);
+    }
+    return out;
   }
 
   var SKIP = { SCRIPT:1, STYLE:1, NOSCRIPT:1, CODE:1, PRE:1, TEXTAREA:1, INPUT:1, SELECT:1, OPTION:1, SVG:1 };
