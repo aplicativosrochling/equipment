@@ -8776,10 +8776,19 @@ window.adminUpdateUnidade = async function(email, unidade, country) {
   try {
     var upd = { unidade: unidade, updated_at: new Date().toISOString() };
     if (country) upd.country = country;
-    const { error } = await sb.from('user_profiles')
+    // [v16 FIX] Adicionado .select() para detectar UPDATE "fantasma": o Supabase
+    // não retorna erro quando uma política RLS bloqueia a atualização — ele
+    // simplesmente afeta 0 linhas e o código antigo mostrava "✅ sucesso" mesmo
+    // sem nada ter mudado no banco (raiz do "não liga usuário e planta").
+    const { data, error } = await sb.from('user_profiles')
       .update(upd)
-      .eq('email', email);
+      .eq('email', email)
+      .select();
     if (error) throw error;
+    if (!data || data.length === 0) {
+      showToast('⚠️ Nenhuma linha atualizada para ' + email + '. Provável bloqueio de política RLS (RLS policy) na tabela user_profiles — verifique no Supabase se existe policy de UPDATE para o role do Director.', 'err');
+      return;
+    }
     showToast('✅ Planta atualizada: ' + email + ' → ' + _getPlantLabel(unidade), 'success');
   } catch(e) {
     _handleProfilesError(e, 'Atualizar planta');
@@ -8791,8 +8800,13 @@ window.adminDeleteUser = async function(email) {
   if (!sb || !_isDirector) return;
   if (!confirm('Remover perfil de ' + email + '?\n\nO usuário perderá o acesso à planta configurada.')) return;
   try {
-    const { error } = await sb.from('user_profiles').delete().eq('email', email);
+    // [v16 FIX] .select() detecta exclusão bloqueada por RLS (0 linhas, sem erro).
+    const { data, error } = await sb.from('user_profiles').delete().eq('email', email).select();
     if (error) throw error;
+    if (!data || data.length === 0) {
+      showToast('⚠️ Nenhum perfil removido — possível bloqueio de RLS (policy de DELETE ausente) na tabela user_profiles.', 'err');
+      return;
+    }
     showToast('🗑 Perfil removido: ' + email, 'success');
     window.adminLoadUsers();
   } catch(e) {
@@ -8962,10 +8976,14 @@ function _initSupabaseClient() {
       // [v29 FIX] storageKey único evita warning "Multiple GoTrueClient instances"
       // [FIX-LOGIN] persistSession:false — sessão nunca salva em localStorage.
       // Cada vez que o sistema abre exige login obrigatório (sem auto-login com último usuário).
+      // [v17 FIX] autoRefreshToken:true — antes era false, o que deixava o JWT expirar
+      // (~1h) em silêncio durante o uso. Depois disso as chamadas passavam a rodar como
+      // role "anon" (sem policy em user_profiles), e updates/deletes afetavam 0 linhas
+      // sem erro nenhum — raiz do bug "não atualiza nem liga usuário e planta".
       window._globalSupabaseClient = supabase.createClient(
         _supabaseUrl,
         _supabaseKey,
-        { auth: { persistSession: false, autoRefreshToken: false, storageKey: 'sb-rochling-auth-token' } }
+        { auth: { persistSession: false, autoRefreshToken: true, storageKey: 'sb-rochling-auth-token' } }
       );
       window._globalSupabaseClientCfg = { url: _supabaseUrl, key: _supabaseKey };
     }
@@ -9426,8 +9444,9 @@ async function sbConnect() {
     const _existingCfg = window._globalSupabaseClientCfg || {};
     if (!window._globalSupabaseClient || _existingCfg.url !== url || _existingCfg.key !== key) {
       // [FIX-LOGIN] persistSession:false — login obrigatório a cada abertura do sistema.
+      // [v17 FIX] autoRefreshToken:true — ver nota em _initSupabaseClient().
       window._globalSupabaseClient = supabase.createClient(url, key, {
-        auth: { persistSession: false, autoRefreshToken: false, storageKey: 'sb-rochling-auth-token' }
+        auth: { persistSession: false, autoRefreshToken: true, storageKey: 'sb-rochling-auth-token' }
       });
       window._globalSupabaseClientCfg = { url, key };
     }
@@ -13052,6 +13071,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // BOOT
 // ═══════════════════════════════════════════════════════
 function updateAll(){
+  // [v16 FIX] Garante que a tabela de logs de auditoria seja recalculada
+  // sempre que os dados são atualizados (inclui troca de planta), para não
+  // mostrar logs desatualizados/de outra planta na aba Auditoria/Relatórios.
+  try { if (typeof v12RenderAuditTable === 'function') v12RenderAuditTable(); } catch(e){}
   // [v49.9 FIX] Proteção contra DB undefined ou inválido
   if (typeof DB === 'undefined' || !Array.isArray(DB)) return;
   // Clear stale bulk selections
@@ -17383,6 +17406,17 @@ function toggleColFilterDd(tbl, col, event) {
     try { return JSON.parse(localStorage.getItem(AUDIT_KEY) || '[]'); } catch(e) { return []; }
   }
 
+  // [v16 FIX] Filtra os logs pela planta atualmente selecionada.
+  // - Se houver uma planta ativa (_currentUnidade), mostra só os logs dessa planta
+  //   + logs antigos sem "unidade" gravada (compatibilidade com registros anteriores).
+  // - Se nenhuma planta estiver selecionada (Director em modo Global), mostra tudo,
+  //   propositalmente, para permitir visão geral de auditoria multi-planta.
+  function _filterLogsForCurrentPlant(logs) {
+    var cur = (typeof _currentUnidade !== 'undefined') ? _currentUnidade : null;
+    if (!cur || cur === '__BLOQUEADO__') return logs; // Director sem planta = visão global
+    return logs.filter(function(e){ return !e.unidade || e.unidade === cur; });
+  }
+
   // Escreve logs (limita a MAX_AUDIT_LOGS, FIFO)
   function _writeLogs(logs) {
     try {
@@ -17400,7 +17434,11 @@ function toggleColFilterDd(tbl, col, event) {
       type: type,
       id:   String(equipId || '—'),
       desc: String(description || '').substring(0, 300),
-      user: _currentUser()
+      user: _currentUser(),
+      // [v16 FIX] cada log agora é gravado com a planta atual (_currentUnidade).
+      // Sem isso, TODOS os logs de TODAS as plantas ficavam misturados no mesmo
+      // localStorage e apareciam juntos para qualquer usuário/planta.
+      unidade: (typeof _currentUnidade !== 'undefined' && _currentUnidade) ? _currentUnidade : (window._currentUnidade || null)
     });
     _writeLogs(logs);
     // Atualiza a tabela se já estiver visível
@@ -17409,7 +17447,7 @@ function toggleColFilterDd(tbl, col, event) {
 
   // ── Renderiza a mini-tabela de logs na aba Relatórios ────────────────
   window.v12RenderAuditTable = function() {
-    var logs   = _readLogs();
+    var logs   = _filterLogsForCurrentPlant(_readLogs());
     var tbody  = document.getElementById('v12-audit-tbody');
     var tbl    = document.getElementById('audit-tbl');
     var empty  = document.getElementById('audit-empty');
@@ -17447,12 +17485,12 @@ function toggleColFilterDd(tbl, col, event) {
 
   // ── Exportar logs como CSV ────────────────────────────────────────────
   window.v12ExportAuditCSV = function() {
-    var logs = _readLogs();
+    var logs = _filterLogsForCurrentPlant(_readLogs());
     if (!logs.length) { if (typeof showToast==='function') showToast('Nenhum log para exportar.','err'); return; }
-    var header = ['Data/Hora','Tipo','ID Equipamento','Descrição','Utilizador'];
+    var header = ['Data/Hora','Tipo','ID Equipamento','Descrição','Utilizador','Planta'];
     var lines  = ['\ufeff' + header.join(';')];
     logs.forEach(function(e) {
-      lines.push([e.ts, e.type, e.id, '"'+(e.desc||'').replace(/"/g,'""')+'"', e.user].join(';'));
+      lines.push([e.ts, e.type, e.id, '"'+(e.desc||'').replace(/"/g,'""')+'"', e.user, e.unidade||'—'].join(';'));
     });
     var blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     var a    = document.createElement('a');
@@ -19725,6 +19763,24 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!confirm(window._at('confirm_del_plant').replace('{c}', code))) return;
     var sb = window._globalSupabaseClient || window._sb;
     if (sb) {
+      // [v16 FIX] Antes de excluir o sentinel, verifica se ainda existem
+      // equipamentos ou usuários reais apontando para esta planta. A planta é
+      // RECONSTRUÍDA automaticamente a partir desses dados a cada sbPull/reload
+      // (ver linha ~8407 e adminLoadUsers), então excluir só o sentinel NUNCA
+      // é suficiente — é exatamente por isso que a planta "volta".
+      try {
+        const [{ count: eqCount }, { data: usersLeft }] = await Promise.all([
+          sb.from('equipamentos').select('id', { count: 'exact', head: true }).eq('unidade', code),
+          sb.from('user_profiles').select('email').eq('unidade', code).not('email', 'like', '__plant__%')
+        ]);
+        if ((eqCount && eqCount > 0) || (usersLeft && usersLeft.length > 0)) {
+          var msg = '⚠️ Não é possível excluir "' + code + '" definitivamente: ainda há '
+            + (eqCount||0) + ' equipamento(s) e ' + (usersLeft ? usersLeft.length : 0)
+            + ' usuário(s) vinculados a esta planta no Supabase. Reatribua ou exclua esses '
+            + 'registros primeiro, senão a planta será reconstruída automaticamente no próximo carregamento.';
+          if (!confirm(msg + '\n\nDeseja excluir o cadastro da planta mesmo assim (ela pode reaparecer)?')) return;
+        }
+      } catch(e) { console.warn('[adminDeletePlant/check]', e); }
       try {
         // [v49.6] Remove sentinel do Supabase (funciona para fixas e dinâmicas)
         var sentinel = '__plant__' + code.toLowerCase() + '@plant.local';
@@ -19833,10 +19889,16 @@ document.addEventListener('DOMContentLoaded', function() {
     var country = (document.getElementById('eu-country').value||'').trim().toUpperCase() || null;
     if (!unidade) { showToast('⚠️ '+window._at('lbl_plant'), 'warning'); return; }
     try {
-      var { error } = await sb.from('user_profiles').update({
+      // [v16 FIX] .select() para detectar update bloqueado por RLS (0 linhas afetadas
+      // sem erro explícito do Supabase) — antes o modal fechava com "sucesso" falso.
+      var { data, error } = await sb.from('user_profiles').update({
         display_name: name || null, unidade: unidade, country: country, updated_at: new Date().toISOString()
-      }).eq('email', email);
+      }).eq('email', email).select();
       if (error) throw error;
+      if (!data || data.length === 0) {
+        showToast('⚠️ Nenhuma linha atualizada — possível bloqueio de RLS na tabela user_profiles.', 'err');
+        return;
+      }
       showToast(window._at('user_updated')+': '+email, 'success');
       window.adminCloseEditUserModal();
       window.adminLoadUsers();
@@ -20227,15 +20289,32 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   var SKIP = { SCRIPT:1, STYLE:1, NOSCRIPT:1, CODE:1, PRE:1, TEXTAREA:1, INPUT:1, SELECT:1, OPTION:1, SVG:1 };
+  // [v16 FIX] Guarda o texto ORIGINAL em PT usando WeakMap (texto) e um atributo
+  // (elementos), para que a tradução seja sempre feita a partir da fonte real em
+  // PT — nunca a partir do texto já traduzido de uma passada anterior. Sem isso,
+  // ao trocar de planta (ex.: DE → IT), textos já traduzidos para alemão ficavam
+  // "presos" nesse idioma, pois o dicionário só reconhece a chave original em PT.
+  var _origTextMap = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
+  function _origAttr(el, attr){
+    var key = '_origAttr_' + attr;
+    if (!el[key]) el[key] = {};
+    return el[key];
+  }
   function walk(root){
     if (!root || !root.nodeType) return;
     if (root.nodeType === 3) { // text
       var p = root.parentNode;
       if (!p || SKIP[p.nodeName] || p.isContentEditable) return;
-      var raw = root.nodeValue;
+      var raw;
+      if (_origTextMap) {
+        raw = _origTextMap.get(root);
+        if (raw === undefined) { raw = root.nodeValue; _origTextMap.set(root, raw); }
+      } else {
+        raw = root.nodeValue;
+      }
       if (!raw || !raw.trim()) return;
       var out = tr(raw);
-      if (out !== raw) root.nodeValue = out;
+      if (out !== root.nodeValue) root.nodeValue = out;
       return;
     }
     if (root.nodeType !== 1) return;
@@ -20243,13 +20322,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Atributos visíveis
     ['title','placeholder','aria-label'].forEach(function(a){
       if (root.hasAttribute && root.hasAttribute(a)) {
-        var v = root.getAttribute(a); var t = tr(v);
-        if (t !== v) root.setAttribute(a, t);
+        var store = _origAttr(root, a);
+        var v = ('orig' in store) ? store.orig : root.getAttribute(a);
+        if (!('orig' in store)) store.orig = v;
+        var tOut = tr(v);
+        if (tOut !== root.getAttribute(a)) root.setAttribute(a, tOut);
       }
     });
     // OPTION com texto
     if (root.nodeName === 'OPTION' && root.textContent) {
-      var ot = tr(root.textContent);
+      var store2 = _origAttr(root, 'textContent');
+      var orig2 = ('orig' in store2) ? store2.orig : root.textContent;
+      if (!('orig' in store2)) store2.orig = orig2;
+      var ot = tr(orig2);
       if (ot !== root.textContent) root.textContent = ot;
     }
     var ch = root.childNodes;
@@ -20293,7 +20378,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var orig = window.switchPlanta;
     window.switchPlanta = function(code){
       var r = orig.apply(this, arguments);
-      window._applyLangFromPlanta(code);
+      // [v16 FIX] REMOVIDA a chamada a window._applyLangFromPlanta(code) daqui.
+      // O switchPlanta() original (linha ~7996) JÁ troca o idioma corretamente
+      // via _langForPlant()/_COUNTRY_LANG. Esta segunda chamada usava uma tabela
+      // país→idioma DIFERENTE (COUNTRY_LANG, definida mais abaixo neste arquivo)
+      // e podia disparar um SEGUNDO setLang() com um idioma diferente do primeiro,
+      // causando a mistura de idiomas (ex.: título em italiano + cards em alemão).
       scheduleSweep();
       return r;
     };
