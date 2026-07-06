@@ -10037,6 +10037,19 @@ function showApp(user) {
   // Valores válidos: "SP", "MX", "USA" (ou qualquer sigla) / "DIRECTOR" para ver tudo
   const meta = (user.user_metadata || user.app_metadata || {});
   if (meta.unidade) {
+    // [FIX-i18n] Registra planta dinâmica (país/label) a partir do user_metadata
+    // ANTES de trocar de planta — sem isso, _langForPlant() nunca sabia o país
+    // de plantas criadas via signUp() (ex.: LAIVES→IT), e só plantas antigas
+    // fixas (SP, MX, USA, DUNCAN, AKRON) trocavam de idioma automaticamente.
+    var _metaUnidade = String(meta.unidade).toUpperCase();
+    if (meta.country && _metaUnidade !== 'DIRECTOR') {
+      var _metaFlag = _countryFlagEmoji(meta.country);
+      _DYNAMIC_PLANTS[_metaUnidade] = {
+        label: (_metaFlag ? _metaFlag + ' ' : '') + (meta.display_name || _metaUnidade),
+        country: meta.country
+      };
+      _UNIDADE_LABELS[_metaUnidade] = _DYNAMIC_PLANTS[_metaUnidade].label;
+    }
     _setUnidade(meta.unidade);
   } else {
     // [v48] Fallback: busca a planta na tabela user_profiles pelo e-mail
