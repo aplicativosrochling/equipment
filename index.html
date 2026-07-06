@@ -6931,10 +6931,25 @@ function applyLang() {
     ['Top Urgent','⏱️ Top 15 Most Urgent','rep_urgentes'],
     ['📋 Relatório por Período','📋 Period Report','rep_period_title'],
   ];
+  // [v18 FIX] Antes, o reconhecimento do texto atual só cobria as versões PT/EN
+  // hardcoded no array acima. Se o card já tivesse sido traduzido para ES/DE/IT/etc.
+  // numa troca de planta anterior, nenhuma troca de idioma seguinte reconhecia mais
+  // aquele texto (não era nem PT nem EN) e o título ficava PRESO no idioma antigo —
+  // exatamente o efeito de "gráficos e KPIs misturando traduções". Agora comparamos
+  // contra a tradução desse texto em QUALQUER idioma suportado.
+  var _chartKeys = chartMap.map(function(e){ return e[2]; });
+  var _allLangs = Object.keys(T);
   document.querySelectorAll('.chart-title, .tbl-title').forEach(el => {
     const txt = el.textContent.trim();
-    const entry = chartMap.find(e => e[0]===txt || e[1]===txt);
-    if(entry) el.textContent = t(entry[2]);
+    let matchedKey = null;
+    for (let ki = 0; ki < _chartKeys.length && !matchedKey; ki++) {
+      const k = _chartKeys[ki];
+      for (let li = 0; li < _allLangs.length; li++) {
+        const lg = _allLangs[li];
+        if (T[lg] && T[lg][k] === txt) { matchedKey = k; break; }
+      }
+    }
+    if (matchedKey) el.textContent = t(matchedKey);
   });
 
   // Alert timeline cards
@@ -8271,21 +8286,31 @@ async function _loadPlantasParaSelector(cb) {
     try {
       var { data } = await window._globalSupabaseClient
         .from('user_profiles')
-        .select('unidade, display_name, country')
+        .select('email, unidade, display_name, country')
         .not('unidade', 'eq', 'DIRECTOR')
         .not('unidade', 'is', null);
       if (data) {
         data.forEach(function(row) {
           if (!row.unidade || row.unidade === 'DIRECTOR') return;
           var code = String(row.unidade).toUpperCase();
-          // Register in dynamic map
-          if (!_DYNAMIC_PLANTS[code]) {
+          // [v18 FIX] mesma correção de _loadPlantasDisponiveis: o sentinel
+          // (__plant__*) é a fonte oficial do nome editado e deve sempre
+          // sobrescrever o seed hardcoded de plantas fixas.
+          var isSentinel = row.email && row.email.indexOf('__plant__') === 0;
+          var rawName = row.display_name ? String(row.display_name).replace(/^\[PLANT\]\s*/, '') : null;
+          if (isSentinel && rawName) {
             var flag = _countryFlagEmoji(row.country);
             _DYNAMIC_PLANTS[code] = {
-              label: (flag ? flag + ' ' : '') + (row.display_name || code),
+              label: (flag ? flag + ' ' : '') + rawName,
               country: row.country || null
             };
-            // Also update _UNIDADE_LABELS for backward compat
+            _UNIDADE_LABELS[code] = _DYNAMIC_PLANTS[code].label;
+          } else if (!_DYNAMIC_PLANTS[code]) {
+            var flag2 = _countryFlagEmoji(row.country);
+            _DYNAMIC_PLANTS[code] = {
+              label: (flag2 ? flag2 + ' ' : '') + (rawName || code),
+              country: row.country || null
+            };
             _UNIDADE_LABELS[code] = _DYNAMIC_PLANTS[code].label;
           }
           if (!seen[code]) { seen[code] = true; plantas.push({ v:code, lbl:_getPlantLabel(code) }); }
@@ -8385,16 +8410,29 @@ window._loadPlantasDisponiveis = async function() {
     try {
       const { data: profData } = await window._globalSupabaseClient
         .from('user_profiles')
-        .select('unidade, display_name, country')
+        .select('email, unidade, display_name, country')
         .not('unidade', 'eq', 'DIRECTOR')
         .not('unidade', 'is', null);
       (profData || []).forEach(function(row) {
         if (!row.unidade || row.unidade === 'DIRECTOR') return;
         var code = String(row.unidade).toUpperCase();
-        if (!_DYNAMIC_PLANTS[code]) {
+        // [v18 FIX] sentinel (__plant__*) é a fonte OFICIAL do nome/país editado pelo
+        // Director — precisa sempre sobrescrever o seed hardcoded de _seedLegacyPlants()
+        // e qualquer valor já carregado, senão uma edição de nome (ex.: Duncan) era
+        // descartada silenciosamente a cada novo login.
+        var isSentinel = row.email && row.email.indexOf('__plant__') === 0;
+        var rawName = row.display_name ? String(row.display_name).replace(/^\[PLANT\]\s*/, '') : null;
+        if (isSentinel && rawName) {
           var flag = _countryFlagEmoji(row.country);
           _DYNAMIC_PLANTS[code] = {
-            label: (flag ? flag + ' ' : '') + (row.display_name || code),
+            label: (flag ? flag + ' ' : '') + rawName,
+            country: row.country || null
+          };
+          _UNIDADE_LABELS[code] = _DYNAMIC_PLANTS[code].label;
+        } else if (!_DYNAMIC_PLANTS[code]) {
+          var flag2 = _countryFlagEmoji(row.country);
+          _DYNAMIC_PLANTS[code] = {
+            label: (flag2 ? flag2 + ' ' : '') + (rawName || code),
             country: row.country || null
           };
           _UNIDADE_LABELS[code] = _DYNAMIC_PLANTS[code].label;
