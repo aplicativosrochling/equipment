@@ -4313,10 +4313,10 @@ const T = {
     rep_evolucao:   '📈 Evolução Acumulada (7 meses)',
     rep_resp:       '👤 Por Responsável',
     rep_emp_venc:   '🏭 Vencidos por Empresa',
-    rep_freq:       '📅 Frequência de Calibração',
+    rep_freq:       '⏱ Frequência de Calibração',
     rep_heatmap:    '🌡️ Status por Localização',
-    rep_resumo:     '📊 Resumo Geral',
-    rep_urgentes:   '🔴 Top Urgentes',
+    rep_resumo:     '🔢 Resumo Geral',
+    rep_urgentes:   '⏱️ Top 15 Mais Urgentes',
     rep_kpi_venc:   'Vencidos',
     rep_kpi_30d:    'Vencem 30d',
     rep_kpi_90d:    'Vencem 90d',
@@ -5157,6 +5157,11 @@ const T = {
     rep_freq:       '⏱ Frecuencia de Calibración',
     rep_heatmap:    '🌡️ Estado por Ubicación',
     rep_resumo:     '🔢 Resumen General',
+    ch_mensal_title:   '📆 Calibraciones por Mes — Previstas vs Realizadas',
+    ch_leg_prev:       'Previstas (vencen)',
+    ch_leg_real:       'Realizadas (última calib.)',
+    ch_leg_venc:       'Vencidas sin realizar',
+    ch_click_detail:   'haga clic en las barras para más detalles',
     rep_urgentes:   '⏱️ Top 15 Más Urgentes',
     rep_kpi_venc:   'Vencidos',
     rep_kpi_30d:    'Vencen 30d',
@@ -5498,6 +5503,11 @@ const T = {
     rep_freq:       '⏱ Kalibrierungsfrequenz',
     rep_heatmap:    '🌡️ Status nach Standort',
     rep_resumo:     '🔢 Allgemeine Zusammenfassung',
+    ch_mensal_title:   '📆 Kalibrierungen pro Monat — Geplant vs Durchgeführt',
+    ch_leg_prev:       'Geplant (fällig)',
+    ch_leg_real:       'Durchgeführt (letzte Kalibr.)',
+    ch_leg_venc:       'Überfällig (nicht durchgeführt)',
+    ch_click_detail:   'Klicken Sie auf die Balken für Details',
     rep_urgentes:   '⏱️ Top 15 Dringendste',
     rep_kpi_venc:   'Abgelaufen',
     rep_kpi_30d:    'Fällig 30T',
@@ -5838,6 +5848,11 @@ const T = {
     rep_freq:       '⏱ Fréquence de Calibration',
     rep_heatmap:    '🌡️ Statut par Emplacement',
     rep_resumo:     '🔢 Résumé Général',
+    ch_mensal_title:   '📆 Calibrations Mensuelles — Prévues vs Réalisées',
+    ch_leg_prev:       'Prévues (échéance)',
+    ch_leg_real:       'Réalisées (dernière calib.)',
+    ch_leg_venc:       'En retard (non réalisées)',
+    ch_click_detail:   'cliquez sur les barres pour plus de détails',
     rep_urgentes:   '⏱️ Top 15 Plus Urgents',
     rep_kpi_venc:   'Expirés',
     rep_kpi_30d:    'Échéant 30j',
@@ -6178,6 +6193,11 @@ const T = {
     rep_freq:       '⏱ Frequenza Calibrazione',
     rep_heatmap:    '🌡️ Stato per Posizione',
     rep_resumo:     '🔢 Riepilogo Generale',
+    ch_mensal_title:   '📆 Tarature Mensili — Previste vs Effettuate',
+    ch_leg_prev:       'Previste (in scadenza)',
+    ch_leg_real:       'Effettuate (ultima taratura)',
+    ch_leg_venc:       'Scadute non effettuate',
+    ch_click_detail:   'clicca sulle barre per i dettagli',
     rep_urgentes:   '⏱️ Top 15 Più Urgenti',
     rep_kpi_venc:   'Scaduti',
     rep_kpi_30d:    'Scade 30g',
@@ -6518,6 +6538,11 @@ const T = {
     rep_freq:       '⏱ Częstotliwość Kalibracji',
     rep_heatmap:    '🌡️ Status wg Lokalizacji',
     rep_resumo:     '🔢 Ogólne Podsumowanie',
+    ch_mensal_title:   '📆 Kalibracje miesięczne — Planowane vs Wykonane',
+    ch_leg_prev:       'Planowane (termin)',
+    ch_leg_real:       'Wykonane (ostatnia kalibracja)',
+    ch_leg_venc:       'Zaległe (niewykonane)',
+    ch_click_detail:   'kliknij słupki, aby zobaczyć szczegóły',
     rep_urgentes:   '⏱️ Top 15 Najpilniejszych',
     rep_kpi_venc:   'Wygasłe',
     rep_kpi_30d:    'Do 30d',
@@ -7012,9 +7037,16 @@ function applyLang() {
 
   // Reports
   const repPeriodLabels = document.querySelectorAll('.tbl-hdr label');
+  const _fromToPairs = [['rep_from','De','From:'],['rep_to','Até','To:']];
   repPeriodLabels.forEach(lbl => {
-    if(lbl.textContent.trim()==='De:' || lbl.textContent.trim()==='From:') lbl.textContent = t('rep_from');
-    if(lbl.textContent.trim()==='Até:' || lbl.textContent.trim()==='To:') lbl.textContent = t('rep_to');
+    var cur = lbl.textContent.trim();
+    _fromToPairs.forEach(function(p){
+      var key = p[0];
+      for (var li = 0; li < _allLangs.length; li++) {
+        var lg = _allLangs[li];
+        if (T[lg] && (T[lg][key] === cur || T[lg][key] === cur + ':')) { lbl.textContent = t(key); break; }
+      }
+    });
   });
   document.querySelectorAll('[onclick="exportRepCSV()"]').forEach(btn => {
     if(btn.textContent.includes('CSV')) btn.textContent = t('rep_csv_period');
@@ -10064,7 +10096,11 @@ async function initSupabaseAndAuth() {
   // Verifica sessão existente e escuta mudanças de estado de autenticação
   try {
     const { data: { session } } = await _sb.auth.getSession();
+    // [v20 FIX] guarda qual usuário já está com showApp() aplicado, para não
+    // reiniciar a tela de seleção de planta a cada evento SIGNED_IN redundante.
+    var _lastAuthedUserId = null;
     if (session && session.user) {
+      _lastAuthedUserId = session.user.id;
       showApp(session.user);
     } else {
       showLoginScreen();
@@ -10073,8 +10109,19 @@ async function initSupabaseAndAuth() {
     // Listener de mudanças de auth (login/logout em outra aba, expiração de token)
     _sb.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session && session.user) {
+        // [v20 FIX] Com autoRefreshToken:true (ligado no v17 para o token nunca
+        // expirar em silêncio), o supabase-js revalida a sessão sempre que a
+        // aba do navegador volta a ficar visível/focada — e isso dispara um
+        // SIGNED_IN de novo, mesmo sendo o MESMO usuário já logado. Antes,
+        // showApp() rodava de novo a cada uma dessas revalidações e reiniciava
+        // a detecção de planta do zero, jogando o Diretor de volta pra tela
+        // "Selecione uma unidade" toda vez que trocava de aba. Agora só chama
+        // showApp() se o usuário autenticado realmente mudou.
+        if (_lastAuthedUserId === session.user.id) return;
+        _lastAuthedUserId = session.user.id;
         showApp(session.user);
       } else if (event === 'SIGNED_OUT') {
+        _lastAuthedUserId = null;
         showLoginScreen();
       }
     });
@@ -20276,6 +20323,22 @@ document.addEventListener('DOMContentLoaded', function() {
     var src = _EXTRA2[lang];
     Object.keys(src).forEach(function(k){ if (!(k in DICT[lang])) DICT[lang][k] = src[k]; });
   });
+  // [v20 FIX] "Cliente"/"Empresa"/"Status Op."/"Calibração" (rótulos do filtro
+  // da aba Relatórios) nunca tiveram tradução em NENHUM dicionário do arquivo —
+  // não era bug de detecção, a tradução simplesmente não existia.
+  var _EXTRA3 = {
+    en: { 'Cliente':'Client', 'Empresa':'Company', 'Status Op.':'Op. Status', 'Calibração':'Calibration' },
+    es: { 'Cliente':'Cliente', 'Empresa':'Empresa', 'Status Op.':'Estado Op.', 'Calibração':'Calibración' },
+    de: { 'Cliente':'Kunde', 'Empresa':'Unternehmen', 'Status Op.':'Betr.-Status', 'Calibração':'Kalibrierung' },
+    fr: { 'Cliente':'Client', 'Empresa':'Entreprise', 'Status Op.':'Statut Op.', 'Calibração':'Calibration' },
+    it: { 'Cliente':'Cliente', 'Empresa':'Azienda', 'Status Op.':'Stato Op.', 'Calibração':'Calibrazione' },
+    pl: { 'Cliente':'Klient', 'Empresa':'Firma', 'Status Op.':'Status Op.', 'Calibração':'Kalibracja' },
+  };
+  Object.keys(_EXTRA3).forEach(function(lang){
+    if (!DICT[lang]) DICT[lang] = {};
+    var src = _EXTRA3[lang];
+    Object.keys(src).forEach(function(k){ DICT[lang][k] = src[k]; });
+  });
   // [v49.4] Extra translations for strings reported as untranslated.
   var _EXTRA = {"en": {"Nenhum equipamento cadastrado": "No equipment registered", "Nenhum equipamento cadastrado nesta sessão.": "No equipment registered in this session.", "Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.": "This plant has no measuring equipment registered yet. Start by adding a new one.", "Adicionar primeiro equipamento": "Add first equipment", "Cadastrar Novo Equipamento": "Register New Equipment", "Últimos Cadastros nesta Sessão": "Latest entries in this session", "Log de Auditoria": "Audit log", "Selecione uma unidade": "Select a unit", "Escolha uma planta para acessar o sistema": "Choose a plant to access the system", "Clique em um pin no mapa para acessar o sistema daquela planta": "Click a plant below to access its system", "Carregando plantas…": "Loading plants…", "Calibração OK": "Calibration OK", "Vence em breve": "Due soon", "Vencida": "Overdue", "Sem equipamentos cadastrados": "No equipment registered", "Visão Geral": "Overview", "Gestão": "Manage", "Análise": "Analysis", "Total": "Total", "Ativos": "Active", "Inativos": "Inactive", "Calib. OK": "Calib. OK", "Vencidos": "Overdue", "Vencem 30d": "Due 30d", "Vencem 90d": "Due 90d", "Índice Saúde": "Health Index", "registros": "records", "em operação": "in operation", "fora de uso": "out of service", "aprovados": "approved", "prazo expirado": "expired", "urgente": "urgent", "monitorar": "monitor", "equip. em dia": "on-track", "planta": "plant", "plantas": "plants", "São Paulo": "São Paulo", "México": "Mexico", "EUA": "USA"}, "es": {"Nenhum equipamento cadastrado": "Sin equipos registrados", "Nenhum equipamento cadastrado nesta sessão.": "Sin equipos registrados en esta sesión.", "Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.": "Esta planta aún no tiene instrumentos de medición registrados. Comience agregando uno nuevo.", "Adicionar primeiro equipamento": "Agregar primer equipo", "Cadastrar Novo Equipamento": "Registrar nuevo equipo", "Últimos Cadastros nesta Sessão": "Últimos registros de esta sesión", "Log de Auditoria": "Registro de auditoría", "Selecione uma unidade": "Seleccione una unidad", "Escolha uma planta para acessar o sistema": "Elija una planta para acceder al sistema", "Clique em um pin no mapa para acessar o sistema daquela planta": "Haga clic en una planta abajo para acceder a su sistema", "Carregando plantas…": "Cargando plantas…", "Calibração OK": "Calibración OK", "Vence em breve": "Vence pronto", "Vencida": "Vencida", "Sem equipamentos cadastrados": "Sin equipos registrados", "Visão Geral": "Resumen", "Gestão": "Gestión", "Análise": "Análisis", "Total": "Total", "Ativos": "Activos", "Inativos": "Inactivos", "Calib. OK": "Calib. OK", "Vencidos": "Vencidos", "Vencem 30d": "Vencen 30d", "Vencem 90d": "Vencen 90d", "Índice Saúde": "Índice de Salud", "registros": "registros", "em operação": "en operación", "fora de uso": "fuera de uso", "aprovados": "aprobados", "prazo expirado": "plazo vencido", "urgente": "urgente", "monitorar": "monitorear", "equip. em dia": "al día", "planta": "planta", "plantas": "plantas", "São Paulo": "São Paulo", "México": "México", "EUA": "EE. UU."}, "de": {"Nenhum equipamento cadastrado": "Keine Geräte erfasst", "Nenhum equipamento cadastrado nesta sessão.": "In dieser Sitzung wurden keine Geräte erfasst.", "Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.": "Dieses Werk hat noch keine Messmittel erfasst. Fügen Sie zuerst ein neues Gerät hinzu.", "Adicionar primeiro equipamento": "Erstes Gerät hinzufügen", "Cadastrar Novo Equipamento": "Neues Gerät erfassen", "Últimos Cadastros nesta Sessão": "Letzte Einträge dieser Sitzung", "Log de Auditoria": "Audit-Protokoll", "Selecione uma unidade": "Werk auswählen", "Escolha uma planta para acessar o sistema": "Wählen Sie ein Werk, um das System zu öffnen", "Clique em um pin no mapa para acessar o sistema daquela planta": "Klicken Sie unten auf ein Werk, um das System zu öffnen", "Carregando plantas…": "Werke werden geladen…", "Calibração OK": "Kalibrierung OK", "Vence em breve": "Bald fällig", "Vencida": "Überfällig", "Sem equipamentos cadastrados": "Keine Geräte erfasst", "Visão Geral": "Übersicht", "Gestão": "Verwaltung", "Análise": "Analyse", "Total": "Gesamt", "Ativos": "Aktiv", "Inativos": "Inaktiv", "Calib. OK": "Kalib. OK", "Vencidos": "Überfällig", "Vencem 30d": "Fällig 30T", "Vencem 90d": "Fällig 90T", "Índice Saúde": "Gesundheitsindex", "registros": "Einträge", "em operação": "in Betrieb", "fora de uso": "außer Betrieb", "aprovados": "genehmigt", "prazo expirado": "Frist abgelaufen", "urgente": "dringend", "monitorar": "überwachen", "equip. em dia": "auf Stand", "planta": "Werk", "plantas": "Werke", "São Paulo": "São Paulo", "México": "Mexiko", "EUA": "USA"}, "fr": {"Nenhum equipamento cadastrado": "Aucun équipement enregistré", "Nenhum equipamento cadastrado nesta sessão.": "Aucun équipement enregistré dans cette session.", "Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.": "Ce site n’a pas encore d’instruments de mesure enregistrés. Commencez par en ajouter un nouveau.", "Adicionar primeiro equipamento": "Ajouter le premier équipement", "Cadastrar Novo Equipamento": "Enregistrer un nouvel équipement", "Últimos Cadastros nesta Sessão": "Derniers enregistrements de cette session", "Log de Auditoria": "Journal d’audit", "Selecione uma unidade": "Sélectionnez un site", "Escolha uma planta para acessar o sistema": "Choisissez un site pour accéder au système", "Clique em um pin no mapa para acessar o sistema daquela planta": "Cliquez sur un site ci-dessous pour accéder à son système", "Carregando plantas…": "Chargement des sites…", "Calibração OK": "Calibration OK", "Vence em breve": "Bientôt dû", "Vencida": "Échue", "Sem equipamentos cadastrados": "Aucun équipement enregistré", "Visão Geral": "Aperçu", "Gestão": "Gestion", "Análise": "Analyse", "Total": "Total", "Ativos": "Actifs", "Inativos": "Inactifs", "Calib. OK": "Calib. OK", "Vencidos": "En retard", "Vencem 30d": "Échus 30j", "Vencem 90d": "Échus 90j", "Índice Saúde": "Indice de santé", "registros": "enregistrements", "em operação": "en service", "fora de uso": "hors service", "aprovados": "approuvés", "prazo expirado": "délai dépassé", "urgente": "urgent", "monitorar": "surveiller", "equip. em dia": "à jour", "planta": "site", "plantas": "sites", "São Paulo": "São Paulo", "México": "Mexique", "EUA": "États-Unis"}, "it": {"Nenhum equipamento cadastrado": "Nessuno strumento registrato", "Nenhum equipamento cadastrado nesta sessão.": "Nessuno strumento registrato in questa sessione.", "Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.": "Questo stabilimento non ha ancora strumenti di misura registrati. Inizia aggiungendone uno nuovo.", "Adicionar primeiro equipamento": "Aggiungi primo strumento", "Cadastrar Novo Equipamento": "Registra nuovo strumento", "Últimos Cadastros nesta Sessão": "Ultime registrazioni di questa sessione", "Log de Auditoria": "Log di audit", "Selecione uma unidade": "Seleziona uno stabilimento", "Escolha uma planta para acessar o sistema": "Scegli uno stabilimento per accedere al sistema", "Clique em um pin no mapa para acessar o sistema daquela planta": "Fai clic su uno stabilimento qui sotto per accedere al sistema", "Carregando plantas…": "Caricamento stabilimenti…", "Calibração OK": "Taratura OK", "Vence em breve": "In scadenza", "Vencida": "Scaduta", "Sem equipamentos cadastrados": "Nessuno strumento registrato", "Visão Geral": "Panoramica", "Gestão": "Gestione", "Análise": "Analisi", "Total": "Totale", "Ativos": "Attivi", "Inativos": "Inattivi", "Calib. OK": "Taratura OK", "Vencidos": "Scaduti", "Vencem 30d": "Scadono 30g", "Vencem 90d": "Scadono 90g", "Índice Saúde": "Indice di salute", "registros": "registrazioni", "em operação": "in servizio", "fora de uso": "fuori servizio", "aprovados": "approvati", "prazo expirado": "scaduto", "urgente": "urgente", "monitorar": "monitorare", "equip. em dia": "aggiornati", "planta": "stabilimento", "plantas": "stabilimenti", "São Paulo": "San Paolo", "México": "Messico", "EUA": "USA"}, "pl": {"Nenhum equipamento cadastrado": "Brak zarejestrowanych urządzeń", "Nenhum equipamento cadastrado nesta sessão.": "Brak urządzeń zarejestrowanych w tej sesji.", "Esta planta ainda não possui instrumentos de medição registrados. Comece adicionando um novo equipamento.": "Ten zakład nie ma jeszcze zarejestrowanych przyrządów pomiarowych. Zacznij od dodania nowego.", "Adicionar primeiro equipamento": "Dodaj pierwsze urządzenie", "Cadastrar Novo Equipamento": "Zarejestruj nowe urządzenie", "Últimos Cadastros nesta Sessão": "Ostatnie wpisy w tej sesji", "Log de Auditoria": "Dziennik audytu", "Selecione uma unidade": "Wybierz zakład", "Escolha uma planta para acessar o sistema": "Wybierz zakład, aby uzyskać dostęp do systemu", "Clique em um pin no mapa para acessar o sistema daquela planta": "Kliknij zakład poniżej, aby przejść do systemu", "Carregando plantas…": "Ładowanie zakładów…", "Calibração OK": "Kalibracja OK", "Vence em breve": "Wkrótce upływa", "Vencida": "Zaległa", "Sem equipamentos cadastrados": "Brak zarejestrowanych urządzeń", "Visão Geral": "Przegląd", "Gestão": "Zarządzanie", "Análise": "Analiza", "Total": "Razem", "Ativos": "Aktywne", "Inativos": "Nieaktywne", "Calib. OK": "Kalib. OK", "Vencidos": "Zaległe", "Vencem 30d": "Termin 30d", "Vencem 90d": "Termin 90d", "Índice Saúde": "Wskaźnik stanu", "registros": "rekordy", "em operação": "w eksploatacji", "fora de uso": "wyłączone", "aprovados": "zatwierdzone", "prazo expirado": "termin upłynął", "urgente": "pilne", "monitorar": "monitorować", "equip. em dia": "aktualne", "planta": "zakład", "plantas": "zakłady", "São Paulo": "São Paulo", "México": "Meksyk", "EUA": "USA"}};
   Object.keys(_EXTRA).forEach(function(lang){
@@ -20327,6 +20390,16 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   var SKIP = { SCRIPT:1, STYLE:1, NOSCRIPT:1, CODE:1, PRE:1, TEXTAREA:1, INPUT:1, SELECT:1, OPTION:1, SVG:1 };
+  // [v19 FIX] SKIP acima serve só para decidir se um nó de TEXTO solto (nodeType 3)
+  // deve ser ignorado com base no pai dele — não deve ser usado para parar a
+  // varredura de um elemento inteiro, senão <input>/<select> nunca chegam até o
+  // trecho que traduz os atributos title/placeholder/aria-label (era exatamente
+  // isso que fazia os placeholders "Descrição completa do equipamento" e
+  // "Observações adicionais (opcional)" nunca traduzir, e também impedia o
+  // <select> de sequer recursar até suas <option>). NO_RECURSE é usado só para
+  // os elementos cujo CONTEÚDO realmente não deve ser tocado (código, estilos,
+  // texto editável pelo usuário, SVG interno).
+  var NO_RECURSE = { SCRIPT:1, STYLE:1, NOSCRIPT:1, CODE:1, PRE:1, TEXTAREA:1, SVG:1 };
   // [v16 FIX] Guarda o texto ORIGINAL em PT usando WeakMap (texto) e um atributo
   // (elementos), para que a tradução seja sempre feita a partir da fonte real em
   // PT — nunca a partir do texto já traduzido de uma passada anterior. Sem isso,
@@ -20356,7 +20429,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     if (root.nodeType !== 1) return;
-    if (SKIP[root.nodeName] || root.isContentEditable) return;
+    if (NO_RECURSE[root.nodeName] || root.isContentEditable) return;
     // Atributos visíveis
     ['title','placeholder','aria-label'].forEach(function(a){
       if (root.hasAttribute && root.hasAttribute(a)) {
