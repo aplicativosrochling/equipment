@@ -3499,18 +3499,18 @@ input[type="checkbox"], input[type="radio"] {
   <!-- Últimos cadastros nesta sessão -->
   <div class="tbl-card" style="max-width:860px;margin:18px auto 0">
     <div class="tbl-hdr">
-      <span class="tbl-title">🕐 Últimos Cadastros nesta Sessão</span>
+      <span class="tbl-title" id="cad-session-title">🕐 Últimos Cadastros nesta Sessão</span>
       <span class="tbl-cnt" id="cad-recent-count">0</span>
     </div>
     <div class="tbl-wrap" style="max-height:280px">
       <table>
         <thead><tr>
-          <th><div class="th-inner"><span>Código</span></div></th>
-          <th><div class="th-inner"><span>Tipo</span></div></th>
-          <th><div class="th-inner"><span>Descrição</span></div></th>
-          <th><div class="th-inner"><span>Localização</span></div></th>
-          <th><div class="th-inner"><span>Próx. Calib.</span></div></th>
-          <th><div class="th-inner"><span>Status</span></div></th>
+          <th><div class="th-inner"><span id="cad-th-cod">Código</span></div></th>
+          <th><div class="th-inner"><span id="cad-th-tipo">Tipo</span></div></th>
+          <th><div class="th-inner"><span id="cad-th-desc">Descrição</span></div></th>
+          <th><div class="th-inner"><span id="cad-th-local">Localização</span></div></th>
+          <th><div class="th-inner"><span id="cad-th-prox">Próx. Calib.</span></div></th>
+          <th><div class="th-inner"><span id="cad-th-status">Status</span></div></th>
         </tr></thead>
         <tbody id="cad-recent-tbody">
           <tr><td colspan="6" style="text-align:center;color:var(--tx3);padding:24px;font-size:11px">
@@ -4317,6 +4317,12 @@ const T = {
     rep_heatmap:    '🌡️ Status por Localização',
     rep_resumo:     '🔢 Resumo Geral',
     rep_urgentes:   '⏱️ Top 15 Mais Urgentes',
+    rs_total_equip: 'Total de Equipamentos', rs_ativos: 'Ativos', rs_inativos: 'Inativos',
+    rs_vencidos: 'Vencidos', rs_venc30: 'Vencem em 30 dias', rs_venc90: 'Vencem em 90 dias',
+    rs_emdia: 'Em dia (>90d)', rs_nodate: 'Sem Data', rs_health: 'Índice de Saúde',
+    heat_col_local:'Localização', heat_col_total:'Total', heat_col_venc:'Venc.',
+    heat_col_30d:'30d', heat_col_ok:'OK', heat_col_bar:'Barra',
+    rep_urgentes_empty: '✓ Nenhum equipamento urgente nos próximos 90 dias.',
     rep_kpi_venc:   'Vencidos',
     rep_kpi_30d:    'Vencem 30d',
     rep_kpi_90d:    'Vencem 90d',
@@ -4749,6 +4755,12 @@ const T = {
     rep_heatmap:    '🌡️ Status by Location',
     rep_resumo:     '🔢 General Summary',
     rep_urgentes:   '⏱️ Top 15 Most Urgent',
+    rs_total_equip: 'Total Equipment', rs_ativos: 'Active', rs_inativos: 'Inactive',
+    rs_vencidos: 'Overdue', rs_venc30: 'Due in 30 Days', rs_venc90: 'Due in 90 Days',
+    rs_emdia: 'On Track (>90d)', rs_nodate: 'No Date', rs_health: 'Health Index',
+    heat_col_local:'Location', heat_col_total:'Total', heat_col_venc:'Overdue',
+    heat_col_30d:'30d', heat_col_ok:'OK', heat_col_bar:'Bar',
+    rep_urgentes_empty: '✓ No equipment due in the next 90 days.',
     rep_kpi_venc:   'Expired',
     rep_kpi_30d:    'Due 30d',
     rep_kpi_90d:    'Due 90d',
@@ -5163,6 +5175,12 @@ const T = {
     ch_leg_venc:       'Vencidas sin realizar',
     ch_click_detail:   'haga clic en las barras para más detalles',
     rep_urgentes:   '⏱️ Top 15 Más Urgentes',
+    rs_total_equip: 'Total de Equipos', rs_ativos: 'Activos', rs_inativos: 'Inactivos',
+    rs_vencidos: 'Vencidos', rs_venc30: 'Vencen en 30 Días', rs_venc90: 'Vencen en 90 Días',
+    rs_emdia: 'Al Día (>90d)', rs_nodate: 'Sin Fecha', rs_health: 'Índice de Salud',
+    heat_col_local:'Ubicación', heat_col_total:'Total', heat_col_venc:'Venc.',
+    heat_col_30d:'30d', heat_col_ok:'OK', heat_col_bar:'Barra',
+    rep_urgentes_empty: '✓ Ningún equipo urgente en los próximos 90 días.',
     rep_kpi_venc:   'Vencidos',
     rep_kpi_30d:    'Vencen 30d',
     rep_kpi_90d:    'Vencen 90d',
@@ -5509,6 +5527,12 @@ const T = {
     ch_leg_venc:       'Überfällig (nicht durchgeführt)',
     ch_click_detail:   'Klicken Sie auf die Balken für Details',
     rep_urgentes:   '⏱️ Top 15 Dringendste',
+    rs_total_equip: 'Geräte Gesamt', rs_ativos: 'Aktiv', rs_inativos: 'Inaktiv',
+    rs_vencidos: 'Überfällig', rs_venc30: 'Fällig in 30 Tagen', rs_venc90: 'Fällig in 90 Tagen',
+    rs_emdia: 'Im Plan (>90T)', rs_nodate: 'Kein Datum', rs_health: 'Gesundheitsindex',
+    heat_col_local:'Standort', heat_col_total:'Gesamt', heat_col_venc:'Überf.',
+    heat_col_30d:'30T', heat_col_ok:'OK', heat_col_bar:'Balken',
+    rep_urgentes_empty: '✓ Keine dringenden Geräte in den nächsten 90 Tagen.',
     rep_kpi_venc:   'Abgelaufen',
     rep_kpi_30d:    'Fällig 30T',
     rep_kpi_90d:    'Fällig 90T',
@@ -5854,6 +5878,12 @@ const T = {
     ch_leg_venc:       'En retard (non réalisées)',
     ch_click_detail:   'cliquez sur les barres pour plus de détails',
     rep_urgentes:   '⏱️ Top 15 Plus Urgents',
+    rs_total_equip: 'Total Équipements', rs_ativos: 'Actifs', rs_inativos: 'Inactifs',
+    rs_vencidos: 'En Retard', rs_venc30: 'Échéance 30 Jours', rs_venc90: 'Échéance 90 Jours',
+    rs_emdia: 'À Jour (>90j)', rs_nodate: 'Sans Date', rs_health: 'Indice de Santé',
+    heat_col_local:'Emplacement', heat_col_total:'Total', heat_col_venc:'Retard',
+    heat_col_30d:'30j', heat_col_ok:'OK', heat_col_bar:'Barre',
+    rep_urgentes_empty: '✓ Aucun équipement urgent dans les 90 prochains jours.',
     rep_kpi_venc:   'Expirés',
     rep_kpi_30d:    'Échéant 30j',
     rep_kpi_90d:    'Échéant 90j',
@@ -6199,6 +6229,12 @@ const T = {
     ch_leg_venc:       'Scadute non effettuate',
     ch_click_detail:   'clicca sulle barre per i dettagli',
     rep_urgentes:   '⏱️ Top 15 Più Urgenti',
+    rs_total_equip: 'Totale Strumenti', rs_ativos: 'Attivi', rs_inativos: 'Inattivi',
+    rs_vencidos: 'Scaduti', rs_venc30: 'Scadono tra 30 Giorni', rs_venc90: 'Scadono tra 90 Giorni',
+    rs_emdia: 'In Regola (>90g)', rs_nodate: 'Senza Data', rs_health: 'Indice di Salute',
+    heat_col_local:'Posizione', heat_col_total:'Totale', heat_col_venc:'Scad.',
+    heat_col_30d:'30g', heat_col_ok:'OK', heat_col_bar:'Barra',
+    rep_urgentes_empty: '✓ Nessuno strumento urgente nei prossimi 90 giorni.',
     rep_kpi_venc:   'Scaduti',
     rep_kpi_30d:    'Scade 30g',
     rep_kpi_90d:    'Scade 90g',
@@ -6544,6 +6580,12 @@ const T = {
     ch_leg_venc:       'Zaległe (niewykonane)',
     ch_click_detail:   'kliknij słupki, aby zobaczyć szczegóły',
     rep_urgentes:   '⏱️ Top 15 Najpilniejszych',
+    rs_total_equip: 'Łącznie Urządzeń', rs_ativos: 'Aktywne', rs_inativos: 'Nieaktywne',
+    rs_vencidos: 'Zaległe', rs_venc30: 'Termin za 30 Dni', rs_venc90: 'Termin za 90 Dni',
+    rs_emdia: 'Aktualne (>90d)', rs_nodate: 'Brak Daty', rs_health: 'Wskaźnik Stanu',
+    heat_col_local:'Lokalizacja', heat_col_total:'Razem', heat_col_venc:'Zaległe',
+    heat_col_30d:'30d', heat_col_ok:'OK', heat_col_bar:'Pasek',
+    rep_urgentes_empty: '✓ Brak pilnych urządzeń w ciągu najbliższych 90 dni.',
     rep_kpi_venc:   'Wygasłe',
     rep_kpi_30d:    'Do 30d',
     rep_kpi_90d:    'Do 90d',
@@ -6773,6 +6815,37 @@ function t(key) { return (T[LANG] || T.pt)[key] || (T.pt)[key] || key; }
   // [v48] extras for new languages (already inlined in their objects above)
   const _newLangs = ['de','fr','it','pl'];
   _newLangs.forEach(function(l){ if(!T[l]) T[l] = {}; if(!T[l].sb_overview) Object.assign(T[l], {sb_overview:T[l].sb_overview||T.en.sb_overview, sb_manage:T[l].sb_manage||T.en.sb_manage, sb_analysis:T[l].sb_analysis||T.en.sb_analysis, btn_new_lbl:T[l].btn_new_lbl||T.en.btn_new_lbl, btn_import_lbl:T[l].btn_import_lbl||T.en.btn_import_lbl, btn_export_lbl:T[l].btn_export_lbl||T.en.btn_export_lbl}); });
+})();
+
+// [v21 FIX] Título "Últimos Cadastros nesta Sessão" como chave de tradução própria
+// (id-based, ver applyLang()), em vez de depender só da varredura de DOM.
+(function(){
+  var _cst = {
+    pt:'🕐 Últimos Cadastros nesta Sessão', en:'🕐 Latest Entries This Session',
+    es:'🕐 Últimos Registros de esta Sesión', de:'🕐 Letzte Einträge dieser Sitzung',
+    fr:'🕐 Derniers Enregistrements de cette Session', it:'🕐 Ultime Registrazioni di questa Sessione',
+    pl:'🕐 Ostatnie Wpisy w tej Sesji',
+  };
+  Object.keys(_cst).forEach(function(l){ if(!T[l]) T[l]={}; T[l].cad_session_title = _cst[l]; });
+})();
+
+// [v21 FIX] Preenchimento automático de QUALQUER chave de tradução que exista em
+// algum idioma mas esteja faltando em outro — fecha de vez a classe de bug em que
+// uma chave só foi adicionada em PT/EN e os demais idiomas caíam silenciosamente
+// em português (ex.: ch_mensal_title, audit_session_empty, e provavelmente outras
+// que ainda não foram reportadas). Prioridade de fallback: EN, depois PT.
+(function(){
+  var allKeys = {};
+  Object.keys(T).forEach(function(l){ Object.keys(T[l]||{}).forEach(function(k){ allKeys[k] = 1; }); });
+  Object.keys(T).forEach(function(l){
+    Object.keys(allKeys).forEach(function(k){
+      if (T[l][k] === undefined) {
+        T[l][k] = (T.en && T.en[k] !== undefined ? T.en[k] : undefined)
+               ?? (T.pt && T.pt[k] !== undefined ? T.pt[k] : undefined)
+               ?? k;
+      }
+    });
+  });
 })();
 
 // [v49.7] Cadastrar form action labels — needed for full i18n of the Add Equipment form
@@ -7397,6 +7470,27 @@ function applyLang() {
         td.textContent = t('audit_session_empty');
       }
     });
+  })();
+
+  // [v21 FIX] "Últimos Cadastros nesta Sessão" (título, cabeçalhos e mensagem
+  // vazia) — dependiam só da varredura de DOM (tr()/walk()), que por algum
+  // motivo não estava pegando esses elementos de forma confiável. Agora usam
+  // t() diretamente por id, igual ao resto da tabela principal de equipamentos
+  // (que já traduz correto), então não dependem mais de heurística nenhuma.
+  (function(){
+    var s = function(id, key){ var el = document.getElementById(id); if(el) el.textContent = t(key); };
+    s('cad-session-title', 'cad_session_title');
+    s('cad-th-cod',    'col_id');
+    s('cad-th-tipo',   'col_tipo');
+    s('cad-th-desc',   'col_desc');
+    s('cad-th-local',  'col_local');
+    s('cad-th-prox',   'col_prox');
+    s('cad-th-status', 'col_status');
+    var tbody = document.getElementById('cad-recent-tbody');
+    if (tbody) {
+      var onlyCell = tbody.querySelector('td[colspan]');
+      if (onlyCell) onlyCell.textContent = t('audit_session_empty');
+    }
   })();
 
   // [BUG14 FIX] Removido bloco inútil: `const isEdit = ...` era declarada mas nunca lida.
@@ -12224,7 +12318,7 @@ function buildHeatMap() {
   const wrap=document.getElementById('heat-wrap'); if(!wrap)return;
   const locais=[...new Set(DB.map(r=>r.localizacao).filter(x=>x))].sort().slice(0,24);
   let html='<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr>';
-  ['Localização','Total','Venc.','30d','OK','Barra'].forEach(h=>html+=`<th style="padding:4px 8px;text-align:left;background:var(--surf2);color:var(--tx2);font-size:9px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;white-space:nowrap;position:sticky;top:0">${h}</th>`);
+  [t('heat_col_local'),t('heat_col_total'),t('heat_col_venc'),t('heat_col_30d'),t('heat_col_ok'),t('heat_col_bar')].forEach(h=>html+=`<th style="padding:4px 8px;text-align:left;background:var(--surf2);color:var(--tx2);font-size:9px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;white-space:nowrap;position:sticky;top:0">${h}</th>`);
   html+='</tr></thead><tbody>';
   locais.forEach(loc=>{
     const rows=DB.filter(r=>r.localizacao===loc);
@@ -12250,15 +12344,15 @@ function buildResumo() {
   const x = computeStats();
   el.innerHTML='';
   const rows = [
-    ['Total Equipment', x.tot, ''],
-    ['Ativos',    `${x.ativos} (${x.tot?Math.round(x.ativos/x.tot*100):0}%)`, 'var(--green)'],
-    ['Inativos',  x.inativos, ''],
-    ['Vencidos',  `${x.vencidos} (${x.tot?Math.round(x.vencidos/x.tot*100):0}%)`, 'var(--red)'],
-    ['Vencem em 30 dias', x.d30, 'var(--orange)'],
-    ['Vencem em 90 dias', x.d90, 'var(--accent)'],
-    ['Em dia (>90d)',     x.okFuturo, 'var(--green)'],
-    ['No Date',   x.semData, 'var(--tx3)'],
-    ['Health Index',   x.saude+'%', x.saude>=80?'var(--green)':x.saude>=50?'var(--orange)':'var(--red)'],
+    [t('rs_total_equip'), x.tot, ''],
+    [t('rs_ativos'),    `${x.ativos} (${x.tot?Math.round(x.ativos/x.tot*100):0}%)`, 'var(--green)'],
+    [t('rs_inativos'),  x.inativos, ''],
+    [t('rs_vencidos'),  `${x.vencidos} (${x.tot?Math.round(x.vencidos/x.tot*100):0}%)`, 'var(--red)'],
+    [t('rs_venc30'), x.d30, 'var(--orange)'],
+    [t('rs_venc90'), x.d90, 'var(--accent)'],
+    [t('rs_emdia'),     x.okFuturo, 'var(--green)'],
+    [t('rs_nodate'),   x.semData, 'var(--tx3)'],
+    [t('rs_health'),   x.saude+'%', x.saude>=80?'var(--green)':x.saude>=50?'var(--orange)':'var(--red)'],
   ];
   rows.forEach(([l,v,c])=>
     el.innerHTML+=`<div class="stat-row"><span style="color:var(--tx2);font-size:12px">${l}</span><span style="font-weight:700;font-family:var(--mono);${c?'color:'+c:''}">${v}</span></div>`);
@@ -12267,7 +12361,7 @@ function buildResumo() {
 function buildUrgentes() {
   const el=document.getElementById('rep-urgentes'); if(!el)return;
   const rows=DB.filter(r=>r.prox_calib&&r.dias_vencer!==null&&r.dias_vencer<=90).sort((a,b)=>a.dias_vencer-b.dias_vencer).slice(0,15);
-  if(!rows.length){ el.innerHTML='<div style="padding:14px;text-align:center;color:var(--tx3);font-size:11px">✓ Nenhum equipamento urgente nos próximos 90 dias.</div>'; return; }
+  if(!rows.length){ el.innerHTML='<div style="padding:14px;text-align:center;color:var(--tx3);font-size:11px">'+esc(t('rep_urgentes_empty'))+'</div>'; return; }
   el.innerHTML=rows.map((r,i)=>{
     const d=r.dias_vencer,c=d<0?'var(--red)':d<=30?'var(--orange)':'var(--accent)';
     const lb=d<0?`${t('d_expired')} ${Math.abs(d)}${t('d_days')}`:`${d}${t('d_days')} ${t('d_remaining')}`;
