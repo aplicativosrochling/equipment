@@ -14266,7 +14266,15 @@ async function printQrBulk(uids) {
   const showStatus = document.getElementById('qrb-opt-status')?.checked ?? true;
   document.getElementById('qr-bulk-ov')?.remove();
 
-  const rows = DB.filter(r => uids.has(r._uid));
+  // [FIX QR-LOTE v3] A seleção feita pela TABELA (_selectedUIDs['geral'/'rep'/'alert'])
+  // guarda os UIDs como STRING (String(r._uid)), enquanto a seleção feita pelos
+  // CARDS (_cardSelectedUIDs) guarda como NÚMERO — e r._uid no DB é sempre número.
+  // Comparando `uids.has(r._uid)` diretamente, uma seleção vinda da tabela (strings)
+  // nunca batia com o número do DB, resultando em 0 registros e no aviso silencioso
+  // "Nenhum registro do DB corresponde aos UIDs selecionados". Normalizamos tudo
+  // para string antes de comparar, cobrindo os dois fluxos de seleção.
+  const _uidsNorm = new Set(Array.from(uids).map(String));
+  const rows = DB.filter(r => _uidsNorm.has(String(r._uid)));
   if (!rows.length) {
     // [FIX QR-LOTE v2] Antes retornava aqui SEM nenhum aviso — se os UIDs
     // selecionados não batessem com r._uid do DB (ex.: seleção obsoleta,
