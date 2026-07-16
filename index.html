@@ -14267,7 +14267,34 @@ async function printQrBulk(uids) {
   document.getElementById('qr-bulk-ov')?.remove();
 
   const rows = DB.filter(r => uids.has(r._uid));
-  if (!rows.length) return;
+  if (!rows.length) {
+    // [FIX QR-LOTE v2] Antes retornava aqui SEM nenhum aviso — se os UIDs
+    // selecionados não batessem com r._uid do DB (ex.: seleção obsoleta,
+    // tipos diferentes), a função encerrava silenciosamente: o modal já
+    // tinha sido fechado acima e nada mais acontecia, dando a impressão de
+    // que o botão "Gerar e Imprimir" simplesmente não fazia nada.
+    console.error('[QR Lote] Nenhum registro do DB corresponde aos UIDs selecionados:', Array.from(uids));
+    if (typeof showToast === 'function') showToast('⚠ Nenhum equipamento correspondente encontrado. Tente selecionar novamente.', 'err');
+    else alert('Nenhum equipamento correspondente encontrado. Tente selecionar novamente.');
+    return;
+  }
+
+  // [FIX QR-LOTE] Abre a janela AQUI, ainda dentro do gesto de clique do usuário,
+  // igual já é feito em printQrLabel() (ver comentário "FIX v25" mais abaixo neste
+  // arquivo). Antes, window.open() só era chamado no FINAL desta função, depois de
+  // um loop assíncrono que pode levar vários segundos (até ~2s por etiqueta em
+  // polling) para gerar todos os QR codes. Como esse tempo excede a janela que os
+  // navegadores consideram "gesto do usuário", o popup era bloqueado silenciosamente
+  // e a impressão em lote simplesmente não abria/nada acontecia.
+  const win = window.open('', '_blank', 'width=800,height=700');
+  if (!win) { alert('Permita popups para imprimir etiquetas.'); return; }
+  win.document.write('<html><head><title>Aguarde...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial;color:#555;font-size:14px">⏳ Gerando etiquetas QR...</body></html>');
+
+  // [FIX QR-LOTE v2] Try/catch em torno de toda a geração: antes, qualquer
+  // erro aqui (ex.: biblioteca de QR não carregada, DB inconsistente) deixava
+  // a janela popup travada para sempre em "Aguarde..." e falhava silenciosamente
+  // (unhandled promise rejection), sem nenhum aviso visível ao usuário.
+  try {
 
   // Config por tamanho: [widthMM, heightMM, colsA4, rowsA4, qrPxSize]
   const cfg = {
@@ -14377,9 +14404,10 @@ async function printQrBulk(uids) {
   const perPage = cfg.cols * cfg.rows;
   const pages = Math.ceil(rows.length / perPage);
 
-  const win = window.open('', '_blank', 'width=800,height=700');
-  if (!win) { alert('Permita popups para imprimir etiquetas.'); return; }
-
+  // [FIX QR-LOTE] Reabre o stream do documento para SUBSTITUIR a tela "Aguarde..."
+  // em vez de apenas anexar o HTML final depois dela (document.write() acumula
+  // conteúdo até document.close() ser chamado).
+  win.document.open();
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>QR em Lote — ${rows.length} etiquetas</title>
 <style>
@@ -14430,6 +14458,18 @@ ${Array.from({length: pages}, (_,pi) => {
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 1200);
+
+  } catch (err) {
+    // Torna qualquer falha visível em vez de deixar a janela travada em "Aguarde..."
+    console.error('[QR Lote] Erro ao gerar etiquetas:', err);
+    try {
+      win.document.open();
+      win.document.write('<html><head><title>Erro</title></head><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:Arial;color:#b91c1c;font-size:14px;text-align:center;padding:20px"><div style="font-size:28px;margin-bottom:10px">⚠️</div><div style="font-weight:700;margin-bottom:6px">Erro ao gerar as etiquetas QR</div><div style="font-size:12px;color:#555;max-width:420px">' + (err && err.message ? String(err.message).replace(/</g,'&lt;') : 'Verifique o console (F12) para mais detalhes.') + '</div></body></html>');
+      win.document.close();
+    } catch(e2) { /* janela pode já ter sido fechada pelo usuário */ }
+    if (typeof showToast === 'function') showToast('❌ Erro ao gerar QR em lote. Veja o console (F12).', 'err');
+    else alert('Erro ao gerar QR em lote. Veja o console (F12) para detalhes.');
+  }
 }
 
 const _selectedUIDs = { geral: new Set(), alert: new Set(), rep: new Set() };
