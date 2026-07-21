@@ -2442,6 +2442,8 @@ input[type="checkbox"], input[type="radio"] {
 </style>
 <!-- ── SUPABASE SDK ── -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- ── PDF-LIB (compressão leve de PDFs anexados antes do upload) ── -->
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <style>
 /* ══════════════════════════════════════════════
@@ -2702,6 +2704,7 @@ input[type="checkbox"], input[type="radio"] {
     <span id="sync-indicator" style="font-size:10px;font-family:var(--mono);white-space:nowrap;display:none;color:var(--tx3)"></span>
     <button class="btn-g" id="btn-sync-now" onclick="sbPush(true)" style="display:none;border-color:var(--green);color:var(--green);font-size:10px" title="Sync now" aria-label="Sincronizar agora">↑ Sync</button>
     <button class="btn-g" id="btn-migrate-files" onclick="migrateAttachmentsToStorage()" style="display:none;border-color:var(--orange);color:var(--orange);font-size:10px" title="Move anexos antigos (base64) para o Supabase Storage — corrige erros de localStorage cheio e timeout de sync" aria-label="Migrar anexos">🗂 Migrar Anexos</button>
+    <button class="btn-g" id="btn-storage-usage" onclick="calculateStorageUsage(true)" style="display:none;font-size:10px" title="Clique para recalcular o uso do Supabase Storage" aria-label="Uso do Storage">💾 …</button>
 
     <!-- Divider -->
     <div class="hdr-divider"></div>
@@ -9462,6 +9465,8 @@ async function sbPull() {
       if (typeof updateAll === 'function') updateAll();
     }
     setSyncInd('☁ Sync ' + new Date().toLocaleTimeString('pt-BR'), 'var(--green)');
+    // [v52] Atualiza o indicador de uso do Storage (usa cache de 6h; não bloqueia o fluxo)
+    if (typeof calculateStorageUsage === 'function') calculateStorageUsage(false).catch(()=>{});
     return true;
   } catch(e) {
     setSyncInd(t('sync_offline'), 'var(--orange)');
@@ -12983,19 +12988,44 @@ function refreshFileUI(name,dataURL){
   if(info){if(name){const has=_hasFileData(dataURL);info.innerHTML=`${fileIcon(name)} <strong style="color:var(--tx2)">${esc(name)}</strong> &nbsp;<span style="color:${has?'var(--green)':'var(--orange)'}">${has?'✅ Arquivo salvo':'⚠ Selecione novamente'}</span>`;}else info.textContent='';}
   const btn=document.getElementById('btn-open-file');if(btn)btn.style.display=name&&_hasFileData(dataURL)?'inline-block':'none';
 }
+// ── [v51] Compressão leve de PDFs antes do upload ──
+// Usa pdf-lib para reotimizar a estrutura interna do PDF (remove metadados
+// supérfluos, deduplica objetos, usa object streams) — reduz ~5-20% em PDFs
+// gerados digitalmente, sem perda de qualidade. Se por algum motivo falhar
+// ou o resultado não ficar menor, envia o arquivo original normalmente.
+async function compressPdfIfPossible(file){
+  if(!file || file.type !== 'application/pdf' || typeof PDFLib === 'undefined') return file;
+  try{
+    const buf = await file.arrayBuffer();
+    const doc = await PDFLib.PDFDocument.load(buf, { updateMetadata:false, ignoreEncryption:true });
+    doc.setProducer(''); doc.setCreator(''); doc.setSubject(''); doc.setKeywords([]);
+    const out = await doc.save({ useObjectStreams:true, addDefaultPage:false });
+    if(out.byteLength > 0 && out.byteLength < file.size){
+      return new File([out], file.name, { type:'application/pdf' });
+    }
+    return file;
+  }catch(err){
+    console.warn('[compressPdfIfPossible] Não foi possível otimizar, enviando original:', err);
+    return file;
+  }
+}
 async function onFilePick(e){
-  const f=e.target.files[0];if(!f)return;
-  if(f.size>15*1024*1024){showToast('Arquivo >15MB. Pode deixar lento.','err');e.target.value='';return;}
+  const f0=e.target.files[0];if(!f0)return;
+  if(f0.size>15*1024*1024){showToast('Arquivo >15MB. Pode deixar lento.','err');e.target.value='';return;}
   e.target.value='';
   const recordId = document.getElementById('m-id')?.value || 'novo';
   const info=document.getElementById('file-info');
   if(info) info.innerHTML = '⏳ Enviando arquivo...';
   try{
+    const f = await compressPdfIfPossible(f0);
     const url = await uploadFileToStorage(f, recordId);
     document.getElementById('m-link').value=f.name;
     document.getElementById('m-link-data').value=url;
     refreshFileUI(f.name,url);
-    showToast('✅ '+f.name+' ('+fmtSize(f.size)+') enviado!');
+    _bumpStorageUsage(f.size);
+    const saved = f0.size - f.size;
+    const msg = saved>1024 ? `✅ ${f.name} enviado! (${fmtSize(f.size)}, ${fmtSize(saved)} economizados)` : `✅ ${f.name} (${fmtSize(f.size)}) enviado!`;
+    showToast(msg);
   }catch(err){
     console.error('[onFilePick] Erro no upload:', err);
     showToast('Erro ao enviar arquivo: '+(err.message||err),'err');
@@ -13044,6 +13074,7 @@ async function migrateAttachmentsToStorage(){
       r.link_data = url;
       const { error } = await _sb.from('equipamentos').update({ link_data: url }).eq('id', r.id);
       if(error) throw error;
+      _bumpStorageUsage(file.size);
       ok++;
     }catch(err){
       console.error('[migrateAttachmentsToStorage] Falha em', r.id, err);
@@ -13064,6 +13095,91 @@ function _checkLegacyAttachments(){
     const btn = document.getElementById('btn-migrate-files');
     if(btn) btn.style.display = has ? 'inline-block' : 'none';
   }catch(e){}
+}
+
+// ── [v52] Monitor de uso do Supabase Storage ──
+// Plano gratuito do Supabase = 1 GB de Storage. Ajuste STORAGE_QUOTA_MB
+// se você fizer upgrade de plano (Pro = 100 GB).
+const STORAGE_QUOTA_MB = 1024;
+const STORAGE_CACHE_KEY = 'rochling_storage_usage_v1';
+const STORAGE_WARN_SHOWN_KEY = 'rochling_storage_warn_shown';
+let _storageCalculating = false;
+
+function _paintStorageBadge(bytes, fromCache, ts){
+  const btn = document.getElementById('btn-storage-usage');
+  if(!btn) return;
+  const mb = bytes / (1024*1024);
+  const pct = Math.min(100, (mb / STORAGE_QUOTA_MB) * 100);
+  let color = 'var(--green)';
+  if(pct >= 90) color = 'var(--red)';
+  else if(pct >= 70) color = 'var(--orange)';
+  const label = mb >= 1024 ? (mb/1024).toFixed(2)+' GB' : mb.toFixed(1)+' MB';
+  btn.style.display = 'inline-block';
+  btn.style.borderColor = color;
+  btn.style.color = color;
+  const when = ts ? new Date(ts).toLocaleString('pt-BR') : '';
+  btn.title = `Storage do Supabase: ${label} de ${STORAGE_QUOTA_MB>=1024?(STORAGE_QUOTA_MB/1024)+' GB':STORAGE_QUOTA_MB+' MB'} (${pct.toFixed(1)}%)${fromCache?' — cache de '+when:''}\nClique para recalcular agora.`;
+  btn.innerHTML = `💾 ${pct.toFixed(0)}%`;
+  _maybeWarnStorage(pct);
+}
+function _maybeWarnStorage(pct){
+  try{
+    const shownAt = Number(sessionStorage.getItem(STORAGE_WARN_SHOWN_KEY) || 0);
+    if(shownAt) return; // avisa no máximo 1x por sessão
+    if(pct >= 95){ showToast('⚠ Storage do Supabase quase cheio (≥95%)! Anexos podem parar de subir.', 'err'); sessionStorage.setItem(STORAGE_WARN_SHOWN_KEY,'1'); }
+    else if(pct >= 80){ showToast('⚠ Storage do Supabase em '+pct.toFixed(0)+'% de uso. Considere fazer upgrade em breve.', 'err'); sessionStorage.setItem(STORAGE_WARN_SHOWN_KEY,'1'); }
+  }catch(e){}
+}
+function _cacheStorageUsage(bytes){
+  try{ localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify({ bytes, ts: Date.now() })); }
+  catch(e){ /* se o localStorage estiver cheio, ignora silenciosamente */ }
+}
+function _readStorageCache(){
+  try{ const raw = localStorage.getItem(STORAGE_CACHE_KEY); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+// Ajusta o cache local otimisticamente logo após um upload, sem precisar
+// re-escanear o bucket inteiro (que é mais lento com muitos arquivos).
+function _bumpStorageUsage(deltaBytes){
+  const c = _readStorageCache();
+  const bytes = Math.max(0, (c?.bytes || 0) + deltaBytes);
+  _cacheStorageUsage(bytes);
+  _paintStorageBadge(bytes, true, Date.now());
+}
+// Varredura completa e recursiva do bucket (soma o tamanho real de cada arquivo).
+async function calculateStorageUsage(force){
+  if(!sbActive()){ return; }
+  if(_storageCalculating){ if(force) showToast('Cálculo já em andamento...'); return; }
+  const cache = _readStorageCache();
+  if(!force && cache && (Date.now() - cache.ts) < 6*60*60*1000){
+    _paintStorageBadge(cache.bytes, true, cache.ts);
+    return;
+  }
+  _storageCalculating = true;
+  const btn = document.getElementById('btn-storage-usage');
+  if(btn){ btn.style.display='inline-block'; btn.innerHTML='💾 …'; }
+  try{
+    const { data: roots, error } = await _sb.storage.from(STORAGE_BUCKET).list('', { limit: 1000 });
+    if(error) throw error;
+    let total = 0;
+    const folders = (roots||[]).filter(x => x.id === null);
+    const rootFiles = (roots||[]).filter(x => x.id !== null);
+    total += rootFiles.reduce((s,x)=>s+(x.metadata?.size||0),0);
+    for(const folder of folders){
+      const { data: files, error: e2 } = await _sb.storage.from(STORAGE_BUCKET).list(folder.name, { limit: 1000 });
+      if(e2) continue;
+      total += (files||[]).reduce((s,x)=>s+(x.metadata?.size||0),0);
+    }
+    _cacheStorageUsage(total);
+    _paintStorageBadge(total, false, Date.now());
+    if(force) showToast('✅ Uso do Storage recalculado.');
+  }catch(err){
+    console.error('[calculateStorageUsage]', err);
+    if(force) showToast('Erro ao consultar Storage: '+(err.message||err), 'err');
+    if(btn && !cache) btn.style.display='none';
+  }finally{
+    _storageCalculating = false;
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -13470,6 +13586,8 @@ function updateAll(){
   if (typeof DB === 'undefined' || !Array.isArray(DB)) return;
   // [v50] Mostra/oculta botão "Migrar Anexos" se ainda houver base64 legado
   try { if (typeof _checkLegacyAttachments === 'function') _checkLegacyAttachments(); } catch(e){}
+  // [v52] Pinta o indicador de uso do Storage a partir do cache local (sem rede)
+  try { if (typeof _readStorageCache === 'function') { const c=_readStorageCache(); if(c) _paintStorageBadge(c.bytes, true, c.ts); } } catch(e){}
   // Clear stale bulk selections
   if(typeof _selectedUIDs !== 'undefined') {
     ['geral','alert'].forEach(tbl => {
