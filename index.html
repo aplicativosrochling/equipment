@@ -2701,6 +2701,7 @@ input[type="checkbox"], input[type="radio"] {
     <!-- Sync status -->
     <span id="sync-indicator" style="font-size:10px;font-family:var(--mono);white-space:nowrap;display:none;color:var(--tx3)"></span>
     <button class="btn-g" id="btn-sync-now" onclick="sbPush(true)" style="display:none;border-color:var(--green);color:var(--green);font-size:10px" title="Sync now" aria-label="Sincronizar agora">↑ Sync</button>
+    <button class="btn-g" id="btn-migrate-files" onclick="migrateAttachmentsToStorage()" style="display:none;border-color:var(--orange);color:var(--orange);font-size:10px" title="Move anexos antigos (base64) para o Supabase Storage — corrige erros de localStorage cheio e timeout de sync" aria-label="Migrar anexos">🗂 Migrar Anexos</button>
 
     <!-- Divider -->
     <div class="hdr-divider"></div>
@@ -11557,7 +11558,7 @@ function renderCell(r, k, tbl) {
   if(k==='status')       return `<td ${attr} ${editAttr}>${statusBadge(r.status)}<span class="fill-handle" onmousedown="startFillDrag(event,${r._uid},'${k}')" ontouchstart="startFillDrag(event,${r._uid},'${k}')"></span></td>`;
 
   if(k==='link'){
-    if(r.link){const fn=(r.link.split(/[\/\\]/).pop()||r.link);const has=!!(r.link_data&&r.link_data.startsWith('data:'));return `<td ${attr}><span onclick="openFileForRow(${r._uid})" style="cursor:pointer;font-size:10px" title="${esc(fn)}">${fileIcon(fn)} ${esc(fn.slice(0,14))} <span style="color:${has?'var(--green)':'var(--orange)'}">●</span></span></td>`;}
+    if(r.link){const fn=(r.link.split(/[\/\\]/).pop()||r.link);const has=_hasFileData(r.link_data);return `<td ${attr}><span onclick="openFileForRow(${r._uid})" style="cursor:pointer;font-size:10px" title="${esc(fn)}">${fileIcon(fn)} ${esc(fn.slice(0,14))} <span style="color:${has?'var(--green)':'var(--orange)'}">●</span></span></td>`;}
     return `<td ${attr}>—</td>`;
   }
 
@@ -12959,29 +12960,110 @@ function updateValidityBar(){
 // ═══════════════════════════════════════════════════════
 function fmtSize(b){if(!b)return '';if(b<1024)return b+' B';if(b<1048576)return (b/1024).toFixed(1)+' KB';return (b/1048576).toFixed(2)+' MB';}
 // [v20 FIX] Duplicate fileIcon removed
+
+// ── [v50 FIX] Anexos via Supabase Storage (não mais base64 no localStorage/DB) ──
+// Raiz do bug: anexos em base64 embutidos no registro estouravam o localStorage
+// (QuotaExceededError) e inflavam o payload do sbPush, causando "statement timeout"
+// no Postgres a cada upsert de todos os registros. Agora só um link (URL) é salvo.
+const STORAGE_BUCKET = 'anexos';
+function _hasFileData(d){ return !!(d && (d.startsWith('data:') || d.startsWith('http'))); }
+async function uploadFileToStorage(file, recordId){
+  if(!_sb) throw new Error('Supabase não conectado — configure em ⚙ Configurações.');
+  const safeId = String(recordId || 'novo').trim().replace(/[^a-zA-Z0-9_-]/g,'_') || 'novo';
+  const safeName = String(file.name || 'arquivo').replace(/[^a-zA-Z0-9_.-]/g,'_');
+  const path = `${safeId}/${Date.now()}_${safeName}`;
+  const { error } = await _sb.storage.from(STORAGE_BUCKET).upload(path, file, { upsert: true, cacheControl: '3600' });
+  if(error) throw error;
+  const { data } = _sb.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
 function refreshFileUI(name,dataURL){
   const inp=document.getElementById('m-link');if(inp)inp.value=name||'';
   const info=document.getElementById('file-info');
-  if(info){if(name){const has=!!(dataURL&&dataURL.startsWith('data:'));info.innerHTML=`${fileIcon(name)} <strong style="color:var(--tx2)">${esc(name)}</strong> &nbsp;<span style="color:${has?'var(--green)':'var(--orange)'}">${has?'✅ Arquivo salvo':'⚠ Selecione novamente'}</span>`;}else info.textContent='';}
-  const btn=document.getElementById('btn-open-file');if(btn)btn.style.display=name&&dataURL&&dataURL.startsWith('data:')?'inline-block':'none';
+  if(info){if(name){const has=_hasFileData(dataURL);info.innerHTML=`${fileIcon(name)} <strong style="color:var(--tx2)">${esc(name)}</strong> &nbsp;<span style="color:${has?'var(--green)':'var(--orange)'}">${has?'✅ Arquivo salvo':'⚠ Selecione novamente'}</span>`;}else info.textContent='';}
+  const btn=document.getElementById('btn-open-file');if(btn)btn.style.display=name&&_hasFileData(dataURL)?'inline-block':'none';
 }
-function onFilePick(e){
+async function onFilePick(e){
   const f=e.target.files[0];if(!f)return;
-  if(f.size>15*1024*1024){showToast('Arquivo >15MB. Pode deixar lento.','err');return;}
-  const rd=new FileReader();
-  rd.onload=ev=>{document.getElementById('m-link').value=f.name;document.getElementById('m-link-data').value=ev.target.result;refreshFileUI(f.name,ev.target.result);showToast('✅ '+f.name+' ('+fmtSize(f.size)+') salvo!');};
-  rd.readAsDataURL(f);e.target.value='';
+  if(f.size>15*1024*1024){showToast('Arquivo >15MB. Pode deixar lento.','err');e.target.value='';return;}
+  e.target.value='';
+  const recordId = document.getElementById('m-id')?.value || 'novo';
+  const info=document.getElementById('file-info');
+  if(info) info.innerHTML = '⏳ Enviando arquivo...';
+  try{
+    const url = await uploadFileToStorage(f, recordId);
+    document.getElementById('m-link').value=f.name;
+    document.getElementById('m-link-data').value=url;
+    refreshFileUI(f.name,url);
+    showToast('✅ '+f.name+' ('+fmtSize(f.size)+') enviado!');
+  }catch(err){
+    console.error('[onFilePick] Erro no upload:', err);
+    showToast('Erro ao enviar arquivo: '+(err.message||err),'err');
+    if(info) info.textContent='';
+  }
 }
 function openFile(){
   const data=document.getElementById('m-link-data')?.value,name=document.getElementById('m-link')?.value||'';
-  if(data&&data.startsWith('data:')){try{const[h,b64]=data.split(',');const mime=h.replace('data:','').replace(';base64','');const bin=atob(b64);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);const blob=new Blob([arr],{type:mime});const url=URL.createObjectURL(blob);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(err){showToast('Erro: '+err.message,'err');}}
+  if(data && data.startsWith('http')){ window.open(data,'_blank'); return; }
+  if(data && data.startsWith('data:')){try{const[h,b64]=data.split(',');const mime=h.replace('data:','').replace(';base64','');const bin=atob(b64);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);const blob=new Blob([arr],{type:mime});const url=URL.createObjectURL(blob);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(err){showToast('Erro: '+err.message,'err');}}
   else showToast('Nenhum arquivo salvo. Clique em 📁 Selecionar.','err');
 }
 function clearFile(){document.getElementById('m-link').value='';document.getElementById('m-link-data').value='';refreshFileUI('','');}
 function openFileForRow(uid){
   const r=DB.find(x=>x._uid===uid);if(!r)return;
-  if(r.link_data&&r.link_data.startsWith('data:')){try{const[h,b64]=r.link_data.split(',');const mime=h.replace('data:','').replace(';base64','');const bin=atob(b64);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);const blob=new Blob([arr],{type:mime});const url=URL.createObjectURL(blob);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(err){showToast('Erro: '+err.message,'err');}}
+  if(r.link_data && r.link_data.startsWith('http')){ window.open(r.link_data,'_blank'); return; }
+  if(r.link_data && r.link_data.startsWith('data:')){try{const[h,b64]=r.link_data.split(',');const mime=h.replace('data:','').replace(';base64','');const bin=atob(b64);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);const blob=new Blob([arr],{type:mime});const url=URL.createObjectURL(blob);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(err){showToast('Erro: '+err.message,'err');}}
   else{openEdit(uid);showToast('Abra o registro e selecione o arquivo.','err');}
+}
+
+// ── [v50] Migração de anexos legados (base64) para o Supabase Storage ──
+// Percorre a base local, reenvia cada anexo em base64 para o Storage e
+// atualiza tanto o DB local quanto o registro no Supabase com a nova URL.
+// Isto resolve retroativamente o QuotaExceededError e o timeout de sync
+// causados por registros antigos que já tinham arquivos em base64.
+let _migratingFiles = false;
+async function migrateAttachmentsToStorage(){
+  if(_migratingFiles){ showToast('Migração já em andamento...', 'err'); return; }
+  if(!sbActive()){ showToast('Conecte ao Supabase primeiro.', 'err'); return; }
+  const toMigrate = DB.filter(r => r && r.link_data && r.link_data.startsWith('data:'));
+  if(!toMigrate.length){ showToast('Nenhum anexo antigo (base64) encontrado.'); return; }
+  _migratingFiles = true;
+  showToast(`Migrando ${toMigrate.length} anexo(s) para o Storage...`);
+  let ok=0, fail=0;
+  for(const r of toMigrate){
+    try{
+      const [h,b64]=r.link_data.split(',');
+      const mime=h.replace('data:','').replace(';base64','');
+      const bin=atob(b64);
+      const arr=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+      const blob=new Blob([arr],{type:mime});
+      const fname=(r.link||'arquivo').split(/[\/\\]/).pop() || 'arquivo';
+      const file=new File([blob], fname, {type:mime});
+      const url = await uploadFileToStorage(file, r.id);
+      r.link_data = url;
+      const { error } = await _sb.from('equipamentos').update({ link_data: url }).eq('id', r.id);
+      if(error) throw error;
+      ok++;
+    }catch(err){
+      console.error('[migrateAttachmentsToStorage] Falha em', r.id, err);
+      fail++;
+    }
+  }
+  saveLS();
+  if(typeof updateAll === 'function') updateAll();
+  const btn=document.getElementById('btn-migrate-files');
+  if(btn && DB.every(r=>!r || !r.link_data || !r.link_data.startsWith('data:'))) btn.style.display='none';
+  _migratingFiles = false;
+  showToast(`Migração concluída: ${ok} ok${fail?`, ${fail} falha(s)`:''}.`, fail?'err':undefined);
+}
+window.migrateAttachmentsToStorage = migrateAttachmentsToStorage;
+function _checkLegacyAttachments(){
+  try{
+    const has = Array.isArray(DB) && DB.some(r => r && r.link_data && r.link_data.startsWith('data:'));
+    const btn = document.getElementById('btn-migrate-files');
+    if(btn) btn.style.display = has ? 'inline-block' : 'none';
+  }catch(e){}
 }
 
 // ═══════════════════════════════════════════════════════
@@ -13288,7 +13370,7 @@ function renderCardList() {
     const ult    = r.ult_calib  ? fmtDate(r.ult_calib)  : '—';
     const daysLbl = _cardDaysLabel(r);
     const stBadge = _cardStatusBadge(r);
-    const hasFile = r.link && r.link_data && r.link_data.startsWith('data:');
+    const hasFile = r.link && _hasFileData(r.link_data);
 
     return `<div class="eq-card ${sc}${_cardSelectedUIDs.has(r._uid)?' card-selected':''}" data-uid="${r._uid}" onclick="onCardClick(event,${r._uid})" title="Clique para editar ${id}">
       <input type="checkbox" class="eq-card-chk" data-uid="${r._uid}" ${_cardSelectedUIDs.has(r._uid)?'checked':''} onclick="event.stopPropagation();toggleCardCheck(${r._uid},this)">
@@ -13386,6 +13468,8 @@ function updateAll(){
   try { if (typeof v12RenderAuditTable === 'function') v12RenderAuditTable(); } catch(e){}
   // [v49.9 FIX] Proteção contra DB undefined ou inválido
   if (typeof DB === 'undefined' || !Array.isArray(DB)) return;
+  // [v50] Mostra/oculta botão "Migrar Anexos" se ainda houver base64 legado
+  try { if (typeof _checkLegacyAttachments === 'function') _checkLegacyAttachments(); } catch(e){}
   // Clear stale bulk selections
   if(typeof _selectedUIDs !== 'undefined') {
     ['geral','alert'].forEach(tbl => {
@@ -15232,7 +15316,7 @@ function renderEquipView(uid) {
   if(r.link) {
     if($ev.fwrap) $ev.fwrap.style.display = '';
     const fname   = r.link.split(/[\/\\]/).pop() || r.link;
-    const hasData = !!(r.link_data && r.link_data.startsWith('data:'));
+    const hasData = _hasFileData(r.link_data);
     if($ev.farea) $ev.farea.innerHTML = `<div style="display:flex;align-items:center;gap:10px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:10px 14px">
       <span style="font-size:22px">${fileIcon(fname)}</span>
       <div>
