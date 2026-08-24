@@ -72,13 +72,15 @@
   function safeColor(c) {
     return /^#[0-9a-f]{3,8}$|^rgba?\([\d,\s.]+\)$/i.test(String(c||'')) ? c : '#6b7280';
   }
+  // Timezone-safe: nunca cria objeto Date a partir de string 'YYYY-MM-DD'.
+  // new Date('YYYY-MM-DD') é interpretado como UTC e, ao exibir no fuso local
+  // (ex.: Brasil, UTC-3), pode "voltar" um dia. Por isso formatamos via
+  // split de string, igual ao index_EQUIPAMENTOS.html (fmtDateSafe).
   function fmtDate(v) {
     if (!v) return '—';
-    try {
-      const d = new Date(v);
-      if (isNaN(d.getTime())) return String(v);
-      return d.toLocaleDateString('pt-BR');
-    } catch(e) { return String(v); }
+    const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return String(v);
+    return m[3] + '/' + m[2] + '/' + m[1]; // DD/MM/AAAA
   }
   function unique(arr) {
     const seen = {};
