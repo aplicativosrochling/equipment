@@ -9513,6 +9513,40 @@ window.sbPush = async function(manual) {
   try {
     // [v15 FIX] captura timestamp único para este push
     const _pushTs = new Date().toISOString();
+
+    // [FIX RENAME-CODIGO] O campo 'id' (código do instrumento) é a chave primária da
+    // tabela 'equipamentos'. Ao editar o código, o upsert com onConflict:'id' não
+    // encontra a linha antiga e inseria um registro NOVO, deixando o antigo na nuvem
+    // (que voltava como duplicata no próximo pull). Agora: registros marcados com
+    // _prevId (código antigo) têm a linha EXISTENTE atualizada in-place (a PK é
+    // renomeada). Se já existe uma linha com o novo código (duplicata criada antes
+    // desta correção), a linha antiga é removida.
+    try {
+      const _renames = DB.filter(r => r && r._prevId != null && String(r._prevId).trim() !== '' && String(r._prevId).trim() !== String(r.id || '').trim());
+      for (const _rn of _renames) {
+        const _oldId = String(_rn._prevId).trim().replace(/\s+/g, ' ');
+        const _newId = String(_rn.id || '').trim().replace(/\s+/g, ' ');
+        if (!_oldId || !_newId || _oldId === _newId) { delete _rn._prevId; continue; }
+        try {
+          const { data: _existsNew, error: _selErr } = await _sb.from('equipamentos').select('id').eq('id', _newId).limit(1).maybeSingle();
+          if (_selErr) throw _selErr;
+          if (_existsNew) {
+            // Linha com o novo código já existe (ex.: duplicata criada antes da correção)
+            // → apaga a linha antiga; o upsert abaixo grava os dados no registro novo.
+            const { error: _delErr } = await _sb.from('equipamentos').delete().eq('id', _oldId);
+            if (_delErr) throw _delErr;
+          } else {
+            const { error: _updErr } = await _sb.from('equipamentos').update({ id: _newId }).eq('id', _oldId);
+            if (_updErr) throw _updErr;
+          }
+          delete _rn._prevId; // sucesso — não tenta novamente
+        } catch (_rnErr) {
+          console.warn('[Supabase] Renomear código falhou (' + _oldId + ' → ' + _newId + '):', _rnErr.message || _rnErr);
+          // mantém _prevId: tenta de novo no próximo push (auto-recuperação)
+        }
+      }
+    } catch (_renLoopErr) { console.warn('[Supabase] rename loop:', _renLoopErr.message || _renLoopErr); }
+
     // Prepara payload: remove dias_vencer (campo calculado) e garante campos obrigatórios
     // Remove duplicados por ID antes do upsert
 const uniqueMap = new Map();
@@ -9525,7 +9559,7 @@ DB.forEach(r => {
     return;
   }
 
-  const { dias_vencer, _isDraft, ...rest } = r;
+  const { dias_vencer, _isDraft, _prevId, ...rest } = r;
 
   // [v47 MULTI-PLANTA] Garante que unidade é salva em cada registro
   const recUnidade = rest.unidade || (_isDirector ? (rest.unidade || null) : _currentUnidade) || null;
@@ -11438,6 +11472,12 @@ function commitInlineEdit(silent) {
 
   if(r && (String(r[k]||'') !== String(newVal||''))) {
     pushUndo();
+    // [FIX RENAME-CODIGO] Código (id) alterado inline → guarda o código antigo (_prevId)
+    // para o sbPush atualizar a linha existente no Supabase em vez de criar um registro novo.
+    if(k === 'id'){
+      if(r._prevId == null) r._prevId = String(r[k]||'');
+      else if(String(r._prevId||'').trim() === String(newVal||'').trim()) delete r._prevId;
+    }
     r[k] = newVal;
     _statsCache = null; // invalida cache de KPIs
 
@@ -12685,6 +12725,15 @@ function saveRecord(){
     if (idx < 0 && idVal) idx = DB.findIndex(x => x.id === idVal);
     if(idx>=0){
       const before = {...DB[idx]};
+      // [FIX RENAME-CODIGO] Se o código (id) foi alterado, guarda o código antigo em _prevId.
+      // O sbPush usa isso para atualizar a linha existente no Supabase (renomeando a chave
+      // primária) em vez de inserir um registro novo — que deixava o antigo na nuvem como
+      // duplicata. Preserva _prevId já existente (cadeia A→B→C) e limpa se voltou ao original.
+      const _srvOldId = (DB[idx]._prevId != null) ? String(DB[idx]._prevId) : String(before.id || '');
+      if (String(upd.id || '').trim() !== _srvOldId.trim()) {
+        if (DB[idx]._prevId == null) DB[idx]._prevId = String(before.id || '');
+        else if (String(DB[idx]._prevId).trim() === String(upd.id || '').trim()) delete DB[idx]._prevId;
+      }
       pushUndo(); DB[idx]={...DB[idx],...upd}; recalcRecord(DB[idx]);
       // [FIX v49.12] Recomputa _uid (hash determinístico do id) e limpa flag _isDraft —
       // garante que o _uid no DB case com o produzido por sbPull/loadLS após sync.
@@ -12786,7 +12835,11 @@ function deleteRecord(){
     try { if (typeof bulkClearSelection === 'function') bulkClearSelection(); } catch(_) {}
     // [FIX] Promise.allSettled para padronizar com bulkDelete (Safari/iOS)
     if(deletedId && typeof sbActive === 'function' && sbActive() && typeof sbDeleteRecord === 'function') {
-      Promise.allSettled([sbDeleteRecord(deletedId)]).then(function(){ sbSchedulePush(); });
+      // [FIX RENAME-CODIGO] Se o código foi editado nesta sessão (_prevId), também apaga
+      // do Supabase a linha com o código antigo, para não voltar como duplicata no pull.
+      const _delTargets = [deletedId];
+      if (r._prevId && String(r._prevId).trim() && String(r._prevId).trim() !== String(deletedId).trim()) _delTargets.push(r._prevId);
+      Promise.allSettled(_delTargets.map(function(_c){ return sbDeleteRecord(_c); })).then(function(){ sbSchedulePush(); });
     } else {
       sbSchedulePush();
     }
@@ -12826,7 +12879,11 @@ function deleteInline(uid){
     try { if (typeof bulkClearSelection === 'function') bulkClearSelection(); } catch(_) {}
     // [FIX] Promise.allSettled (Safari/iOS race safety)
     if(deletedId && typeof sbActive === 'function' && sbActive() && typeof sbDeleteRecord === 'function') {
-      Promise.allSettled([sbDeleteRecord(deletedId)]).then(function(){ sbSchedulePush(); });
+      // [FIX RENAME-CODIGO] Se o código foi editado nesta sessão (_prevId), também apaga
+      // do Supabase a linha com o código antigo, para não voltar como duplicata no pull.
+      const _delTargets = [deletedId];
+      if (r._prevId && String(r._prevId).trim() && String(r._prevId).trim() !== String(deletedId).trim()) _delTargets.push(r._prevId);
+      Promise.allSettled(_delTargets.map(function(_c){ return sbDeleteRecord(_c); })).then(function(){ sbSchedulePush(); });
     } else {
       sbSchedulePush();
     }
@@ -16905,6 +16962,12 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       pushUndo && pushUndo();
+      // [FIX RENAME-CODIGO] Código (id) alterado → guarda o código antigo (_prevId)
+      // para o sbPush atualizar a linha existente no Supabase em vez de criar um registro novo.
+      if(k === 'id'){
+        if(r._prevId == null) r._prevId = String(r[k]||'');
+        else if(String(r._prevId||'').trim() === String(finalVal||'').trim()) delete r._prevId;
+      }
       r[k] = finalVal;
       _statsCache = null;
 
